@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sw_vers:*)",
+      "Bash(swift build:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
