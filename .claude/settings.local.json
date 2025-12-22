@@ -3,7 +3,10 @@
     "allow": [
       "Bash(sw_vers:*)",
       "Bash(swift build:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nPhase 1: Foundation - Basic Hugo CMS structure\n\nImplemented:\n- SwiftUI macOS app with Swift Package Manager\n- Core data models (HugoSite, ContentFile, FileNode, Frontmatter)\n- FileSystemService with security-scoped bookmarks\n- SiteViewModel for state management\n- NavigationSplitView layout with sidebar\n- File browser with search functionality\n- Open folder dialog and file list display\n\nDependencies:\n- Down 0.11.0 for Markdown rendering (Phase 2)\n- Yams 5.x for YAML frontmatter parsing (Phase 3)\n- TOMLKit 0.6.0 for TOML frontmatter parsing (Phase 3)\n\nNext: Phase 2 - Editor & Preview with live markdown rendering\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(swift package:*)"
     ]
   }
 }
