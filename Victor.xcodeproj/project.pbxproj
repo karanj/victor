@@ -24,6 +24,7 @@
 		100000000000000F /* PreviewWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000F /* PreviewWebView.swift */; };
 		1000000000000010 /* FrontmatterParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000010 /* FrontmatterParser.swift */; };
 		1000000000000011 /* FrontmatterEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000011 /* FrontmatterEditorView.swift */; };
+		1000000000000012 /* AutoSaveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000012 /* AutoSaveService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,7 @@
 		200000000000000F /* PreviewWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWebView.swift; sourceTree = "<group>"; };
 		2000000000000010 /* FrontmatterParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterParser.swift; sourceTree = "<group>"; };
 		2000000000000011 /* FrontmatterEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterEditorView.swift; sourceTree = "<group>"; };
+		2000000000000012 /* AutoSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +122,7 @@
 		5000000000000007 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				2000000000000012 /* AutoSaveService.swift */,
 				2000000000000009 /* FileSystemService.swift */,
 				2000000000000010 /* FrontmatterParser.swift */,
 				200000000000000E /* MarkdownRenderer.swift */,
@@ -245,6 +248,7 @@
 				100000000000000F /* PreviewWebView.swift in Sources */,
 				1000000000000010 /* FrontmatterParser.swift in Sources */,
 				1000000000000011 /* FrontmatterEditorView.swift in Sources */,
+				1000000000000012 /* AutoSaveService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

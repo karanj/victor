@@ -77,6 +77,7 @@ struct EditorPanelView: View {
     @State private var showSavedIndicator = false
     @State private var editorCoordinator: EditorTextView.Coordinator?
     @State private var isFrontmatterExpanded = false
+    @State private var showConflictAlert = false
 
     init(contentFile: ContentFile, fileNode: FileNode, siteViewModel: SiteViewModel) {
         self.contentFile = contentFile
@@ -126,10 +127,26 @@ struct EditorPanelView: View {
             editableContent = newValue
         }
         // Sync editing content to view model for live preview (only if enabled)
+        // Also trigger auto-save when content changes (if enabled)
         .onChange(of: editableContent) { _, newValue in
             if siteViewModel.isLivePreviewEnabled {
                 siteViewModel.currentEditingContent = newValue
             }
+
+            // Schedule auto-save (debounced 2 seconds) if auto-save is enabled
+            if hasUnsavedChanges && siteViewModel.isAutoSaveEnabled {
+                scheduleAutoSave()
+            }
+        }
+        .alert("File Modified Externally", isPresented: $showConflictAlert) {
+            Button("Reload from Disk") {
+                Task {
+                    await siteViewModel.reloadFile(node: fileNode)
+                }
+            }
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("This file was modified by another application. Auto-save has been cancelled. You can reload the file to see external changes, or keep editing to manually save your version.")
         }
     }
 
@@ -158,6 +175,49 @@ struct EditorPanelView: View {
             showSavedIndicator = true
             try? await Task.sleep(for: .seconds(2))
             showSavedIndicator = false
+        }
+    }
+
+    private func scheduleAutoSave() {
+        // Prepare full content
+        let fullContent: String
+        if let frontmatter = contentFile.frontmatter {
+            let serialized = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
+            fullContent = serialized + "\n" + editableContent
+        } else {
+            fullContent = editableContent
+        }
+
+        // Schedule auto-save with conflict detection
+        Task {
+            await AutoSaveService.shared.scheduleAutoSave(
+                fileURL: fileNode.url,
+                content: fullContent,
+                lastModified: contentFile.lastModified,
+                onConflict: { @MainActor in
+                    // Cancel auto-save and show alert
+                    showConflictAlert = true
+                    return .cancel
+                },
+                onSuccess: { @MainActor newModificationDate in
+                    // Update modification date
+                    contentFile.lastModified = newModificationDate
+                    contentFile.markdownContent = editableContent
+
+                    // Show saved indicator briefly
+                    showSavedIndicator = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1))
+                        showSavedIndicator = false
+                    }
+                },
+                onError: { @MainActor error in
+                    // Show error in site view model (unless it's a user cancellation)
+                    if !(error is AutoSaveError) {
+                        siteViewModel.errorMessage = error.localizedDescription
+                    }
+                }
+            )
         }
     }
 }
@@ -306,9 +366,17 @@ struct PreviewPanel: View {
 
 // MARK: - Frontmatter Bottom Panel
 
+enum FrontmatterViewMode {
+    case form
+    case raw
+}
+
 struct FrontmatterBottomPanel: View {
     @Bindable var frontmatter: Frontmatter
     @Binding var isExpanded: Bool
+    @State private var viewMode: FrontmatterViewMode = .form
+    @State private var rawText: String = ""
+    @State private var parseError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -333,9 +401,21 @@ struct FrontmatterBottomPanel: View {
 
                     Spacer()
 
+                    // View mode picker (only show when expanded)
+                    if isExpanded {
+                        Picker("View Mode", selection: $viewMode) {
+                            Text("Form").tag(FrontmatterViewMode.form)
+                            Text("Raw").tag(FrontmatterViewMode.raw)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 120)
+                        .labelsHidden()
+                    }
+
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .padding(.leading, 8)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -349,16 +429,70 @@ struct FrontmatterBottomPanel: View {
             if isExpanded {
                 Divider()
 
-                ScrollView {
-                    FrontmatterEditorView(frontmatter: frontmatter)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                if viewMode == .form {
+                    // Form view
+                    ScrollView {
+                        FrontmatterEditorView(frontmatter: frontmatter)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    .frame(maxHeight: 250)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                } else {
+                    // Raw view
+                    VStack(spacing: 0) {
+                        if let parseError = parseError {
+                            HStack {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                                Text(parseError)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button("Dismiss") {
+                                    self.parseError = nil
+                                }
+                                .buttonStyle(.plain)
+                                .font(.caption)
+                            }
+                            .padding(8)
+                            .background(Color.orange.opacity(0.1))
+
+                            Divider()
+                        }
+
+                        TextEditor(text: $rawText)
+                            .font(.system(size: 12, design: .monospaced))
+                            .frame(maxHeight: parseError != nil ? 200 : 250)
+                            .padding(8)
+                            .background(Color(nsColor: .textBackgroundColor))
+                    }
                 }
-                .frame(maxHeight: 250)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
             }
         }
         .animation(.easeInOut(duration: 0.2), value: isExpanded)
+        .onAppear {
+            // Initialize raw text when first loaded
+            if rawText.isEmpty {
+                rawText = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
+            }
+        }
+        .onChange(of: viewMode) { oldValue, newValue in
+            if newValue == .raw {
+                // Switching to raw view - serialize current frontmatter
+                rawText = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
+                parseError = nil
+            } else if newValue == .form && oldValue == .raw {
+                // Switching to form view - parse raw text
+                parseRawText()
+            }
+        }
+        .onChange(of: isExpanded) { _, newValue in
+            if newValue {
+                // When expanding, ensure raw text is up to date
+                rawText = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
+            }
+        }
     }
 
     private var frontmatterFormatBadge: String {
@@ -367,6 +501,29 @@ struct FrontmatterBottomPanel: View {
         case .toml: return "TOML"
         case .json: return "JSON"
         }
+    }
+
+    private func parseRawText() {
+        // Try to parse the edited raw text
+        let parser = FrontmatterParser.shared
+        let (parsedFrontmatter, _) = parser.parseContent(rawText)
+
+        guard let parsedFrontmatter = parsedFrontmatter else {
+            parseError = "Failed to parse frontmatter. Please check the syntax."
+            return
+        }
+
+        // Update the frontmatter object with parsed values
+        frontmatter.title = parsedFrontmatter.title
+        frontmatter.date = parsedFrontmatter.date
+        frontmatter.draft = parsedFrontmatter.draft
+        frontmatter.tags = parsedFrontmatter.tags
+        frontmatter.categories = parsedFrontmatter.categories
+        frontmatter.description = parsedFrontmatter.description
+        frontmatter.customFields = parsedFrontmatter.customFields
+
+        // Clear any previous errors
+        parseError = nil
     }
 }
 

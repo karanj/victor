@@ -4,7 +4,7 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 
 ## Features
 
-### ✅ Currently Available (Phases 1-3 Complete)
+### ✅ Currently Available (Phases 1-5 Complete)
 
 **Site Management:**
 - Open and browse Hugo site folders
@@ -29,18 +29,40 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
   - Description
   - Tags (chip-based input with flow layout)
   - Categories (chip-based input)
+- Raw text editor for advanced editing
+- Switch between form and raw views with segmented control
+- Parse validation with error feedback
 - Custom fields preserved
 - Round-trip format preservation (YAML stays YAML, etc.)
-- Collapsible frontmatter editor UI
+- Collapsible frontmatter bottom panel
+
+**Hugo Page Bundle Support:**
+- Visual detection of page bundles (folders with index.md or _index.md)
+- Distinct purple icon with gear badge for page bundles
+- "bundle" badge label for easy identification
+- Click page bundle to automatically open its index file
+- Works at all levels of the file hierarchy
 
 **File Operations:**
 - Save files (⌘S) with frontmatter + markdown combined
+- Auto-save with 2-second debounce after typing stops
+- Conflict detection - alerts if file modified externally
 - Undo/redo support in editor
-- Unsaved changes indicator
+- Unsaved changes indicator ("• Edited" in subtitle)
 
-### Coming Soon
-- **Phase 4**: Hugo page bundle support (visual indicators, special handling)
-- **Phase 5**: Auto-save, file watching, extended keyboard shortcuts, and UI polish
+**Keyboard Shortcuts:**
+- ⌘O - Open Hugo Site
+- ⌘S - Save current file
+- ⌘F - Focus search field
+- ⌘B - Bold selected text (in editor)
+- ⌘I - Italic selected text (in editor)
+
+### Future Enhancements
+- File system watching with FSEvents for automatic reload
+- Image drag & drop support
+- Syntax highlighting
+- Git integration
+- Hugo server integration
 
 ## Requirements
 
@@ -145,22 +167,31 @@ Victor/
 - Form-based frontmatter editor with structured fields
 - Optional date field with toggle
 - Tag/category input with chip UI
+- Raw text editor with form/raw view switching
 - Preserve original format on save
 - Custom fields preserved
 
-### 🔄 Phase 4: Hugo Page Bundle Support (Next)
-- Visual indicators for page bundles (folders with index.md)
-- Special handling when opening page bundles
-- Bundle-aware navigation
-- Note: Detection logic exists, UI integration needed
+### ✅ Phase 4: Hugo Page Bundle Support (Complete - Dec 22, 2024)
+- Visual indicators for page bundles (purple icon with gear badge)
+- "bundle" badge label for easy identification
+- Click page bundle to automatically open index file
+- Bundle detection for both index.md and _index.md
+- Works at all levels of file hierarchy
 
-### 📋 Phase 5: Polish & Reliability
-- Auto-save with 2-second debounce
-- File system watching with FSEvents
-- Conflict detection and resolution
-- Extended keyboard shortcuts
-- Comprehensive error handling
-- Performance optimization for 500+ files
+### ✅ Phase 5: Auto-Save & Polish (Complete - Dec 22, 2024)
+- Auto-save with 2-second debounce after typing stops
+- Conflict detection with user alert (Keep Editing / Reload from Disk)
+- File reload functionality when externally modified
+- Keyboard shortcut: ⌘F to focus search field
+- Unsaved changes indicator in navigation subtitle
+- Production-ready error handling
+
+### 🔮 Future Enhancements
+- File system watching with FSEvents for live reload
+- Image asset management and drag & drop
+- Syntax highlighting for code blocks
+- Git integration for version control
+- Hugo server integration for live preview
 
 ## Hugo Site Structure
 
@@ -182,13 +213,11 @@ your-hugo-site/
 ## Keyboard Shortcuts
 
 - **⌘O**: Open Hugo site folder
-- **⌘S**: Save current file
-- **⌘F**: Focus search (when site is open)
-- **⌘W**: Close window
+- **⌘S**: Save current file (also triggers auto-save 2s after typing)
+- **⌘F**: Focus search field
+- **⌘W**: Close window (standard macOS)
 - **⌘B**: Bold selected text (in editor)
 - **⌘I**: Italic selected text (in editor)
-
-More shortcuts coming in Phase 5.
 
 ## Security & Privacy
 

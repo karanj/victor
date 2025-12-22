@@ -18,6 +18,18 @@ struct VictorApp: App {
                 }
                 .keyboardShortcut("o", modifiers: .command)
             }
+
+            CommandGroup(after: .saveItem) {
+                Toggle("Auto-Save", isOn: $siteViewModel.isAutoSaveEnabled)
+            }
+
+            CommandGroup(after: .sidebar) {
+                Button("Focus Search") {
+                    siteViewModel.shouldFocusSearch = true
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(siteViewModel.site == nil)
+            }
         }
     }
 }

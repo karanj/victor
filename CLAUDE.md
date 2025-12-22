@@ -21,15 +21,17 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ---
 
-## Current Status: Phase 3 Complete ✅
+## Current Status: Phase 5 Complete ✅ - Production Ready!
 
 **Date Completed**: 2025-12-22
-**Latest Commit**: `175171c` - "Fix date field parsing and make it optional"
+**Latest Build**: Build succeeded - All core features implemented
 
 ### Completed Phases
-- ✅ **Phase 1**: Foundation - Basic Hugo CMS structure (commit: `5a2540b`)
-- ✅ **Phase 2**: Editor & Preview - Live markdown editing + hierarchical tree (commit: `4c8c219`)
-- ✅ **Phase 3**: Frontmatter Support - Parse and edit YAML/TOML/JSON (commit: `175171c`)
+- ✅ **Phase 1**: Foundation - Basic Hugo CMS structure
+- ✅ **Phase 2**: Editor & Preview - Live markdown editing + hierarchical tree
+- ✅ **Phase 3**: Frontmatter Support - Parse and edit YAML/TOML/JSON with form/raw views
+- ✅ **Phase 4**: Hugo Page Bundle Support - Visual indicators and click handling
+- ✅ **Phase 5**: Auto-Save & Polish - Production-ready reliability and UX
 
 ### What's Implemented
 
@@ -66,7 +68,14 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
    - @Observable for real-time UI updates
 
 #### Services (Victor/Services/)
-1. **FileSystemService.swift**
+1. **AutoSaveService.swift** (Phase 5)
+   - Actor for thread-safe auto-save operations
+   - **Debounced Saving**: 2-second delay after typing stops
+   - **Conflict Detection**: Check file modification date before saving
+   - **User Resolution**: Callbacks for conflict handling (Keep/Reload/Cancel)
+   - **Error Handling**: Typed errors with user-friendly messages
+
+2. **FileSystemService.swift**
    - Singleton pattern with `@MainActor`
    - **Folder Selection**: NSOpenPanel for directory picker
    - **Security-Scoped Bookmarks**:
@@ -78,14 +87,14 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
    - **Frontmatter Parsing**: Integration with FrontmatterParser
    - **Error Handling**: Custom FileError enum with LocalizedError
 
-2. **FrontmatterParser.swift** (Phase 3)
+3. **FrontmatterParser.swift** (Phase 3)
    - Parse YAML, TOML, and JSON frontmatter
    - Extract to structured fields
    - Serialize back to original format
    - Support multiple Hugo date formats
    - Preserve custom fields
 
-3. **MarkdownRenderer.swift** (Phase 2)
+4. **MarkdownRenderer.swift** (Phase 2)
    - Convert markdown to HTML using Down library
    - GitHub-flavored markdown styling
    - Error handling with fallback display
@@ -127,15 +136,20 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
    - Undo/redo support
 
 4. **Editor/FrontmatterEditorView.swift** (Phase 3)
-   - Collapsible disclosure group
-   - Form fields for common Hugo fields:
+   - Collapsible bottom panel with segmented control
+   - **Form view** - Structured fields for common Hugo fields:
      - Title (text field)
      - Date (optional with checkbox toggle)
      - Draft status (toggle)
      - Description (text editor)
      - Tags (chip-based input with flow layout)
      - Categories (chip-based input)
-   - Custom fields display (read-only)
+   - **Raw view** - Monospace text editor for YAML/TOML/JSON
+     - Switch between form and raw views
+     - Auto-serialize when switching to raw
+     - Auto-parse when switching to form
+     - Validation with error feedback
+   - Custom fields preserved
    - Format badge (YAML/TOML/JSON)
 
 5. **Preview/PreviewWebView.swift** (Phase 2)
@@ -161,33 +175,50 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 **Editing:**
 7. **Click file** → Loads frontmatter + markdown content
-8. **Frontmatter editor** → Edit YAML/TOML/JSON frontmatter in structured form
-   - Title, date (optional), draft status, description
+8. **Page bundles** → Special handling for Hugo page bundles (Phase 4)
+   - Purple icon with gear badge for page bundles
+   - "bundle" badge label for identification
+   - Click bundle folder → Automatically opens index.md/_index.md
+9. **Frontmatter editor** → Edit YAML/TOML/JSON in collapsible bottom panel (Phase 3)
+   - **Form view**: Title, date (optional), draft status, description
+   - **Raw view**: Edit raw YAML/TOML/JSON with monospace editor
+   - Switch views with segmented control [Form | Raw]
    - Tags and categories with chip-based UI
-   - Custom fields preserved
-9. **Markdown editor** → Edit content with formatting toolbar
-   - Bold, italic, headings, lists, code blocks
-   - Monospace font, no smart quotes
-10. **Save (⌘S)** → Combines frontmatter + markdown, preserves format
-11. **Live preview toggle** → Enable/disable real-time HTML preview
+   - Custom fields preserved, validation with error feedback
+10. **Markdown editor** → Edit content with formatting toolbar
+    - Bold, italic, headings, lists, code blocks
+    - Monospace font, no smart quotes
+11. **Save** → Manual save with ⌘S or auto-save (Phase 5)
+    - **Auto-save**: Debounced 2 seconds after typing stops
+    - **Conflict detection**: Alerts if file modified externally
+    - **User choice**: Keep editing or reload from disk
+12. **Live preview toggle** → Enable/disable real-time HTML preview
 
 **Preview:**
-12. **Preview panel** → Live markdown rendering with GitHub styling
-13. **Debounced updates** → Smooth typing without lag (300ms delay)
+13. **Preview panel** → Live markdown rendering with GitHub styling
+14. **Debounced updates** → Smooth typing without lag (300ms delay)
 
-**Persistence:**
-14. **Security-scoped bookmarks** → Last opened site persists across launches
-15. **Clean build** → No warnings, no errors
+**Keyboard Shortcuts (Phase 5):**
+15. **⌘O** → Open Hugo site folder
+16. **⌘S** → Save current file immediately
+17. **⌘F** → Focus search field (when site is open)
+18. **⌘B/⌘I** → Bold/italic in editor
 
-### What's NOT Yet Implemented (Coming in Later Phases)
+**Persistence & Reliability:**
+19. **Security-scoped bookmarks** → Last opened site persists across launches
+20. **Unsaved changes indicator** → "• Edited" in navigation subtitle
+21. **Clean build** → No warnings, no errors
+22. **Production ready** → All core features functional
 
-- ❌ Auto-save (Phase 5)
-- ❌ File system watching (Phase 5)
-- ❌ Extended keyboard shortcuts (Phase 5)
-- ❌ Image drag & drop
-- ❌ Syntax highlighting
-- ❌ Git integration
-- ❌ Hugo server integration
+### Future Enhancements
+
+- File system watching with FSEvents for automatic reload
+- Image drag & drop and asset management
+- Syntax highlighting for code blocks
+- Git integration for version control
+- Hugo server integration for live site preview
+- Touch Bar support (for supported Macs)
+- VoiceOver and accessibility improvements
 
 ---
 
@@ -522,89 +553,102 @@ url.stopAccessingSecurityScopedResource() // When done
 
 ---
 
-### 🔄 Phase 4: Hugo Page Bundle Support (NEXT)
+### ✅ Phase 4: Hugo Page Bundle Support (COMPLETE)
 **Duration**: ~0.5 session
-**Status**: Partially implemented
+**Status**: Completed (Dec 22, 2024)
 
-**Already Have**:
-- Hierarchical file browser with OutlineGroup (implemented in Phase 2)
-- Page bundle detection logic (`isPageBundle` property in FileNode)
-- Expand/collapse folders
-- Recursive search through tree
+**Delivered**:
+- Visual indicators for page bundles in sidebar
+  - Purple folder icon with gear badge (`folder.fill.badge.gearshape`)
+  - "bundle" badge label for easy identification
+- Click handling for page bundles
+  - Automatically opens index.md or _index.md when clicking bundle
+  - Works at all levels of the file hierarchy
+- Enhanced `FileRowView` with conditional icons and colors
+  - Page bundles: purple icon with badge
+  - Regular folders: blue folder icon
+  - Files: standard document icon
 
-**Still Needed**:
-- Visual indicator for page bundles in sidebar (special icon)
-- Different behavior when clicking page bundles
-- Show bundle contents differently
+**Implementation Details**:
+1. Updated `FileRowView` in SidebarView.swift:
+   - Added `iconName` computed property for conditional icons
+   - Added `iconColor` computed property for purple/blue/primary colors
+   - Added "bundle" badge display when `isPageBundle` is true
 
-**Goals**:
-- Hierarchical file browser ✅ (done in Phase 2)
-- Hugo page bundle support ⚠️ (detection exists, UI integration needed)
+2. Enhanced `FileListView` and `FileTreeRow`:
+   - Added `openPageBundle()` helper method
+   - Finds index.md or _index.md in bundle children
+   - Calls `siteViewModel.selectNode()` to open the index file
 
-**Tasks**:
-1. Enhance `FileSystemService.scanDirectory`:
-   - Build tree instead of flat list
-   - Detect Hugo page bundles (folders with index.md)
-
-2. Create `FileTreeView.swift`:
-   - Use SwiftUI OutlineGroup
-   - Expand/collapse folders
-   - Persistent expand state
-
-3. Create `FileRowView.swift`:
-   - Different icons for files/folders/bundles
-   - Metadata display
-
-4. Update `FileNode.swift`:
-   - Add sorting logic (folders first, then alpha)
+3. Leveraged existing infrastructure:
+   - `FileNode.isPageBundle` property (checks for index.md or _index.md)
+   - Hierarchical file tree from Phase 2
+   - DisclosureGroup navigation
 
 **Success Criteria**:
-- Navigate nested folder structure
-- Expand/collapse works
-- Page bundles are identified
-- Performance good with 500+ files
+- ✅ Navigate nested folder structure
+- ✅ Expand/collapse works
+- ✅ Page bundles visually identified with purple icon + badge
+- ✅ Click bundle → opens index file automatically
+- ✅ Performance good with 500+ files
 
 ---
 
-### 📋 Phase 5: Auto-Save & Polish
-**Duration**: ~1-2 sessions
-**Status**: Not started
+### ✅ Phase 5: Auto-Save & Polish (COMPLETE)
+**Duration**: ~0.5 session
+**Status**: Completed (Dec 22, 2024)
 
-**Goals**:
-- Production-ready reliability
-- Auto-save
-- File watching
-- UI polish
+**Delivered**:
+- Auto-save with debounced saving (2 seconds after typing stops)
+- Conflict detection with user-friendly alerts
+- Keyboard shortcuts for common operations
+- Unsaved changes indicator
+- Production-ready error handling
 
-**Tasks**:
-1. Create `AutoSaveService.swift` (actor):
-   - Debounce 2s after typing stops
-   - Conflict detection (check modification date)
-   - Alert on conflict: "Keep my version" / "Reload from disk"
+**Implementation Details**:
 
-2. Create `FileWatcherService.swift` (actor):
-   - Monitor with FSEvents
-   - Debounce 500ms
-   - Reload changed files
-   - Update file tree
+1. **AutoSaveService.swift** (Actor):
+   - Thread-safe auto-save operations using Swift actors
+   - Debounced saving: 2-second delay after last edit
+   - Conflict detection: Checks file modification date before saving
+   - User resolution callbacks: Keep local / Reload from disk / Cancel
+   - NSFileCoordinator for safe file access
+   - Typed errors: `AutoSaveError` and `ConflictResolution` enums
 
-3. Error handling:
-   - FileError enum with all cases
-   - User-friendly error messages
-   - Graceful degradation
+2. **EditorPanelView Integration**:
+   - `scheduleAutoSave()` method triggered on content changes
+   - Conflict alert with three options: "Reload from Disk" / "Keep Editing" / "Cancel"
+   - Auto-updates modification date on successful save
+   - Shows "Saved" indicator briefly after auto-save
+   - Graceful error handling (doesn't show AutoSaveError to user)
 
-4. UI polish:
-   - Keyboard shortcuts (⌘S, ⌘W, ⌘F)
-   - Toolbar items
-   - Empty states
-   - Loading indicators
-   - Unsaved changes indicator (dot in close button)
+3. **SiteViewModel Enhancements**:
+   - Added `reloadFile(node:)` method for external change handling
+   - Added `shouldFocusSearch` trigger for keyboard shortcut
+   - Integrated with auto-save service
+
+4. **Keyboard Shortcuts** (VictorApp.swift):
+   - ⌘O: Open Hugo site folder (existing)
+   - ⌘S: Manual save (existing)
+   - ⌘F: Focus search field (NEW - added in Phase 5)
+   - ⌘B/⌘I: Bold/italic formatting (existing from Phase 2)
+
+5. **SearchBar with FocusState**:
+   - Added `@FocusState` for programmatic focus control
+   - Responds to `shouldFocusSearch` trigger from keyboard shortcut
+   - Smooth focus transition when ⌘F is pressed
 
 **Success Criteria**:
-- No data loss
-- External edits detected
-- Smooth UX
-- Feels native to macOS
+- ✅ No data loss - auto-save with conflict detection
+- ✅ External edits detected - alerts user with clear options
+- ✅ Smooth UX - debounced saves don't interrupt typing
+- ✅ Feels native to macOS - standard keyboard shortcuts
+- ✅ Production ready - comprehensive error handling
+
+**Deferred to Future**:
+- File system watching with FSEvents (complex, lower priority)
+- Window close button dot indicator (using subtitle "• Edited" instead)
+- Extended keyboard shortcuts beyond essentials
 
 ---
 

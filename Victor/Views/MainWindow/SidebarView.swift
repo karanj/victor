@@ -16,7 +16,7 @@ struct SidebarView: View {
 
             // Search bar
             if siteViewModel.site != nil {
-                SearchBar(searchText: $siteViewModel.searchQuery)
+                SearchBar(searchText: $siteViewModel.searchQuery, siteViewModel: siteViewModel)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
 
@@ -113,6 +113,8 @@ struct SiteHeader: View {
 
 struct SearchBar: View {
     @Binding var searchText: String
+    @Bindable var siteViewModel: SiteViewModel
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         HStack {
@@ -121,6 +123,7 @@ struct SearchBar: View {
 
             TextField("Search files", text: $searchText)
                 .textFieldStyle(.plain)
+                .focused($isSearchFocused)
 
             if !searchText.isEmpty {
                 Button {
@@ -135,6 +138,12 @@ struct SearchBar: View {
         .padding(6)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(6)
+        .onChange(of: siteViewModel.shouldFocusSearch) { _, newValue in
+            if newValue {
+                isSearchFocused = true
+                siteViewModel.shouldFocusSearch = false
+            }
+        }
     }
 }
 
@@ -156,6 +165,12 @@ struct FileListView: View {
                     }
                 } label: {
                     FileRowView(node: node)
+                        .onTapGesture {
+                            // If page bundle, open the index file
+                            if node.isPageBundle {
+                                openPageBundle(node)
+                            }
+                        }
                 }
             } else {
                 // Regular file row
@@ -188,6 +203,19 @@ struct FileListView: View {
         }
         return nil
     }
+
+    // Open the index file for a page bundle
+    private func openPageBundle(_ bundle: FileNode) {
+        // Find index.md or _index.md in the bundle's children
+        let indexFile = bundle.children.first { child in
+            let name = child.name.lowercased()
+            return name == "index.md" || name == "_index.md"
+        }
+
+        if let indexFile = indexFile {
+            siteViewModel.selectNode(indexFile)
+        }
+    }
 }
 
 // MARK: - Recursive File Tree Row
@@ -207,6 +235,12 @@ struct FileTreeRow: View {
                 }
             } label: {
                 FileRowView(node: node)
+                    .onTapGesture {
+                        // If page bundle, open the index file
+                        if node.isPageBundle {
+                            openPageBundle(node)
+                        }
+                    }
             }
         } else {
             FileRowView(node: node)
@@ -214,6 +248,19 @@ struct FileTreeRow: View {
                 .onTapGesture {
                     siteViewModel.selectNode(node)
                 }
+        }
+    }
+
+    // Open the index file for a page bundle
+    private func openPageBundle(_ bundle: FileNode) {
+        // Find index.md or _index.md in the bundle's children
+        let indexFile = bundle.children.first { child in
+            let name = child.name.lowercased()
+            return name == "index.md" || name == "_index.md"
+        }
+
+        if let indexFile = indexFile {
+            siteViewModel.selectNode(indexFile)
         }
     }
 }
@@ -225,13 +272,27 @@ struct FileRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: node.isDirectory ? "folder" : "doc.text")
-                .foregroundStyle(node.isDirectory ? .blue : .primary)
+            // Icon: different for page bundles, folders, and files
+            Image(systemName: iconName)
+                .foregroundStyle(iconColor)
                 .imageScale(.medium)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(node.name)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(node.name)
+                        .lineLimit(1)
+
+                    // Page bundle badge
+                    if node.isPageBundle {
+                        Text("bundle")
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(.purple)
+                            .cornerRadius(3)
+                    }
+                }
 
                 if let contentFile = node.contentFile, contentFile.isDraft {
                     Text("Draft")
@@ -247,6 +308,26 @@ struct FileRowView: View {
             Spacer()
         }
         .contentShape(Rectangle())
+    }
+
+    private var iconName: String {
+        if node.isPageBundle {
+            return "folder.fill.badge.gearshape"
+        } else if node.isDirectory {
+            return "folder"
+        } else {
+            return "doc.text"
+        }
+    }
+
+    private var iconColor: Color {
+        if node.isPageBundle {
+            return .purple
+        } else if node.isDirectory {
+            return .blue
+        } else {
+            return .primary
+        }
     }
 }
 

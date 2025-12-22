@@ -23,6 +23,13 @@ class SiteViewModel {
     /// Live preview enabled state
     var isLivePreviewEnabled: Bool = false
 
+    /// Auto-save enabled state (persisted)
+    var isAutoSaveEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isAutoSaveEnabled, forKey: "isAutoSaveEnabled")
+        }
+    }
+
     /// Loading state
     var isLoading = false
 
@@ -31,6 +38,9 @@ class SiteViewModel {
 
     /// Search query
     var searchQuery = ""
+
+    /// Trigger to focus search field
+    var shouldFocusSearch = false
 
     /// File system service
     private let fileSystemService = FileSystemService.shared
@@ -72,6 +82,9 @@ class SiteViewModel {
     }
 
     init() {
+        // Load auto-save preference (default: true)
+        self.isAutoSaveEnabled = UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? true
+
         // Try to load previously opened site
         Task {
             await loadSavedSite()
@@ -203,5 +216,24 @@ class SiteViewModel {
     func reloadSite() async {
         guard let site = site else { return }
         await loadSite(from: site.rootURL)
+    }
+
+    /// Reload a specific file from disk
+    func reloadFile(node: FileNode) async {
+        do {
+            // Read the file from disk
+            let freshContent = try await FileSystemService.shared.readContentFile(at: node.url)
+
+            // Update the node's content file
+            node.contentFile = freshContent
+
+            // If this is the currently selected node, trigger a UI update
+            if selectedNode?.id == node.id {
+                selectedNode = node
+            }
+        } catch {
+            errorMessage = "Failed to reload file: \(error.localizedDescription)"
+            print("Error reloading file: \(error)")
+        }
     }
 }
