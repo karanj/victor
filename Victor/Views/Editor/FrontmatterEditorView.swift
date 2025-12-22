@@ -3,12 +3,10 @@ import SwiftUI
 /// View for editing Hugo frontmatter fields
 struct FrontmatterEditorView: View {
     @Bindable var frontmatter: Frontmatter
-    @State private var isExpanded: Bool = true
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Title
+        VStack(alignment: .leading, spacing: 12) {
+            // Title
                 FormFieldView(label: "Title") {
                     TextField("Post title", text: Binding(
                         get: { frontmatter.title ?? "" },
@@ -103,35 +101,6 @@ struct FrontmatterEditorView: View {
                         .padding(.vertical, 2)
                     }
                 }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        } label: {
-            HStack {
-                Image(systemName: "doc.text.fill")
-                    .foregroundStyle(.blue)
-                Text("Frontmatter")
-                    .font(.headline)
-                Spacer()
-                Text(frontmatterFormatBadge)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-    }
-
-    private var frontmatterFormatBadge: String {
-        switch frontmatter.format {
-        case .yaml: return "YAML"
-        case .toml: return "TOML"
-        case .json: return "JSON"
         }
     }
 }

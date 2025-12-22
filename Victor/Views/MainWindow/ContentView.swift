@@ -76,6 +76,7 @@ struct EditorPanelView: View {
     @State private var isSaving = false
     @State private var showSavedIndicator = false
     @State private var editorCoordinator: EditorTextView.Coordinator?
+    @State private var isFrontmatterExpanded = false
 
     init(contentFile: ContentFile, fileNode: FileNode, siteViewModel: SiteViewModel) {
         self.contentFile = contentFile
@@ -103,20 +104,19 @@ struct EditorPanelView: View {
                 }
             )
 
-            // Frontmatter Editor (if frontmatter exists)
-            if let frontmatter = contentFile.frontmatter {
-                ScrollView {
-                    FrontmatterEditorView(frontmatter: frontmatter)
-                }
-                .frame(maxHeight: 300)
-                .overlay(alignment: .bottom) {
-                    Divider()
-                }
-            }
-
-            // Markdown Editor
+            // Markdown Editor (takes priority)
             EditorTextView(text: $editableContent) { coordinator in
                 editorCoordinator = coordinator
+            }
+
+            // Bottom Frontmatter Panel (collapsible)
+            if contentFile.frontmatter != nil {
+                Divider()
+
+                FrontmatterBottomPanel(
+                    frontmatter: contentFile.frontmatter!,
+                    isExpanded: $isFrontmatterExpanded
+                )
             }
         }
         .navigationTitle(contentFile.fileName)
@@ -301,6 +301,72 @@ struct PreviewPanel: View {
 
     private func updatePreview(content: String) {
         renderedHTML = MarkdownRenderer.shared.renderOrError(markdown: content)
+    }
+}
+
+// MARK: - Frontmatter Bottom Panel
+
+struct FrontmatterBottomPanel: View {
+    @Bindable var frontmatter: Frontmatter
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Collapsible header
+            Button(action: { isExpanded.toggle() }) {
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+
+                    Text("Frontmatter")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Text(frontmatterFormatBadge)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.3))
+            .help(isExpanded ? "Collapse frontmatter" : "Expand frontmatter")
+
+            // Frontmatter content (when expanded)
+            if isExpanded {
+                Divider()
+
+                ScrollView {
+                    FrontmatterEditorView(frontmatter: frontmatter)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+                .frame(maxHeight: 250)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+    }
+
+    private var frontmatterFormatBadge: String {
+        switch frontmatter.format {
+        case .yaml: return "YAML"
+        case .toml: return "TOML"
+        case .json: return "JSON"
+        }
     }
 }
 
