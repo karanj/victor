@@ -120,8 +120,8 @@ struct EditorPanelView: View {
                 )
             }
         }
-        .navigationTitle(contentFile.fileName)
-        .navigationSubtitle(hasUnsavedChanges ? "\(contentFile.relativePath) • Edited" : contentFile.relativePath)
+        .navigationTitle(contentFile.frontmatter?.title ?? "No title")
+        .navigationSubtitle(hasUnsavedChanges ? "\(contentFile.fileName) • Edited" : (contentFile.fileName))
         // Update content when file changes
         .onChange(of: contentFile.markdownContent) { _, newValue in
             editableContent = newValue

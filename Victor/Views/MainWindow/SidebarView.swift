@@ -148,7 +148,9 @@ struct SearchBar: View {
 }
 
 // MARK: - File List
-
+/// TODO: double-click on folder should cause it to expand or collapse the folder
+/// TODO: can this be notified of file system changes (e.g. if a new file is added on the file system, it should automatically show up in the folder list - not sure if this is possible.
+/// TODO: add new post - maybe as a right-click, it should prompt to create a new file with a title slug
 struct FileListView: View {
     @Bindable var siteViewModel: SiteViewModel
 

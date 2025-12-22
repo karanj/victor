@@ -32,6 +32,8 @@ class MarkdownRenderer {
     // MARK: - Frontmatter Handling
 
     /// Strip frontmatter delimiters and content from markdown
+    /// TODO: this should use the Frontmatter model and handle it in a common way. This shouldn't be being reimplemented here.
+    /// TODO: this needs to return the title and stick that at the top of the preview HTML
     /// Supports YAML (---), TOML (+++), and JSON ({})
     private func stripFrontmatter(from content: String) -> String {
         let lines = content.components(separatedBy: .newlines)
@@ -111,6 +113,7 @@ class MarkdownRenderer {
     // MARK: - HTML Templates
 
     /// Wrap HTML body in full document with CSS
+    /// TODO: investigate if we can load the CSS from the Hugo theme so that the preview is closer to realistic?
     private func wrapInHTMLTemplate(htmlBody: String) -> String {
         return """
         <!DOCTYPE html>
@@ -169,6 +172,7 @@ class MarkdownRenderer {
     // MARK: - CSS Styling
 
     /// GitHub-flavored markdown CSS
+    /// TODO: can we refactor this to be a separate static resource? this is content, it should be outside the code logic of the render
     private var githubStyleCSS: String {
         return """
         /* GitHub-inspired markdown styling */
