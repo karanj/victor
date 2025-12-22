@@ -31,73 +31,12 @@ class MarkdownRenderer {
 
     // MARK: - Frontmatter Handling
 
-    /// Strip frontmatter delimiters and content from markdown
-    /// TODO: this should use the Frontmatter model and handle it in a common way. This shouldn't be being reimplemented here.
-    /// TODO: this needs to return the title and stick that at the top of the preview HTML
+    /// Strip frontmatter delimiters and content from markdown using FrontmatterParser
     /// Supports YAML (---), TOML (+++), and JSON ({})
     private func stripFrontmatter(from content: String) -> String {
-        let lines = content.components(separatedBy: .newlines)
-
-        guard !lines.isEmpty else { return content }
-
-        let firstLine = lines[0].trimmingCharacters(in: .whitespaces)
-
-        // Check for YAML frontmatter (---)
-        if firstLine == "---" {
-            return stripDelimitedFrontmatter(from: lines, delimiter: "---", startIndex: 1)
-        }
-
-        // Check for TOML frontmatter (+++)
-        if firstLine == "+++" {
-            return stripDelimitedFrontmatter(from: lines, delimiter: "+++", startIndex: 1)
-        }
-
-        // Check for JSON frontmatter ({)
-        if firstLine.hasPrefix("{") {
-            return stripJSONFrontmatter(from: lines)
-        }
-
-        // No frontmatter found
-        return content
-    }
-
-    /// Strip frontmatter with delimiters (YAML or TOML)
-    private func stripDelimitedFrontmatter(from lines: [String], delimiter: String, startIndex: Int) -> String {
-        // Find closing delimiter
-        for i in startIndex..<lines.count {
-            let line = lines[i].trimmingCharacters(in: .whitespaces)
-            if line == delimiter {
-                // Found closing delimiter, return content after it
-                let remainingLines = Array(lines[(i + 1)...])
-                return remainingLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-
-        // No closing delimiter found, return original
-        return lines.joined(separator: "\n")
-    }
-
-    /// Strip JSON frontmatter (less common, but supported by some Hugo themes)
-    private func stripJSONFrontmatter(from lines: [String]) -> String {
-        var braceCount = 0
-
-        for (index, line) in lines.enumerated() {
-            for char in line {
-                if char == "{" {
-                    braceCount += 1
-                } else if char == "}" {
-                    braceCount -= 1
-                    if braceCount == 0 {
-                        // Found end of JSON frontmatter
-                        let remainingLines = Array(lines[(index + 1)...])
-                        return remainingLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                    }
-                }
-            }
-        }
-
-        // No complete JSON found, return original
-        return lines.joined(separator: "\n")
+        // Use FrontmatterParser to extract just the markdown (no code duplication)
+        let (_, markdown) = FrontmatterParser.shared.parseContent(content)
+        return markdown
     }
 
     /// Convert markdown to HTML and handle errors by returning error HTML

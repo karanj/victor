@@ -167,10 +167,23 @@ struct FileListView: View {
                     }
                 } label: {
                     FileRowView(node: node)
+                        .contextMenu {
+                            Button {
+                                Task {
+                                    await siteViewModel.createMarkdownFile(in: node)
+                                }
+                            } label: {
+                                Label("New Markdown File", systemImage: "doc.badge.plus")
+                            }
+                        }
+                        .onTapGesture(count: 2) {
+                            // Double-click to expand/collapse folder
+                            node.isExpanded.toggle()
+                        }
                         .onTapGesture {
                             // If page bundle, open the index file
-                            if node.isPageBundle {
-                                openPageBundle(node)
+                            if node.isPageBundle, let indexFile = node.indexFile {
+                                siteViewModel.selectNode(indexFile)
                             }
                         }
                 }
@@ -206,18 +219,6 @@ struct FileListView: View {
         return nil
     }
 
-    // Open the index file for a page bundle
-    private func openPageBundle(_ bundle: FileNode) {
-        // Find index.md or _index.md in the bundle's children
-        let indexFile = bundle.children.first { child in
-            let name = child.name.lowercased()
-            return name == "index.md" || name == "_index.md"
-        }
-
-        if let indexFile = indexFile {
-            siteViewModel.selectNode(indexFile)
-        }
-    }
 }
 
 // MARK: - Recursive File Tree Row
@@ -237,10 +238,23 @@ struct FileTreeRow: View {
                 }
             } label: {
                 FileRowView(node: node)
+                    .contextMenu {
+                        Button {
+                            Task {
+                                await siteViewModel.createMarkdownFile(in: node)
+                            }
+                        } label: {
+                            Label("New Markdown File", systemImage: "doc.badge.plus")
+                        }
+                    }
+                    .onTapGesture(count: 2) {
+                        // Double-click to expand/collapse folder
+                        node.isExpanded.toggle()
+                    }
                     .onTapGesture {
                         // If page bundle, open the index file
-                        if node.isPageBundle {
-                            openPageBundle(node)
+                        if node.isPageBundle, let indexFile = node.indexFile {
+                            siteViewModel.selectNode(indexFile)
                         }
                     }
             }
@@ -253,18 +267,6 @@ struct FileTreeRow: View {
         }
     }
 
-    // Open the index file for a page bundle
-    private func openPageBundle(_ bundle: FileNode) {
-        // Find index.md or _index.md in the bundle's children
-        let indexFile = bundle.children.first { child in
-            let name = child.name.lowercased()
-            return name == "index.md" || name == "_index.md"
-        }
-
-        if let indexFile = indexFile {
-            siteViewModel.selectNode(indexFile)
-        }
-    }
 }
 
 // MARK: - File Row
@@ -278,6 +280,7 @@ struct FileRowView: View {
             Image(systemName: iconName)
                 .foregroundStyle(iconColor)
                 .imageScale(.medium)
+                .accessibilityLabel(accessibilityIconLabel)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -329,6 +332,16 @@ struct FileRowView: View {
             return .blue
         } else {
             return .primary
+        }
+    }
+
+    private var accessibilityIconLabel: String {
+        if node.isPageBundle {
+            return "Page bundle"
+        } else if node.isDirectory {
+            return "Folder"
+        } else {
+            return "Markdown file"
         }
     }
 }

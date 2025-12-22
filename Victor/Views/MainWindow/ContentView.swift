@@ -49,10 +49,11 @@ struct ContentView: View {
                 }
             }
         }
-        .alert("Error", isPresented: .constant(siteViewModel.errorMessage != nil)) {
-            Button("OK") {
-                siteViewModel.errorMessage = nil
-            }
+        .alert("Error", isPresented: Binding(
+            get: { siteViewModel.errorMessage != nil },
+            set: { if !$0 { siteViewModel.errorMessage = nil } }
+        )) {
+            Button("OK") {}
         } message: {
             if let errorMessage = siteViewModel.errorMessage {
                 Text(errorMessage)
@@ -61,7 +62,7 @@ struct ContentView: View {
     }
 
     private func toggleSidebar() {
-        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+        columnVisibility = columnVisibility == .all ? .detailOnly : .all
     }
 }
 
@@ -72,23 +73,23 @@ struct EditorPanelView: View {
     let fileNode: FileNode
     @Bindable var siteViewModel: SiteViewModel
 
-    @State private var editableContent: String
-    @State private var isSaving = false
-    @State private var showSavedIndicator = false
+    // ViewModel for editor business logic
+    @State private var viewModel: EditorViewModel
+
+    // View-specific state (UI coordination, not business logic)
     @State private var editorCoordinator: EditorTextView.Coordinator?
     @State private var isFrontmatterExpanded = false
-    @State private var showConflictAlert = false
 
     init(contentFile: ContentFile, fileNode: FileNode, siteViewModel: SiteViewModel) {
         self.contentFile = contentFile
         self.fileNode = fileNode
         self.siteViewModel = siteViewModel
-        // Initialize editable content with file's markdown
-        _editableContent = State(initialValue: contentFile.markdownContent)
-    }
-
-    var hasUnsavedChanges: Bool {
-        editableContent != contentFile.markdownContent
+        // Initialize view model
+        _viewModel = State(initialValue: EditorViewModel(
+            fileNode: fileNode,
+            contentFile: contentFile,
+            siteViewModel: siteViewModel
+        ))
     }
 
     var body: some View {
@@ -96,17 +97,17 @@ struct EditorPanelView: View {
             // Toolbar
             EditorToolbar(
                 isLivePreviewEnabled: $siteViewModel.isLivePreviewEnabled,
-                isSaving: isSaving,
-                showSavedIndicator: showSavedIndicator,
-                hasUnsavedChanges: hasUnsavedChanges,
-                onSave: { Task { await saveFile() } },
+                isSaving: viewModel.isSaving,
+                showSavedIndicator: viewModel.showSavedIndicator,
+                hasUnsavedChanges: viewModel.hasUnsavedChanges,
+                onSave: { Task { await viewModel.save() } },
                 onFormat: { format in
                     editorCoordinator?.applyFormat(format)
                 }
             )
 
             // Markdown Editor (takes priority)
-            EditorTextView(text: $editableContent) { coordinator in
+            EditorTextView(text: $viewModel.editableContent) { coordinator in
                 editorCoordinator = coordinator
             }
 
@@ -120,104 +121,38 @@ struct EditorPanelView: View {
                 )
             }
         }
-        .navigationTitle(contentFile.frontmatter?.title ?? "No title")
-        .navigationSubtitle(hasUnsavedChanges ? "\(contentFile.fileName) • Edited" : (contentFile.fileName))
+        .navigationTitle(viewModel.navigationTitle)
+        .navigationSubtitle(viewModel.navigationSubtitle)
+        // Provide formatting function to focused value system for keyboard shortcuts
+        .focusedValue(\.editorFormatting) { format in
+            editorCoordinator?.applyFormat(format)
+        }
+        // When the selected file changes, reset the editor view model so it
+        // points at the new file node and content instead of the previous one.
+        .onChange(of: contentFile.id) { _, _ in
+            viewModel = EditorViewModel(
+                fileNode: fileNode,
+                contentFile: contentFile,
+                siteViewModel: siteViewModel
+            )
+        }
         // Update content when file changes
         .onChange(of: contentFile.markdownContent) { _, newValue in
-            editableContent = newValue
+            viewModel.updateContent(from: newValue)
         }
-        // Sync editing content to view model for live preview (only if enabled)
-        // Also trigger auto-save when content changes (if enabled)
-        .onChange(of: editableContent) { _, newValue in
-            if siteViewModel.isLivePreviewEnabled {
-                siteViewModel.currentEditingContent = newValue
-            }
-
-            // Schedule auto-save (debounced 2 seconds) if auto-save is enabled
-            if hasUnsavedChanges && siteViewModel.isAutoSaveEnabled {
-                scheduleAutoSave()
-            }
+        // Handle content changes (live preview + auto-save)
+        .onChange(of: viewModel.editableContent) { _, _ in
+            viewModel.handleContentChange()
         }
-        .alert("File Modified Externally", isPresented: $showConflictAlert) {
+        .alert("File Modified Externally", isPresented: $viewModel.showConflictAlert) {
             Button("Reload from Disk") {
                 Task {
-                    await siteViewModel.reloadFile(node: fileNode)
+                    await viewModel.reloadFromDisk()
                 }
             }
             Button("Keep Editing", role: .cancel) {}
         } message: {
             Text("This file was modified by another application. Auto-save has been cancelled. You can reload the file to see external changes, or keep editing to manually save your version.")
-        }
-    }
-
-    private func saveFile() async {
-        isSaving = true
-        showSavedIndicator = false
-
-        // Combine frontmatter and markdown content
-        let fullContent: String
-        if let frontmatter = contentFile.frontmatter {
-            let serialized = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
-            fullContent = serialized + "\n" + editableContent
-        } else {
-            fullContent = editableContent
-        }
-
-        let success = await siteViewModel.saveFile(node: fileNode, content: fullContent)
-
-        isSaving = false
-
-        if success {
-            // Update the content file's markdown content
-            contentFile.markdownContent = editableContent
-
-            // Show saved indicator briefly
-            showSavedIndicator = true
-            try? await Task.sleep(for: .seconds(2))
-            showSavedIndicator = false
-        }
-    }
-
-    private func scheduleAutoSave() {
-        // Prepare full content
-        let fullContent: String
-        if let frontmatter = contentFile.frontmatter {
-            let serialized = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
-            fullContent = serialized + "\n" + editableContent
-        } else {
-            fullContent = editableContent
-        }
-
-        // Schedule auto-save with conflict detection
-        Task {
-            await AutoSaveService.shared.scheduleAutoSave(
-                fileURL: fileNode.url,
-                content: fullContent,
-                lastModified: contentFile.lastModified,
-                onConflict: { @MainActor in
-                    // Cancel auto-save and show alert
-                    showConflictAlert = true
-                    return .cancel
-                },
-                onSuccess: { @MainActor newModificationDate in
-                    // Update modification date
-                    contentFile.lastModified = newModificationDate
-                    contentFile.markdownContent = editableContent
-
-                    // Show saved indicator briefly
-                    showSavedIndicator = true
-                    Task {
-                        try? await Task.sleep(for: .seconds(1))
-                        showSavedIndicator = false
-                    }
-                },
-                onError: { @MainActor error in
-                    // Show error in site view model (unless it's a user cancellation)
-                    if !(error is AutoSaveError) {
-                        siteViewModel.errorMessage = error.localizedDescription
-                    }
-                }
-            )
         }
     }
 }
@@ -356,6 +291,10 @@ struct PreviewPanel: View {
                 // File changed, update immediately
                 debounceTask?.cancel()
                 updatePreview(content: siteViewModel.currentEditingContent.isEmpty ? contentFile.markdownContent : siteViewModel.currentEditingContent)
+            }
+            .onDisappear {
+                // Cancel pending debounce task when view disappears
+                debounceTask?.cancel()
             }
     }
 

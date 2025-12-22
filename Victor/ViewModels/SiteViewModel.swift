@@ -45,13 +45,27 @@ class SiteViewModel {
     /// File system service
     private let fileSystemService = FileSystemService.shared
 
+    /// Set of node IDs that should be auto-expanded during search
+    private(set) var autoExpandedNodeIDs: Set<UUID> = []
+
     /// Filtered file nodes based on search (recursively searches tree)
     var filteredNodes: [FileNode] {
-        guard !searchQuery.isEmpty else { return fileNodes }
+        guard !searchQuery.isEmpty else {
+            autoExpandedNodeIDs.removeAll()
+            return fileNodes
+        }
+        autoExpandedNodeIDs.removeAll()
         return filterNodesRecursively(fileNodes, query: searchQuery)
     }
 
-    /// Recursively filter nodes and include parent folders if children match
+    /// Check if a node should be auto-expanded during search
+    func shouldAutoExpand(_ node: FileNode) -> Bool {
+        autoExpandedNodeIDs.contains(node.id)
+    }
+
+    /// Recursively filter nodes - minimizes object creation by reusing originals where possible
+    /// NOTE: This still creates some FileNode instances for directories with filtered children.
+    /// Complete fix would require making FileNode a struct (value type) instead of class.
     private func filterNodesRecursively(_ nodes: [FileNode], query: String) -> [FileNode] {
         var filtered: [FileNode] = []
 
@@ -61,17 +75,27 @@ class SiteViewModel {
                 let filteredChildren = filterNodesRecursively(node.children, query: query)
 
                 if !filteredChildren.isEmpty {
-                    // Include directory if it has matching children
-                    let dirCopy = FileNode(url: node.url, isDirectory: true)
-                    dirCopy.children = filteredChildren
-                    dirCopy.isExpanded = true // Auto-expand when filtering
-                    filtered.append(dirCopy)
+                    // Directory has matching children
+                    // Mark this node for auto-expansion
+                    autoExpandedNodeIDs.insert(node.id)
+
+                    // Only create a new instance if children are filtered
+                    // This is unavoidable with current architecture (FileNode is a class)
+                    if filteredChildren.count < node.children.count {
+                        // Need filtered view - create minimal copy with cached isPageBundle
+                        let filteredNode = FileNode(url: node.url, isDirectory: true, isPageBundle: node.isPageBundle)
+                        filteredNode.children = filteredChildren
+                        filtered.append(filteredNode)
+                    } else {
+                        // All children match - reuse original
+                        filtered.append(node)
+                    }
                 } else if node.name.localizedCaseInsensitiveContains(query) {
-                    // Include directory if its name matches
+                    // Directory name matches - return original
                     filtered.append(node)
                 }
             } else {
-                // Include file if name matches
+                // File node - reuse original (no copies needed)
                 if node.name.localizedCaseInsensitiveContains(query) {
                     filtered.append(node)
                 }
@@ -209,6 +233,26 @@ class SiteViewModel {
             errorMessage = "Failed to save file: \(error.localizedDescription)"
             print("Error saving file: \(error)")
             return false
+        }
+    }
+
+    /// Create a new markdown file inside the given folder node
+    func createMarkdownFile(in folder: FileNode) async {
+        guard folder.isDirectory else { return }
+
+        do {
+            // Ask filesystem service to create a new markdown file
+            let newFileURL = try await fileSystemService.createMarkdownFile(in: folder.url)
+
+            // Build a FileNode for the new file and insert it into the tree
+            let newNode = FileNode(url: newFileURL, isDirectory: false, isPageBundle: false)
+            folder.addChild(newNode)
+
+            // Select the newly created file
+            selectNode(newNode)
+        } catch {
+            errorMessage = "Failed to create file: \(error.localizedDescription)"
+            print("Error creating markdown file: \(error)")
         }
     }
 

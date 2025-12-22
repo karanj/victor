@@ -3,7 +3,7 @@ import Yams
 import TOMLKit
 
 /// Service for parsing and serializing Hugo frontmatter
-@MainActor
+/// Note: No @MainActor - parsing is CPU-intensive but doesn't require main thread
 class FrontmatterParser {
     static let shared = FrontmatterParser()
 

@@ -2,7 +2,6 @@ import Foundation
 import AppKit
 
 /// Service for file system operations and folder management
-@MainActor
 class FileSystemService {
     static let shared = FileSystemService()
 
@@ -11,6 +10,8 @@ class FileSystemService {
     // MARK: - Folder Selection
 
     /// Present folder selection dialog and return selected URL
+    /// Requires main thread for NSOpenPanel
+    @MainActor
     func selectHugoSiteFolder() async -> URL? {
         await withCheckedContinuation { continuation in
             let panel = NSOpenPanel()
@@ -114,8 +115,14 @@ class FileSystemService {
             let isDirectory = resourceValues.isDirectory ?? false
 
             if isDirectory {
-                // Create directory node
-                let dirNode = FileNode(url: itemURL, isDirectory: true)
+                // Check if this is a Hugo page bundle (has index.md or _index.md)
+                let indexMD = itemURL.appendingPathComponent("index.md")
+                let underscoreIndexMD = itemURL.appendingPathComponent("_index.md")
+                let isBundle = fileManager.fileExists(atPath: indexMD.path) ||
+                              fileManager.fileExists(atPath: underscoreIndexMD.path)
+
+                // Create directory node with cached page bundle status
+                let dirNode = FileNode(url: itemURL, isDirectory: true, isPageBundle: isBundle)
 
                 // Recursively scan subdirectory
                 let children = try buildFileTree(at: itemURL)
@@ -132,7 +139,7 @@ class FileSystemService {
                 }
             } else if itemURL.pathExtension.lowercased() == "md" {
                 // Create file node for markdown files
-                let fileNode = FileNode(url: itemURL, isDirectory: false)
+                let fileNode = FileNode(url: itemURL, isDirectory: false, isPageBundle: false)
                 nodes.append(fileNode)
             }
         }
@@ -176,16 +183,21 @@ class FileSystemService {
         var coordinatorError: NSError?
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var didResume = false
+
             coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { url in
                 do {
                     try content.write(to: url, atomically: true, encoding: .utf8)
                     continuation.resume()
+                    didResume = true
                 } catch {
                     continuation.resume(throwing: error)
+                    didResume = true
                 }
             }
 
-            if let error = coordinatorError {
+            // Only resume if the coordination block was never executed
+            if !didResume, let error = coordinatorError {
                 continuation.resume(throwing: error)
             }
         }
@@ -194,6 +206,47 @@ class FileSystemService {
     /// Write content file to disk
     func saveContentFile(_ file: ContentFile) async throws {
         try await writeFile(to: file.url, content: file.fullContent)
+    }
+
+    /// Create a new markdown file inside the given folder URL
+    func createMarkdownFile(in folderURL: URL) async throws -> URL {
+        let fileManager = FileManager.default
+
+        // Ensure directory exists
+        var isDir: ObjCBool = false
+        guard fileManager.fileExists(atPath: folderURL.path, isDirectory: &isDir), isDir.boolValue else {
+            throw FileError.fileNotFound
+        }
+
+        // Generate a base name from the current date: YYYY-MM-DD
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateString = formatter.string(from: Date())
+        let baseName = dateString
+        var candidateName = "\(baseName).md"
+        var index = 1
+        var candidateURL = folderURL.appendingPathComponent(candidateName)
+
+        while fileManager.fileExists(atPath: candidateURL.path) {
+            candidateName = "\(baseName)-\(index).md"
+            candidateURL = folderURL.appendingPathComponent(candidateName)
+            index += 1
+        }
+
+        // Simple default frontmatter and body
+        let content = """
+        ---
+        title: "New Post"
+        draft: true
+        ---
+
+        # New Post
+
+        Write your content here.
+        """
+
+        try await writeFile(to: candidateURL, content: content)
+        return candidateURL
     }
 
     /// Get file modification date

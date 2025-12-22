@@ -25,6 +25,7 @@
 		1000000000000010 /* FrontmatterParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000010 /* FrontmatterParser.swift */; };
 		1000000000000011 /* FrontmatterEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000011 /* FrontmatterEditorView.swift */; };
 		1000000000000012 /* AutoSaveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000012 /* AutoSaveService.swift */; };
+		1000000000000013 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000013 /* EditorViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +46,7 @@
 		2000000000000010 /* FrontmatterParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterParser.swift; sourceTree = "<group>"; };
 		2000000000000011 /* FrontmatterEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterEditorView.swift; sourceTree = "<group>"; };
 		2000000000000012 /* AutoSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveService.swift; sourceTree = "<group>"; };
+		2000000000000013 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +107,7 @@
 			isa = PBXGroup;
 			children = (
 				2000000000000008 /* SiteViewModel.swift */,
+				2000000000000013 /* EditorViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -249,6 +252,7 @@
 				1000000000000010 /* FrontmatterParser.swift in Sources */,
 				1000000000000011 /* FrontmatterEditorView.swift in Sources */,
 				1000000000000012 /* AutoSaveService.swift in Sources */,
+				1000000000000013 /* EditorViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

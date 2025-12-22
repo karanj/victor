@@ -100,6 +100,7 @@ actor AutoSaveService {
         return try await withCheckedThrowingContinuation { continuation in
             let coordinator = NSFileCoordinator()
             var coordinatorError: NSError?
+            var didResume = false
 
             coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
                 do {
@@ -111,12 +112,16 @@ actor AutoSaveService {
                     let newModificationDate = attributes[.modificationDate] as? Date ?? Date()
 
                     continuation.resume(returning: newModificationDate)
+                    didResume = true
                 } catch {
                     continuation.resume(throwing: error)
+                    didResume = true
                 }
             }
 
-            if let error = coordinatorError {
+            // Only resume here if the coordination block was never executed
+            // (coordinatorError is set when coordination fails before the block runs)
+            if !didResume, let error = coordinatorError {
                 continuation.resume(throwing: error)
             }
         }

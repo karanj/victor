@@ -6,6 +6,9 @@ class FileNode: Identifiable, Hashable {
     let id: UUID
     let url: URL
     let isDirectory: Bool
+    /// Whether this is a Hugo page bundle (directory with index.md/_index.md)
+    /// Cached at creation time to avoid file I/O on main thread
+    let isPageBundle: Bool
     var isExpanded: Bool = false
     var children: [FileNode] = []
     weak var parent: FileNode?
@@ -23,19 +26,11 @@ class FileNode: Identifiable, Hashable {
         !isDirectory && url.pathExtension.lowercased() == "md"
     }
 
-    /// Whether this is a Hugo page bundle (directory with index.md)
-    var isPageBundle: Bool {
-        guard isDirectory else { return false }
-        let indexMD = url.appendingPathComponent("index.md")
-        let underscoreIndexMD = url.appendingPathComponent("_index.md")
-        return FileManager.default.fileExists(atPath: indexMD.path) ||
-               FileManager.default.fileExists(atPath: underscoreIndexMD.path)
-    }
-
-    init(url: URL, isDirectory: Bool) {
+    init(url: URL, isDirectory: Bool, isPageBundle: Bool = false) {
         self.id = UUID()
         self.url = url
         self.isDirectory = isDirectory
+        self.isPageBundle = isPageBundle
     }
 
     // MARK: - Hashable & Equatable
@@ -79,6 +74,15 @@ class FileNode: Identifiable, Hashable {
             }
             // Alphabetically within same type
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    /// Get the index file for a page bundle (index.md or _index.md)
+    var indexFile: FileNode? {
+        guard isPageBundle else { return nil }
+        return children.first { child in
+            let name = child.name.lowercased()
+            return name == "index.md" || name == "_index.md"
         }
     }
 }
