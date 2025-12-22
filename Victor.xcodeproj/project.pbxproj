@@ -19,6 +19,9 @@
 		100000000000000A /* Down in Frameworks */ = {isa = PBXBuildFile; productRef = 300000000000000A /* Down */; };
 		100000000000000B /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = 300000000000000B /* Yams */; };
 		100000000000000C /* TOMLKit in Frameworks */ = {isa = PBXBuildFile; productRef = 300000000000000C /* TOMLKit */; };
+		100000000000000D /* EditorTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000D /* EditorTextView.swift */; };
+		100000000000000E /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000E /* MarkdownRenderer.swift */; };
+		100000000000000F /* PreviewWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000F /* PreviewWebView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +36,9 @@
 		2000000000000008 /* SiteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteViewModel.swift; sourceTree = "<group>"; };
 		2000000000000009 /* FileSystemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemService.swift; sourceTree = "<group>"; };
 		200000000000000A /* Victor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Victor.entitlements; sourceTree = "<group>"; };
+		200000000000000D /* EditorTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextView.swift; sourceTree = "<group>"; };
+		200000000000000E /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
+		200000000000000F /* PreviewWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWebView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,6 +107,8 @@
 			isa = PBXGroup;
 			children = (
 				5000000000000008 /* MainWindow */,
+				5000000000000009 /* Editor */,
+				500000000000000A /* Preview */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -109,6 +117,7 @@
 			isa = PBXGroup;
 			children = (
 				2000000000000009 /* FileSystemService.swift */,
+				200000000000000E /* MarkdownRenderer.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -120,6 +129,22 @@
 				2000000000000003 /* SidebarView.swift */,
 			);
 			path = MainWindow;
+			sourceTree = "<group>";
+		};
+		5000000000000009 /* Editor */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000D /* EditorTextView.swift */,
+			);
+			path = Editor;
+			sourceTree = "<group>";
+		};
+		500000000000000A /* Preview */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000F /* PreviewWebView.swift */,
+			);
+			path = Preview;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -209,6 +234,9 @@
 				1000000000000007 /* Frontmatter.swift in Sources */,
 				1000000000000008 /* SiteViewModel.swift in Sources */,
 				1000000000000009 /* FileSystemService.swift in Sources */,
+				100000000000000D /* EditorTextView.swift in Sources */,
+				100000000000000E /* MarkdownRenderer.swift in Sources */,
+				100000000000000F /* PreviewWebView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -342,7 +370,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 55V96YBUQ4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -368,7 +396,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 55V96YBUQ4;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

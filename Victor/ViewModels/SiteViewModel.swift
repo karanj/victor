@@ -17,6 +17,12 @@ class SiteViewModel {
     /// Selected file ID for binding
     var selectedFileID: FileNode.ID?
 
+    /// Current editing content (for live preview)
+    var currentEditingContent: String = ""
+
+    /// Live preview enabled state
+    var isLivePreviewEnabled: Bool = false
+
     /// Loading state
     var isLoading = false
 
@@ -168,6 +174,30 @@ class SiteViewModel {
     }
 
     // MARK: - File Operations
+
+    /// Save edited content to file
+    func saveFile(node: FileNode, content: String) async -> Bool {
+        guard let contentFile = node.contentFile else {
+            errorMessage = "No content file to save"
+            return false
+        }
+
+        do {
+            // Write to disk
+            try await fileSystemService.writeFile(to: node.url, content: content)
+
+            // Update the content file model
+            contentFile.markdownContent = content
+            contentFile.lastModified = Date()
+
+            print("Saved file: \(node.name)")
+            return true
+        } catch {
+            errorMessage = "Failed to save file: \(error.localizedDescription)"
+            print("Error saving file: \(error)")
+            return false
+        }
+    }
 
     /// Reload current site
     func reloadSite() async {

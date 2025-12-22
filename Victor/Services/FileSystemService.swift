@@ -168,15 +168,15 @@ class FileSystemService {
         return file
     }
 
-    /// Write content file to disk
-    func saveContentFile(_ file: ContentFile) async throws {
+    /// Write content to file at URL
+    func writeFile(to url: URL, content: String) async throws {
         let coordinator = NSFileCoordinator()
         var coordinatorError: NSError?
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            coordinator.coordinate(writingItemAt: file.url, options: [], error: &coordinatorError) { url in
+            coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { url in
                 do {
-                    try file.fullContent.write(to: url, atomically: true, encoding: .utf8)
+                    try content.write(to: url, atomically: true, encoding: .utf8)
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -187,6 +187,11 @@ class FileSystemService {
                 continuation.resume(throwing: error)
             }
         }
+    }
+
+    /// Write content file to disk
+    func saveContentFile(_ file: ContentFile) async throws {
+        try await writeFile(to: file.url, content: file.fullContent)
     }
 
     /// Get file modification date
