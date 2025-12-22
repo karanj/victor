@@ -4,14 +4,13 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 
 ## Features
 
-### ✅ Currently Available (Phases 1-4 Complete)
+### ✅ Currently Available (Phases 1-3 Complete)
 
 **Site Management:**
 - Open and browse Hugo site folders
 - Hierarchical file tree navigation with expand/collapse
 - File search (recursive through folders)
 - Security-scoped bookmarks for persistent folder access
-- Hugo page bundle detection
 
 **Markdown Editing:**
 - Full-featured markdown editor with NSTextView
@@ -40,6 +39,7 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 - Unsaved changes indicator
 
 ### Coming Soon
+- **Phase 4**: Hugo page bundle support (visual indicators, special handling)
 - **Phase 5**: Auto-save, file watching, extended keyboard shortcuts, and UI polish
 
 ## Requirements
@@ -148,13 +148,13 @@ Victor/
 - Preserve original format on save
 - Custom fields preserved
 
-### ✅ Phase 4: File Tree Navigation (Complete - Dec 22, 2024)
-- Hierarchical file browser with OutlineGroup
-- Hugo page bundle detection (index.md folders)
-- Folder expand/collapse with state preservation
-- Recursive search through tree structure
+### 🔄 Phase 4: Hugo Page Bundle Support (Next)
+- Visual indicators for page bundles (folders with index.md)
+- Special handling when opening page bundles
+- Bundle-aware navigation
+- Note: Detection logic exists, UI integration needed
 
-### 🔄 Phase 5: Polish & Reliability (Next)
+### 📋 Phase 5: Polish & Reliability
 - Auto-save with 2-second debounce
 - File system watching with FSEvents
 - Conflict detection and resolution
@@ -216,7 +216,7 @@ swift build
 
 ## Contributing
 
-Phases 1-4 are complete! The app is fully functional for editing Hugo sites. Contributions welcome for:
+Phases 1-3 are complete! The app is fully functional for editing Hugo sites. Contributions welcome for:
 - Bug fixes and testing
 - UI/UX improvements
 - Documentation enhancements

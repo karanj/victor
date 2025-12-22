@@ -28,7 +28,7 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ### Completed Phases
 - ✅ **Phase 1**: Foundation - Basic Hugo CMS structure (commit: `5a2540b`)
-- ✅ **Phase 2**: Editor & Preview - Live markdown editing (commit: `4c8c219`)
+- ✅ **Phase 2**: Editor & Preview - Live markdown editing + hierarchical tree (commit: `4c8c219`)
 - ✅ **Phase 3**: Frontmatter Support - Parse and edit YAML/TOML/JSON (commit: `175171c`)
 
 ### What's Implemented
@@ -522,20 +522,24 @@ url.stopAccessingSecurityScopedResource() // When done
 
 ---
 
-### ✅ Phase 4: File Tree Navigation (COMPLETE)
-**Duration**: Included in Phase 2
-**Status**: Committed (31f2874)
+### 🔄 Phase 4: Hugo Page Bundle Support (NEXT)
+**Duration**: ~0.5 session
+**Status**: Partially implemented
 
-**Delivered**:
-- Hierarchical file browser with OutlineGroup
+**Already Have**:
+- Hierarchical file browser with OutlineGroup (implemented in Phase 2)
+- Page bundle detection logic (`isPageBundle` property in FileNode)
 - Expand/collapse folders
-- Hugo page bundle detection
 - Recursive search through tree
-- Folders sorted first, then alphabetically
+
+**Still Needed**:
+- Visual indicator for page bundles in sidebar (special icon)
+- Different behavior when clicking page bundles
+- Show bundle contents differently
 
 **Goals**:
-- Hierarchical file browser ✅
-- Hugo page bundle support ✅
+- Hierarchical file browser ✅ (done in Phase 2)
+- Hugo page bundle support ⚠️ (detection exists, UI integration needed)
 
 **Tasks**:
 1. Enhance `FileSystemService.scanDirectory`:
@@ -562,7 +566,7 @@ url.stopAccessingSecurityScopedResource() // When done
 
 ---
 
-### 🔄 Phase 5: Auto-Save & Polish (NEXT)
+### 📋 Phase 5: Auto-Save & Polish
 **Duration**: ~1-2 sessions
 **Status**: Not started
 
