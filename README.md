@@ -34,21 +34,23 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 
 2. Open in Xcode:
    ```bash
-   open Package.swift
+   open Victor.xcodeproj
    ```
    This will open the project in Xcode and automatically fetch dependencies.
 
 3. Build and run:
-   - Select the "My Mac" destination
+   - Select the "Victor" scheme
+   - Select "My Mac" as the destination
    - Press ⌘R to build and run
 
-### Using Swift Package Manager (Command Line)
+### Alternative: Command Line Build
 
 ```bash
-# Build
-swift build
+# Build with xcodebuild
+xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
 
-# Run
+# Or use Swift Package Manager
+swift build
 swift run Victor
 ```
 

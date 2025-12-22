@@ -127,15 +127,17 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ## Architecture Decisions Made
 
-### 1. Project Structure: Swift Package vs Xcode Project
-**Decision**: Started with Swift Package Manager
+### 1. Project Structure: Xcode Project
+**Decision**: Using traditional Xcode project (Victor.xcodeproj)
 **Rationale**:
-- Easier to create from command line
-- Clean dependency management
-- Can be opened directly in Xcode (open Package.swift)
-- May convert to full Xcode project later for app bundle features
+- User preference for Xcode project workflow
+- Better asset management (App Icon, resources)
+- More familiar Xcode experience
+- SPM dependencies managed within Xcode project
 
-**Trade-off**: Missing some Xcode project features (asset catalogs, Info.plist customization), but sufficient for development.
+**Implementation**: Created project.pbxproj manually with all source files and SPM dependencies configured.
+
+**Note**: Package.swift is kept for backward compatibility but Victor.xcodeproj is the primary build method.
 
 ### 2. State Management: MVVM with @Observable
 **Decision**: Use @Observable macro instead of ObservableObject
@@ -611,35 +613,38 @@ Then open this folder in Victor.
 
 ## Development Commands
 
-### Build
+### Open in Xcode (Primary Method)
 ```bash
-swift build
+open Victor.xcodeproj
 ```
 
-### Run
+### Build with Xcode
 ```bash
+xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
+```
+
+### Run from Xcode
+- Open Victor.xcodeproj
+- Select "Victor" scheme and "My Mac" destination
+- Press ⌘R
+
+### Alternative: Swift Package Manager
+```bash
+# Build
+swift build
+
+# Run
 swift run Victor
-```
 
-### Open in Xcode
-```bash
-open Package.swift
-```
-
-### Clean Build
-```bash
+# Clean
 swift package clean
-swift build
 ```
 
 ### Update Dependencies
+Dependencies are managed in Victor.xcodeproj. Xcode will automatically fetch them on first build.
+Alternatively:
 ```bash
 swift package update
-```
-
-### Generate Xcode Project (if needed)
-```bash
-swift package generate-xcodeproj
 ```
 
 ---
