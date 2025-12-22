@@ -145,17 +145,75 @@ struct FileListView: View {
 
     var body: some View {
         List(siteViewModel.filteredNodes, selection: $siteViewModel.selectedFileID) { node in
+            if node.isDirectory {
+                // Use DisclosureGroup for folders with children
+                DisclosureGroup(isExpanded: Binding(
+                    get: { node.isExpanded },
+                    set: { node.isExpanded = $0 }
+                )) {
+                    ForEach(node.children) { child in
+                        FileTreeRow(node: child, siteViewModel: siteViewModel)
+                    }
+                } label: {
+                    FileRowView(node: node)
+                }
+            } else {
+                // Regular file row
+                FileRowView(node: node)
+                    .tag(node.id)
+                    .onTapGesture {
+                        siteViewModel.selectNode(node)
+                    }
+            }
+        }
+        .listStyle(.sidebar)
+        .onChange(of: siteViewModel.selectedFileID) { _, newValue in
+            if let id = newValue {
+                if let node = findNode(id: id, in: siteViewModel.fileNodes) {
+                    siteViewModel.selectNode(node)
+                }
+            }
+        }
+    }
+
+    // Recursively find a node by ID
+    private func findNode(id: UUID, in nodes: [FileNode]) -> FileNode? {
+        for node in nodes {
+            if node.id == id {
+                return node
+            }
+            if let found = findNode(id: id, in: node.children) {
+                return found
+            }
+        }
+        return nil
+    }
+}
+
+// MARK: - Recursive File Tree Row
+
+struct FileTreeRow: View {
+    let node: FileNode
+    let siteViewModel: SiteViewModel
+
+    var body: some View {
+        if node.isDirectory {
+            DisclosureGroup(isExpanded: Binding(
+                get: { node.isExpanded },
+                set: { node.isExpanded = $0 }
+            )) {
+                ForEach(node.children) { child in
+                    FileTreeRow(node: child, siteViewModel: siteViewModel)
+                }
+            } label: {
+                FileRowView(node: node)
+            }
+        } else {
             FileRowView(node: node)
                 .tag(node.id)
                 .onTapGesture {
                     siteViewModel.selectNode(node)
                 }
-        }
-        .listStyle(.sidebar)
-        .onChange(of: siteViewModel.selectedFileID) { _, newValue in
-            if let id = newValue, let node = siteViewModel.fileNodes.first(where: { $0.id == id }) {
-                siteViewModel.selectNode(node)
-            }
         }
     }
 }

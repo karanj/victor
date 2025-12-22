@@ -29,12 +29,40 @@ class SiteViewModel {
     /// File system service
     private let fileSystemService = FileSystemService.shared
 
-    /// Filtered file nodes based on search
+    /// Filtered file nodes based on search (recursively searches tree)
     var filteredNodes: [FileNode] {
         guard !searchQuery.isEmpty else { return fileNodes }
-        return fileNodes.filter { node in
-            node.name.localizedCaseInsensitiveContains(searchQuery)
+        return filterNodesRecursively(fileNodes, query: searchQuery)
+    }
+
+    /// Recursively filter nodes and include parent folders if children match
+    private func filterNodesRecursively(_ nodes: [FileNode], query: String) -> [FileNode] {
+        var filtered: [FileNode] = []
+
+        for node in nodes {
+            if node.isDirectory {
+                // Recursively filter children
+                let filteredChildren = filterNodesRecursively(node.children, query: query)
+
+                if !filteredChildren.isEmpty {
+                    // Include directory if it has matching children
+                    let dirCopy = FileNode(url: node.url, isDirectory: true)
+                    dirCopy.children = filteredChildren
+                    dirCopy.isExpanded = true // Auto-expand when filtering
+                    filtered.append(dirCopy)
+                } else if node.name.localizedCaseInsensitiveContains(query) {
+                    // Include directory if its name matches
+                    filtered.append(node)
+                }
+            } else {
+                // Include file if name matches
+                if node.name.localizedCaseInsensitiveContains(query) {
+                    filtered.append(node)
+                }
+            }
         }
+
+        return filtered
     }
 
     init() {

@@ -83,54 +83,67 @@ class FileSystemService {
 
     // MARK: - Directory Scanning
 
-    /// Scan directory and build file tree
-    /// Phase 1: Flat list of markdown files
-    /// Phase 4: Will be enhanced to build hierarchical tree
+    /// Scan directory and build hierarchical file tree
     func scanDirectory(at url: URL) throws -> [FileNode] {
-        var nodes: [FileNode] = []
-
         // Get content directory
         let contentURL = url.appendingPathComponent("content")
 
         guard FileManager.default.fileExists(atPath: contentURL.path) else {
             // If no content directory, scan root for .md files
-            return try scanForMarkdownFiles(in: url, relativeTo: url)
+            return try buildFileTree(at: url)
         }
 
-        // Scan content directory recursively
-        nodes = try scanForMarkdownFiles(in: contentURL, relativeTo: contentURL)
-
-        return nodes
+        // Build hierarchical tree from content directory
+        return try buildFileTree(at: contentURL)
     }
 
-    /// Recursively scan for markdown files
-    private func scanForMarkdownFiles(in directory: URL, relativeTo baseURL: URL) throws -> [FileNode] {
+    /// Recursively build file tree with folders and markdown files
+    private func buildFileTree(at directory: URL) throws -> [FileNode] {
         var nodes: [FileNode] = []
-
         let fileManager = FileManager.default
-        let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey]
 
-        guard let enumerator = fileManager.enumerator(
+        // Get immediate children of this directory
+        let contents = try fileManager.contentsOfDirectory(
             at: directory,
-            includingPropertiesForKeys: resourceKeys,
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else {
-            return nodes
-        }
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
 
-        for case let fileURL as URL in enumerator {
-            _ = try fileURL.resourceValues(forKeys: Set(resourceKeys))
+        for itemURL in contents {
+            let resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
+            let isDirectory = resourceValues.isDirectory ?? false
 
-            // Phase 1: Only include markdown files (flat list)
-            // Phase 4: Will include directories for hierarchy
-            if fileURL.pathExtension.lowercased() == "md" {
-                let node = FileNode(url: fileURL, isDirectory: false)
-                nodes.append(node)
+            if isDirectory {
+                // Create directory node
+                let dirNode = FileNode(url: itemURL, isDirectory: true)
+
+                // Recursively scan subdirectory
+                let children = try buildFileTree(at: itemURL)
+
+                // Only include directory if it has markdown files or subdirectories with markdown files
+                if !children.isEmpty {
+                    dirNode.children = children
+                    // Set parent reference for all children
+                    for child in children {
+                        child.parent = dirNode
+                    }
+                    dirNode.sortChildren()
+                    nodes.append(dirNode)
+                }
+            } else if itemURL.pathExtension.lowercased() == "md" {
+                // Create file node for markdown files
+                let fileNode = FileNode(url: itemURL, isDirectory: false)
+                nodes.append(fileNode)
             }
         }
 
-        // Sort alphabetically
-        nodes.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        // Sort: directories first, then alphabetically
+        nodes.sort { lhs, rhs in
+            if lhs.isDirectory != rhs.isDirectory {
+                return lhs.isDirectory
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
 
         return nodes
     }

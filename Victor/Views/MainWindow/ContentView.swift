@@ -8,7 +8,7 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar - File navigation
             SidebarView(siteViewModel: siteViewModel)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 250, max: 400)
+                .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 400)
         } content: {
             // Editor Panel - Markdown content (Phase 1: Simple text view)
             if let selectedNode = siteViewModel.selectedNode,
