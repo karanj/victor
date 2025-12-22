@@ -156,6 +156,7 @@ enum MarkdownFormat {
     case heading
     case unorderedList
     case orderedList
+    case code
 
     var prefix: String {
         switch self {
@@ -170,6 +171,7 @@ enum MarkdownFormat {
         switch self {
         case .bold: return ("**", "**")
         case .italic: return ("*", "*")
+        case .code: return ("```\n","\n```")
         default: return nil
         }
     }

@@ -202,6 +202,13 @@ struct EditorToolbar: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Ordered List")
+                
+                Button(action: { onFormat(.code) }) {
+                    Label("Code", systemImage: "text.word.spacing")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .help("Code Block")
             }
 
             Spacer()
