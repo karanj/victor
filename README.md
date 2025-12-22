@@ -4,18 +4,43 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 
 ## Features
 
-### Phase 1 (✅ Complete)
+### ✅ Currently Available (Phases 1-4 Complete)
+
+**Site Management:**
 - Open and browse Hugo site folders
-- File navigation with search
-- Display markdown file contents
+- Hierarchical file tree navigation with expand/collapse
+- File search (recursive through folders)
 - Security-scoped bookmarks for persistent folder access
-- Flat file list view
+- Hugo page bundle detection
+
+**Markdown Editing:**
+- Full-featured markdown editor with NSTextView
+- Formatting toolbar (bold, italic, headings, lists, code blocks)
+- Monospace font, disabled smart quotes for code-friendly editing
+- Live HTML preview with GitHub-style rendering
+- Debounced preview updates (300ms) for smooth typing
+- Live preview toggle
+
+**Frontmatter Editing:**
+- Parse and edit YAML, TOML, and JSON frontmatter
+- Structured form editor with fields for:
+  - Title
+  - Date (optional with checkbox toggle)
+  - Draft status
+  - Description
+  - Tags (chip-based input with flow layout)
+  - Categories (chip-based input)
+- Custom fields preserved
+- Round-trip format preservation (YAML stays YAML, etc.)
+- Collapsible frontmatter editor UI
+
+**File Operations:**
+- Save files (⌘S) with frontmatter + markdown combined
+- Undo/redo support in editor
+- Unsaved changes indicator
 
 ### Coming Soon
-- **Phase 2**: Live markdown preview with WKWebView
-- **Phase 3**: Frontmatter parsing and editing (YAML/TOML)
-- **Phase 4**: Hierarchical file tree navigation
-- **Phase 5**: Auto-save, file watching, and UI polish
+- **Phase 5**: Auto-save, file watching, extended keyboard shortcuts, and UI polish
 
 ## Requirements
 
@@ -56,12 +81,17 @@ swift run Victor
 
 ## Usage
 
-1. Launch Victor
-2. Click "Open Hugo Site" button or use ⌘O
-3. Select your Hugo site root directory (the folder containing `content/` and config files)
-4. Browse markdown files in the sidebar
-5. Click on a file to view its contents
-6. Use the search bar to filter files
+1. **Launch Victor**
+2. **Open a site**: Click "Open Hugo Site" or use ⌘O
+3. **Select folder**: Choose your Hugo site root directory (containing `content/` and config files)
+4. **Navigate**: Browse the hierarchical file tree, expand/collapse folders
+5. **Search**: Use the search bar to filter files across all folders
+6. **Edit**: Click a file to open it
+   - Edit frontmatter in the structured form (top)
+   - Edit markdown content in the editor (middle)
+   - See live preview in the right panel (toggle with "Live Preview" button)
+7. **Format**: Use toolbar buttons for bold, italic, headings, lists, code blocks
+8. **Save**: Press ⌘S to save changes (frontmatter + markdown combined)
 
 ## Project Structure
 
@@ -98,31 +128,39 @@ Victor/
 
 ## Development Roadmap
 
-### ✅ Phase 1: Foundation (Complete)
-- Basic app structure
-- Folder selection and browsing
-- Simple file list view
+### ✅ Phase 1: Foundation (Complete - Dec 22, 2024)
+- Basic app structure with MVVM architecture
+- Folder selection with security-scoped bookmarks
+- File system service with NSFileCoordinator
+- NavigationSplitView layout
 
-### 🚧 Phase 2: Editor & Preview (Next)
-- NSTextView-based markdown editor
-- WKWebView-based live preview
-- Debounced preview updates
+### ✅ Phase 2: Editor & Preview (Complete - Dec 22, 2024)
+- NSTextView-based markdown editor with formatting toolbar
+- WKWebView-based live preview with GitHub styling
+- Debounced preview updates (300ms)
+- Hierarchical file tree navigation
 
-### 📋 Phase 3: Frontmatter Support
-- YAML/TOML/JSON frontmatter parsing
-- Form-based frontmatter editor
+### ✅ Phase 3: Frontmatter Support (Complete - Dec 22, 2024)
+- YAML/TOML/JSON frontmatter parsing (Yams, TOMLKit)
+- Form-based frontmatter editor with structured fields
+- Optional date field with toggle
+- Tag/category input with chip UI
 - Preserve original format on save
+- Custom fields preserved
 
-### 📋 Phase 4: File Tree Navigation
-- Hierarchical file browser
-- Hugo page bundle support
-- Folder expand/collapse
+### ✅ Phase 4: File Tree Navigation (Complete - Dec 22, 2024)
+- Hierarchical file browser with OutlineGroup
+- Hugo page bundle detection (index.md folders)
+- Folder expand/collapse with state preservation
+- Recursive search through tree structure
 
-### 📋 Phase 5: Polish & Reliability
-- Auto-save with conflict detection
-- File system watching
-- Keyboard shortcuts
-- Error handling
+### 🔄 Phase 5: Polish & Reliability (Next)
+- Auto-save with 2-second debounce
+- File system watching with FSEvents
+- Conflict detection and resolution
+- Extended keyboard shortcuts
+- Comprehensive error handling
+- Performance optimization for 500+ files
 
 ## Hugo Site Structure
 
@@ -144,8 +182,11 @@ your-hugo-site/
 ## Keyboard Shortcuts
 
 - **⌘O**: Open Hugo site folder
+- **⌘S**: Save current file
 - **⌘F**: Focus search (when site is open)
 - **⌘W**: Close window
+- **⌘B**: Bold selected text (in editor)
+- **⌘I**: Italic selected text (in editor)
 
 More shortcuts coming in Phase 5.
 
@@ -175,11 +216,13 @@ swift build
 
 ## Contributing
 
-Phase 1 is complete. Check the roadmap above for upcoming features. Contributions welcome for:
-- Bug fixes
-- UI improvements
-- Documentation
-- Testing
+Phases 1-4 are complete! The app is fully functional for editing Hugo sites. Contributions welcome for:
+- Bug fixes and testing
+- UI/UX improvements
+- Documentation enhancements
+- Phase 5 features (auto-save, file watching, etc.)
+- Performance optimizations
+- Accessibility improvements
 
 ## License
 

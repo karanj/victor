@@ -21,10 +21,15 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ---
 
-## Current Status: Phase 1 Complete ✅
+## Current Status: Phase 3 Complete ✅
 
 **Date Completed**: 2025-12-22
-**Git Commit**: `5a2540b` - "Phase 1: Foundation - Basic Hugo CMS structure"
+**Latest Commit**: `175171c` - "Fix date field parsing and make it optional"
+
+### Completed Phases
+- ✅ **Phase 1**: Foundation - Basic Hugo CMS structure (commit: `5a2540b`)
+- ✅ **Phase 2**: Editor & Preview - Live markdown editing (commit: `4c8c219`)
+- ✅ **Phase 3**: Frontmatter Support - Parse and edit YAML/TOML/JSON (commit: `175171c`)
 
 ### What's Implemented
 
@@ -54,10 +59,11 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
    - Detects Hugo page bundles (folders with index.md)
    - Recursive node finding and sorting
 
-4. **Frontmatter.swift** (Basic Version)
+4. **Frontmatter.swift**
    - Enum for format detection (YAML/TOML/JSON)
-   - Stores raw content (parsing in Phase 3)
-   - Placeholder for structured fields
+   - Structured properties: title, date, draft, tags, categories, description
+   - Custom fields dictionary for unknown fields
+   - @Observable for real-time UI updates
 
 #### Services (Victor/Services/)
 1. **FileSystemService.swift**
@@ -67,9 +73,22 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
      - Save bookmarks for persistent access
      - Load and validate on app launch
      - Handle stale bookmarks
-   - **Directory Scanning**: Recursive file enumeration
+   - **Directory Scanning**: Recursive file enumeration with tree building
    - **File I/O**: Read/write with NSFileCoordinator
+   - **Frontmatter Parsing**: Integration with FrontmatterParser
    - **Error Handling**: Custom FileError enum with LocalizedError
+
+2. **FrontmatterParser.swift** (Phase 3)
+   - Parse YAML, TOML, and JSON frontmatter
+   - Extract to structured fields
+   - Serialize back to original format
+   - Support multiple Hugo date formats
+   - Preserve custom fields
+
+3. **MarkdownRenderer.swift** (Phase 2)
+   - Convert markdown to HTML using Down library
+   - GitHub-flavored markdown styling
+   - Error handling with fallback display
 
 #### ViewModels (Victor/ViewModels/)
 1. **SiteViewModel.swift**
@@ -82,19 +101,47 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 #### Views (Victor/Views/)
 1. **MainWindow/ContentView.swift**
    - Three-column NavigationSplitView layout
-   - Sidebar (200-400pt), Editor panel, Preview panel
+   - Sidebar (250-400pt), Editor panel, Preview panel
+   - EditorPanelView with toolbar and frontmatter integration
+   - PreviewPanel with live markdown rendering
    - Toolbar with sidebar toggle and loading indicator
    - Error alert presentation
    - Empty states with ContentUnavailableView
 
 2. **MainWindow/SidebarView.swift**
+   - Hierarchical file tree navigation (Phase 2)
+   - Expand/collapse folders
    - Modular components:
      - OpenFolderPrompt: Button to open Hugo site
      - SiteHeader: Site name, file count, menu
-     - SearchBar: Filter files by name
-     - FileListView: List with selection binding
+     - SearchBar: Filter files by name with recursive search
+     - FileListView: Tree with selection binding
      - FileRowView: Individual file display with icons and draft badges
      - LoadingView: Progress indicator
+
+3. **Editor/EditorTextView.swift** (Phase 2)
+   - NSTextView wrapper for high-performance editing
+   - Monospace font, plain text (no rich text)
+   - Disabled smart quotes/dashes for markdown
+   - Markdown formatting toolbar (bold, italic, headings, lists, code)
+   - Undo/redo support
+
+4. **Editor/FrontmatterEditorView.swift** (Phase 3)
+   - Collapsible disclosure group
+   - Form fields for common Hugo fields:
+     - Title (text field)
+     - Date (optional with checkbox toggle)
+     - Draft status (toggle)
+     - Description (text editor)
+     - Tags (chip-based input with flow layout)
+     - Categories (chip-based input)
+   - Custom fields display (read-only)
+   - Format badge (YAML/TOML/JSON)
+
+5. **Preview/PreviewWebView.swift** (Phase 2)
+   - WKWebView wrapper for HTML preview
+   - Debounced updates (300ms)
+   - GitHub-style markdown rendering
 
 #### Configuration Files
 - **Package.swift**: SPM configuration with dependencies
@@ -104,24 +151,43 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ### What Works Right Now
 
-1. **Launch app** → Shows "Open Hugo Site" button
+**Site Management:**
+1. **Launch app** → Shows "Open Hugo Site" button or last opened site
 2. **Click button or ⌘O** → NSOpenPanel appears
 3. **Select Hugo site folder** → Validates it's a valid Hugo site
-4. **Sidebar populates** → Shows all .md files from content/
-5. **Search files** → Filter by filename
-6. **Click file** → Raw markdown displays in center panel
-7. **Persistent state** → Last opened site loads on relaunch
-8. **Clean build** → No warnings, no errors
+4. **Sidebar populates** → Shows hierarchical file tree from content/
+5. **Search files** → Filter by filename (recursive through folders)
+6. **Expand/collapse folders** → Navigate nested Hugo content structure
+
+**Editing:**
+7. **Click file** → Loads frontmatter + markdown content
+8. **Frontmatter editor** → Edit YAML/TOML/JSON frontmatter in structured form
+   - Title, date (optional), draft status, description
+   - Tags and categories with chip-based UI
+   - Custom fields preserved
+9. **Markdown editor** → Edit content with formatting toolbar
+   - Bold, italic, headings, lists, code blocks
+   - Monospace font, no smart quotes
+10. **Save (⌘S)** → Combines frontmatter + markdown, preserves format
+11. **Live preview toggle** → Enable/disable real-time HTML preview
+
+**Preview:**
+12. **Preview panel** → Live markdown rendering with GitHub styling
+13. **Debounced updates** → Smooth typing without lag (300ms delay)
+
+**Persistence:**
+14. **Security-scoped bookmarks** → Last opened site persists across launches
+15. **Clean build** → No warnings, no errors
 
 ### What's NOT Yet Implemented (Coming in Later Phases)
 
-- ❌ Editable markdown editor (Phase 2)
-- ❌ Live markdown preview (Phase 2)
-- ❌ Frontmatter parsing/editing (Phase 3)
-- ❌ Hierarchical file tree (Phase 4 - currently flat list)
 - ❌ Auto-save (Phase 5)
 - ❌ File system watching (Phase 5)
-- ❌ Keyboard shortcuts beyond ⌘O (Phase 5)
+- ❌ Extended keyboard shortcuts (Phase 5)
+- ❌ Image drag & drop
+- ❌ Syntax highlighting
+- ❌ Git integration
+- ❌ Hugo server integration
 
 ---
 
@@ -353,9 +419,9 @@ url.stopAccessingSecurityScopedResource() // When done
 
 ---
 
-### 🔄 Phase 2: Editor & Preview (NEXT)
-**Duration**: ~1-2 sessions
-**Status**: Not started
+### ✅ Phase 2: Editor & Preview (COMPLETE)
+**Duration**: 1 session
+**Status**: Committed (4c8c219)
 
 **Goals**:
 - Editable markdown editor
@@ -405,14 +471,23 @@ url.stopAccessingSecurityScopedResource() // When done
 
 ---
 
-### 📋 Phase 3: Frontmatter Support
-**Duration**: ~1 session
-**Status**: Not started
+### ✅ Phase 3: Frontmatter Support (COMPLETE)
+**Duration**: 1 session
+**Status**: Committed (175171c)
+
+**Delivered**:
+- Parse YAML, TOML, and JSON frontmatter
+- Display in structured form with collapsible UI
+- Edit common Hugo fields (title, date, draft, tags, categories, description)
+- Optional date field with checkbox toggle
+- Serialize back to original format
+- Preserve custom fields
+- Tag input with chip-based UI and flow layout
 
 **Goals**:
-- Parse YAML/TOML frontmatter
-- Display in structured form
-- Edit and save back
+- Parse YAML/TOML/JSON frontmatter ✅
+- Display in structured form ✅
+- Edit and save back ✅
 
 **Tasks**:
 1. Enhance `FrontmatterParser.swift`:
@@ -447,13 +522,20 @@ url.stopAccessingSecurityScopedResource() // When done
 
 ---
 
-### 📋 Phase 4: File Tree Navigation
-**Duration**: ~1 session
-**Status**: Not started
+### ✅ Phase 4: File Tree Navigation (COMPLETE)
+**Duration**: Included in Phase 2
+**Status**: Committed (31f2874)
+
+**Delivered**:
+- Hierarchical file browser with OutlineGroup
+- Expand/collapse folders
+- Hugo page bundle detection
+- Recursive search through tree
+- Folders sorted first, then alphabetically
 
 **Goals**:
-- Hierarchical file browser
-- Hugo page bundle support
+- Hierarchical file browser ✅
+- Hugo page bundle support ✅
 
 **Tasks**:
 1. Enhance `FileSystemService.scanDirectory`:
@@ -480,7 +562,7 @@ url.stopAccessingSecurityScopedResource() // When done
 
 ---
 
-### 📋 Phase 5: Auto-Save & Polish
+### 🔄 Phase 5: Auto-Save & Polish (NEXT)
 **Duration**: ~1-2 sessions
 **Status**: Not started
 
