@@ -17,17 +17,33 @@ struct FrontmatterEditorView: View {
                     .textFieldStyle(.roundedBorder)
                 }
 
-                // Date
+                // Date (Optional)
                 FormFieldView(label: "Date") {
-                    DatePicker(
-                        "",
-                        selection: Binding(
-                            get: { frontmatter.date ?? Date() },
-                            set: { frontmatter.date = $0 }
-                        ),
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                    .labelsHidden()
+                    HStack {
+                        Toggle("Include date", isOn: Binding(
+                            get: { frontmatter.date != nil },
+                            set: { isOn in
+                                if isOn {
+                                    frontmatter.date = Date()
+                                } else {
+                                    frontmatter.date = nil
+                                }
+                            }
+                        ))
+                        .toggleStyle(.checkbox)
+
+                        if frontmatter.date != nil {
+                            DatePicker(
+                                "",
+                                selection: Binding(
+                                    get: { frontmatter.date ?? Date() },
+                                    set: { frontmatter.date = $0 }
+                                ),
+                                displayedComponents: [.date, .hourAndMinute]
+                            )
+                            .labelsHidden()
+                        }
+                    }
                 }
 
                 // Draft Status

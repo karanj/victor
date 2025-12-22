@@ -231,8 +231,10 @@ class FrontmatterParser {
             frontmatter.title = title
         }
 
-        // Date
-        if let dateString = dict["date"] as? String {
+        // Date (can be String or Date from YAML parser)
+        if let date = dict["date"] as? Date {
+            frontmatter.date = date
+        } else if let dateString = dict["date"] as? String {
             frontmatter.date = parseDate(dateString)
         }
 
@@ -420,9 +422,12 @@ class FrontmatterParser {
         return frontmatter.rawContent
     }
 
-    /// Format date for Hugo
+    /// Format date for Hugo (uses simple date format: yyyy-MM-dd)
     private func formatDate(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
         return formatter.string(from: date)
     }
 }
