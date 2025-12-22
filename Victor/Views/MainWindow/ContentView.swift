@@ -103,7 +103,18 @@ struct EditorPanelView: View {
                 }
             )
 
-            // Editor
+            // Frontmatter Editor (if frontmatter exists)
+            if let frontmatter = contentFile.frontmatter {
+                ScrollView {
+                    FrontmatterEditorView(frontmatter: frontmatter)
+                }
+                .frame(maxHeight: 300)
+                .overlay(alignment: .bottom) {
+                    Divider()
+                }
+            }
+
+            // Markdown Editor
             EditorTextView(text: $editableContent) { coordinator in
                 editorCoordinator = coordinator
             }
@@ -126,11 +137,23 @@ struct EditorPanelView: View {
         isSaving = true
         showSavedIndicator = false
 
-        let success = await siteViewModel.saveFile(node: fileNode, content: editableContent)
+        // Combine frontmatter and markdown content
+        let fullContent: String
+        if let frontmatter = contentFile.frontmatter {
+            let serialized = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
+            fullContent = serialized + "\n" + editableContent
+        } else {
+            fullContent = editableContent
+        }
+
+        let success = await siteViewModel.saveFile(node: fileNode, content: fullContent)
 
         isSaving = false
 
         if success {
+            // Update the content file's markdown content
+            contentFile.markdownContent = editableContent
+
             // Show saved indicator briefly
             showSavedIndicator = true
             try? await Task.sleep(for: .seconds(2))

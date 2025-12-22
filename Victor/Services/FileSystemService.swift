@@ -156,12 +156,14 @@ class FileSystemService {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         let modificationDate = attributes[.modificationDate] as? Date ?? Date()
 
-        // Phase 1: Just store raw content
-        // Phase 3: Will parse frontmatter
+        // Parse frontmatter and markdown
+        let parser = FrontmatterParser.shared
+        let (frontmatter, markdown) = parser.parseContent(content)
+
         let file = ContentFile(
             url: url,
-            frontmatter: nil,
-            markdownContent: content,
+            frontmatter: frontmatter,
+            markdownContent: markdown,
             lastModified: modificationDate
         )
 

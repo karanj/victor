@@ -18,13 +18,16 @@ class Frontmatter {
     /// Detected format
     var format: FrontmatterFormat
 
-    // Common Hugo fields (will be parsed in Phase 3)
+    // Common Hugo fields
     var title: String?
     var date: Date?
     var draft: Bool?
     var tags: [String]?
     var categories: [String]?
     var description: String?
+
+    // Custom fields (any fields not in the common list)
+    var customFields: [String: Any] = [:]
 
     init(rawContent: String, format: FrontmatterFormat = .yaml) {
         self.rawContent = rawContent
