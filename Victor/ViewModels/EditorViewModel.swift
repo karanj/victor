@@ -18,10 +18,32 @@ class EditorViewModel {
     var showSavedIndicator = false
     var showConflictAlert = false
 
+    // Track last saved frontmatter state for change detection
+    private var lastSavedFrontmatter: FrontmatterSnapshot?
+
     // MARK: - Computed Properties
 
     var hasUnsavedChanges: Bool {
-        editableContent != contentFile.markdownContent
+        // Check if markdown content has changed
+        let contentChanged = editableContent != contentFile.markdownContent
+
+        // Check if frontmatter has changed
+        let frontmatterChanged: Bool = {
+            guard let currentFrontmatter = contentFile.frontmatter else {
+                // No frontmatter now - changed only if we had one before
+                return lastSavedFrontmatter != nil
+            }
+
+            guard let lastSaved = lastSavedFrontmatter else {
+                // We have frontmatter now but didn't before - it's changed
+                return true
+            }
+
+            // Compare current state with last saved snapshot
+            return currentFrontmatter.snapshot() != lastSaved
+        }()
+
+        return contentChanged || frontmatterChanged
     }
 
     var navigationTitle: String {
@@ -39,6 +61,8 @@ class EditorViewModel {
         self.contentFile = contentFile
         self.siteViewModel = siteViewModel
         self.editableContent = contentFile.markdownContent
+        // Snapshot initial frontmatter state
+        self.lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
     }
 
     // MARK: - Public Methods
@@ -46,6 +70,8 @@ class EditorViewModel {
     /// Update editable content when the underlying file changes
     func updateContent(from newMarkdown: String) {
         editableContent = newMarkdown
+        // Also update frontmatter snapshot when content is externally updated
+        lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
     }
 
     /// Handle content changes for live preview and auto-save
@@ -74,6 +100,9 @@ class EditorViewModel {
         if success {
             // Update the content file's markdown content
             contentFile.markdownContent = editableContent
+
+            // Snapshot the frontmatter state after successful save
+            lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
 
             // Show saved indicator briefly
             showSavedIndicator = true
@@ -121,6 +150,9 @@ class EditorViewModel {
                     // Update modification date
                     self.contentFile.lastModified = newModificationDate
                     self.contentFile.markdownContent = self.editableContent
+
+                    // Snapshot the frontmatter state after successful auto-save
+                    self.lastSavedFrontmatter = self.contentFile.frontmatter?.snapshot()
 
                     // Show saved indicator briefly
                     self.showSavedIndicator = true

@@ -78,6 +78,25 @@ struct EditorPanelView: View {
         .onChange(of: viewModel.editableContent) { _, _ in
             viewModel.handleContentChange()
         }
+        // Also handle frontmatter changes
+        .onChange(of: contentFile.frontmatter?.title) { _, _ in
+            viewModel.handleContentChange()
+        }
+        .onChange(of: contentFile.frontmatter?.date) { _, _ in
+            viewModel.handleContentChange()
+        }
+        .onChange(of: contentFile.frontmatter?.draft) { _, _ in
+            viewModel.handleContentChange()
+        }
+        .onChange(of: contentFile.frontmatter?.tags) { _, _ in
+            viewModel.handleContentChange()
+        }
+        .onChange(of: contentFile.frontmatter?.categories) { _, _ in
+            viewModel.handleContentChange()
+        }
+        .onChange(of: contentFile.frontmatter?.description) { _, _ in
+            viewModel.handleContentChange()
+        }
         .alert("File Modified Externally", isPresented: $viewModel.showConflictAlert) {
             Button("Reload from Disk") {
                 Task {

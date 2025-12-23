@@ -45,4 +45,40 @@ class Frontmatter {
         }
         return nil
     }
+
+    /// Create a snapshot of the current frontmatter state for change detection
+    func snapshot() -> FrontmatterSnapshot {
+        FrontmatterSnapshot(
+            title: title,
+            date: date,
+            draft: draft,
+            tags: tags,
+            categories: categories,
+            description: description,
+            customFields: customFields
+        )
+    }
+}
+
+// MARK: - Frontmatter Snapshot
+
+/// Immutable snapshot of frontmatter state for change detection
+struct FrontmatterSnapshot: Equatable {
+    let title: String?
+    let date: Date?
+    let draft: Bool?
+    let tags: [String]?
+    let categories: [String]?
+    let description: String?
+    let customFields: [String: Any]
+
+    static func == (lhs: FrontmatterSnapshot, rhs: FrontmatterSnapshot) -> Bool {
+        lhs.title == rhs.title &&
+        lhs.date == rhs.date &&
+        lhs.draft == rhs.draft &&
+        lhs.tags == rhs.tags &&
+        lhs.categories == rhs.categories &&
+        lhs.description == rhs.description &&
+        NSDictionary(dictionary: lhs.customFields).isEqual(to: rhs.customFields)
+    }
 }

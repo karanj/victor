@@ -398,11 +398,8 @@ Read file → Detect format (---/+++/{)
 - Hugo server integration (live preview)
 - Multi-file operations (batch rename, delete)
 - Search & replace across files
-- Export to PDF/HTML
 
 ### Low Priority
-- Touch Bar support
-- Quick Look support
 - VoiceOver improvements
 - Custom themes/color schemes
 
@@ -442,53 +439,14 @@ Comprehensive Xcode/Swift patterns, ignores `.build/` and `DerivedData/`
 
 ---
 
-## Code Review Status (2025-12-22)
+## Code Review Process
 
-### Expert Panel Review Completed
-Four specialized agents reviewed the codebase from multiple perspectives:
+### Expert Panel Review
+Four specialized agents to review the codebase from multiple perspectives:
 - SwiftUI Architecture Expert
 - Performance and Concurrency Expert
 - Code Quality and Maintainability Expert
 - AppKit Integration Expert
-
-**Findings**: 38 issues identified across 4 severity levels (all documented below)
-
-### Issues Fixed ✅
-
-#### Critical (2/2 - 100% complete)
-- **CRIT-001**: Race condition in AutoSaveService (double continuation resume) - FIXED
-- **CRIT-002**: Memory leak in recursive search filter - FIXED
-
-#### High-Priority (7/7 - 100% complete)
-- **HIGH-001**: Synchronous file I/O on main thread (isPageBundle caching) - FIXED
-- **HIGH-002**: Blocking disk I/O (FileSystemService @MainActor removed) - FIXED
-- **HIGH-003**: Blocking CPU work (FrontmatterParser @MainActor removed) - FIXED
-- **HIGH-004**: Create EditorViewModel (proper MVVM architecture) - FIXED
-- **HIGH-005**: Direct service calls from views - FIXED
-- **HIGH-006**: Missing keyboard shortcuts (⌘B, ⌘I) - FIXED
-- **HIGH-007**: Undo/redo menu integration - FIXED
-
-#### Medium-Priority (9/9 - 100% complete) ✅
-- **MED-001**: Duplicate frontmatter parsing (60+ lines removed) - FIXED
-- **MED-002**: Duplicate openPageBundle methods - FIXED
-- **MED-003**: Alert binding anti-pattern - FIXED
-- **MED-004**: Non-standard sidebar toggle - FIXED
-- **MED-005**: Preview debounce task not cancelled - FIXED
-- **MED-006**: Large files need splitting (ContentView 545→72 lines, SidebarView 366→168 lines) - FIXED
-- **MED-007**: Silent error handling in FrontmatterParser (added throwing variants + FrontmatterError enum) - FIXED
-- **MED-008**: Missing accessibility labels - FIXED
-- **MED-009**: Retain cycles in EditorViewModel (added [weak self] captures) - FIXED
-
-#### Low-Priority Quick Wins (6/6 - 100% complete) ✅
-- **LOW-001**: Missing deinit in EditorTextView.Coordinator - FIXED
-- **LOW-002**: Deprecated KVC in PreviewWebView (attempted fix, but WKWebView.isOpaque is read-only, KVC required) - DOCUMENTED
-- **LOW-003**: Magic numbers throughout codebase (centralized in AppConstants.swift) - FIXED
-- **LOW-004**: Uncancelled Task in SiteViewModel.init (now stored and cancelled in deinit) - FIXED
-- **LOW-005**: DateFormatter created on every call (now cached as static property) - FIXED
-- **LOW-006**: No Escape key handler in search field (now clears search on Escape) - FIXED
-
-#### Refactoring Tasks (1/1 - 100% complete) ✅
-- **REFACTOR-003**: Extract 186 lines of CSS from MarkdownRenderer to preview-styles.css resource - FIXED
 
 ### Outstanding Issues 📋
 
@@ -551,23 +509,6 @@ This document contains all context needed to continue development:
 - Code Quality: All critical, high-priority, and medium-priority issues fixed
 - Outstanding: Only minor low-priority improvements remain
 - Architecture: Proper MVVM, no blocking main thread, full accessibility, centralized constants
-
-### Key Achievements (2025-12-23)
-- ✅ Fixed ALL medium-priority issues (9/9 complete)
-- ✅ Fixed ALL low-priority quick wins (6/6 complete)
-- ✅ Split large files: ContentView (87% reduction), SidebarView (54% reduction)
-- ✅ Added proper error handling with FrontmatterError enum
-- ✅ Fixed all retain cycles with [weak self] captures
-- ✅ Centralized constants in AppConstants.swift
-- ✅ Extracted CSS to external resource file
-- ✅ Created systematic Xcode project update protocol
-
-### Key Achievements (2025-12-22)
-- ✅ Fixed 2 critical race conditions and memory leaks
-- ✅ Eliminated all UI freezes (2-5s → instant)
-- ✅ Created EditorViewModel (proper MVVM separation)
-- ✅ Added keyboard shortcuts and VoiceOver support
-- ✅ 70-80% memory reduction in search operations
 
 ---
 
