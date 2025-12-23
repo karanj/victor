@@ -2,16 +2,55 @@ import Foundation
 import Yams
 import TOMLKit
 
+// MARK: - Frontmatter Errors
+
+/// Errors that can occur during frontmatter parsing and serialization
+enum FrontmatterError: LocalizedError {
+    case yamlParsingFailed(String)
+    case tomlParsingFailed(String)
+    case jsonParsingFailed(String)
+    case yamlSerializationFailed(String)
+    case jsonSerializationFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .yamlParsingFailed(let detail):
+            return "Failed to parse YAML frontmatter: \(detail)"
+        case .tomlParsingFailed(let detail):
+            return "Failed to parse TOML frontmatter: \(detail)"
+        case .jsonParsingFailed(let detail):
+            return "Failed to parse JSON frontmatter: \(detail)"
+        case .yamlSerializationFailed(let detail):
+            return "Failed to serialize YAML frontmatter: \(detail)"
+        case .jsonSerializationFailed(let detail):
+            return "Failed to serialize JSON frontmatter: \(detail)"
+        }
+    }
+}
+
 /// Service for parsing and serializing Hugo frontmatter
 /// Note: No @MainActor - parsing is CPU-intensive but doesn't require main thread
 class FrontmatterParser {
     static let shared = FrontmatterParser()
+
+    /// Cached date formatter for Hugo dates (avoids creating new formatter on each call)
+    private static let hugoDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        return formatter
+    }()
 
     private init() {}
 
     // MARK: - Parsing
 
     /// Parse content and extract frontmatter + markdown
+    /// - Parameter content: The full file content including frontmatter and markdown
+    /// - Returns: A tuple with optional frontmatter and the markdown content
+    /// - Note: This method swallows parsing errors and returns frontmatter with rawContent only.
+    ///         Use `parseContentThrowing(_:)` if you want to handle parsing errors explicitly.
     func parseContent(_ content: String) -> (frontmatter: Frontmatter?, markdown: String) {
         // Try to extract frontmatter
         guard let (rawFrontmatter, markdown, format) = extractFrontmatter(from: content) else {
@@ -21,6 +60,23 @@ class FrontmatterParser {
 
         // Parse frontmatter based on format
         let frontmatter = parseFrontmatter(raw: rawFrontmatter, format: format)
+        return (frontmatter, markdown)
+    }
+
+    /// Parse content and extract frontmatter + markdown (throwing variant)
+    /// - Parameter content: The full file content including frontmatter and markdown
+    /// - Returns: A tuple with optional frontmatter and the markdown content
+    /// - Throws: `FrontmatterError` if parsing fails
+    /// - Note: Use this method when you want to handle parsing errors explicitly and show them to users
+    func parseContentThrowing(_ content: String) throws -> (frontmatter: Frontmatter?, markdown: String) {
+        // Try to extract frontmatter
+        guard let (rawFrontmatter, markdown, format) = extractFrontmatter(from: content) else {
+            // No frontmatter found - not an error
+            return (nil, content)
+        }
+
+        // Parse frontmatter based on format (throws on error)
+        let frontmatter = try parseFrontmatterThrowing(raw: rawFrontmatter, format: format)
         return (frontmatter, markdown)
     }
 
@@ -122,20 +178,48 @@ class FrontmatterParser {
         return (rawFrontmatter, markdown, .json)
     }
 
-    /// Parse frontmatter into structured model
+    /// Parse frontmatter into structured model (non-throwing, logs errors)
     private func parseFrontmatter(raw: String, format: FrontmatterFormat) -> Frontmatter {
         let frontmatter = Frontmatter(rawContent: raw, format: format)
 
         // Extract content without delimiters for parsing
         let contentToParse = stripDelimiters(from: raw, format: format)
 
+        // Try to parse, but don't fail if parsing errors occur
+        // This preserves backwards compatibility where parsing errors were silent
+        do {
+            switch format {
+            case .yaml:
+                try parseYAML(contentToParse, into: frontmatter)
+            case .toml:
+                try parseTOML(contentToParse, into: frontmatter)
+            case .json:
+                try parseJSON(raw, into: frontmatter)
+            }
+        } catch {
+            // Log the error for debugging, but return the frontmatter with rawContent
+            // This allows users to still see/edit the raw frontmatter even if parsing fails
+            print("⚠️ Frontmatter parsing error: \(error.localizedDescription)")
+        }
+
+        return frontmatter
+    }
+
+    /// Parse frontmatter into structured model (throwing variant)
+    private func parseFrontmatterThrowing(raw: String, format: FrontmatterFormat) throws -> Frontmatter {
+        let frontmatter = Frontmatter(rawContent: raw, format: format)
+
+        // Extract content without delimiters for parsing
+        let contentToParse = stripDelimiters(from: raw, format: format)
+
+        // Parse and propagate errors
         switch format {
         case .yaml:
-            parseYAML(contentToParse, into: frontmatter)
+            try parseYAML(contentToParse, into: frontmatter)
         case .toml:
-            parseTOML(contentToParse, into: frontmatter)
+            try parseTOML(contentToParse, into: frontmatter)
         case .json:
-            parseJSON(raw, into: frontmatter)
+            try parseJSON(raw, into: frontmatter)
         }
 
         return frontmatter
@@ -160,20 +244,22 @@ class FrontmatterParser {
     // MARK: - Format-Specific Parsing
 
     /// Parse YAML frontmatter
-    private func parseYAML(_ content: String, into frontmatter: Frontmatter) {
+    private func parseYAML(_ content: String, into frontmatter: Frontmatter) throws {
         do {
             guard let yaml = try Yams.load(yaml: content) as? [String: Any] else {
-                return
+                throw FrontmatterError.yamlParsingFailed("Could not parse as dictionary")
             }
 
             extractCommonFields(from: yaml, into: frontmatter)
+        } catch let error as FrontmatterError {
+            throw error
         } catch {
-            print("Error parsing YAML frontmatter: \(error)")
+            throw FrontmatterError.yamlParsingFailed(error.localizedDescription)
         }
     }
 
     /// Parse TOML frontmatter
-    private func parseTOML(_ content: String, into frontmatter: Frontmatter) {
+    private func parseTOML(_ content: String, into frontmatter: Frontmatter) throws {
         do {
             let table = try TOMLTable(string: content)
 
@@ -205,22 +291,26 @@ class FrontmatterParser {
             }
             frontmatter.customFields = customFields
         } catch {
-            print("Error parsing TOML frontmatter: \(error)")
+            throw FrontmatterError.tomlParsingFailed(error.localizedDescription)
         }
     }
 
     /// Parse JSON frontmatter
-    private func parseJSON(_ content: String, into frontmatter: Frontmatter) {
-        guard let data = content.data(using: .utf8) else { return }
+    private func parseJSON(_ content: String, into frontmatter: Frontmatter) throws {
+        guard let data = content.data(using: .utf8) else {
+            throw FrontmatterError.jsonParsingFailed("Could not convert to UTF-8 data")
+        }
 
         do {
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                return
+                throw FrontmatterError.jsonParsingFailed("Could not parse as dictionary")
             }
 
             extractCommonFields(from: json, into: frontmatter)
+        } catch let error as FrontmatterError {
+            throw error
         } catch {
-            print("Error parsing JSON frontmatter: \(error)")
+            throw FrontmatterError.jsonParsingFailed(error.localizedDescription)
         }
     }
 
@@ -296,6 +386,10 @@ class FrontmatterParser {
     // MARK: - Serialization
 
     /// Serialize frontmatter back to original format
+    /// - Parameter frontmatter: The frontmatter to serialize
+    /// - Returns: Serialized frontmatter string with delimiters
+    /// - Note: This method swallows serialization errors and falls back to rawContent.
+    ///         Use `serializeFrontmatterThrowing(_:)` if you want to handle errors explicitly.
     func serializeFrontmatter(_ frontmatter: Frontmatter) -> String {
         switch frontmatter.format {
         case .yaml:
@@ -307,7 +401,23 @@ class FrontmatterParser {
         }
     }
 
-    /// Serialize to YAML format
+    /// Serialize frontmatter back to original format (throwing variant)
+    /// - Parameter frontmatter: The frontmatter to serialize
+    /// - Returns: Serialized frontmatter string with delimiters
+    /// - Throws: `FrontmatterError` if serialization fails
+    /// - Note: Use this method when you want to handle serialization errors explicitly
+    func serializeFrontmatterThrowing(_ frontmatter: Frontmatter) throws -> String {
+        switch frontmatter.format {
+        case .yaml:
+            return try serializeYAMLThrowing(frontmatter)
+        case .toml:
+            return serializeTOML(frontmatter) // TOML doesn't currently throw
+        case .json:
+            return try serializeJSONThrowing(frontmatter)
+        }
+    }
+
+    /// Serialize to YAML format (non-throwing, falls back to rawContent)
     private func serializeYAML(_ frontmatter: Frontmatter) -> String {
         var dict: [String: Any] = frontmatter.customFields
 
@@ -335,8 +445,42 @@ class FrontmatterParser {
             let yaml = try Yams.dump(object: dict)
             return "---\n\(yaml)---"
         } catch {
-            print("Error serializing YAML: \(error)")
+            // Log the error with a clear warning
+            print("⚠️ YAML serialization error: \(error.localizedDescription)")
+            print("   Falling back to raw frontmatter content")
             return frontmatter.rawContent
+        }
+    }
+
+    /// Serialize to YAML format (throwing variant)
+    private func serializeYAMLThrowing(_ frontmatter: Frontmatter) throws -> String {
+        var dict: [String: Any] = frontmatter.customFields
+
+        // Add common fields
+        if let title = frontmatter.title {
+            dict["title"] = title
+        }
+        if let date = frontmatter.date {
+            dict["date"] = formatDate(date)
+        }
+        if let draft = frontmatter.draft {
+            dict["draft"] = draft
+        }
+        if let tags = frontmatter.tags, !tags.isEmpty {
+            dict["tags"] = tags
+        }
+        if let categories = frontmatter.categories, !categories.isEmpty {
+            dict["categories"] = categories
+        }
+        if let description = frontmatter.description {
+            dict["description"] = description
+        }
+
+        do {
+            let yaml = try Yams.dump(object: dict)
+            return "---\n\(yaml)---"
+        } catch {
+            throw FrontmatterError.yamlSerializationFailed(error.localizedDescription)
         }
     }
 
@@ -386,7 +530,7 @@ class FrontmatterParser {
         return "+++\n\(tomlString)+++"
     }
 
-    /// Serialize to JSON format
+    /// Serialize to JSON format (non-throwing, falls back to rawContent)
     private func serializeJSON(_ frontmatter: Frontmatter) -> String {
         var dict: [String: Any] = frontmatter.customFields
 
@@ -416,18 +560,53 @@ class FrontmatterParser {
                 return jsonString
             }
         } catch {
-            print("Error serializing JSON: \(error)")
+            // Log the error with a clear warning
+            print("⚠️ JSON serialization error: \(error.localizedDescription)")
+            print("   Falling back to raw frontmatter content")
         }
 
         return frontmatter.rawContent
     }
 
+    /// Serialize to JSON format (throwing variant)
+    private func serializeJSONThrowing(_ frontmatter: Frontmatter) throws -> String {
+        var dict: [String: Any] = frontmatter.customFields
+
+        // Add common fields
+        if let title = frontmatter.title {
+            dict["title"] = title
+        }
+        if let date = frontmatter.date {
+            dict["date"] = formatDate(date)
+        }
+        if let draft = frontmatter.draft {
+            dict["draft"] = draft
+        }
+        if let tags = frontmatter.tags, !tags.isEmpty {
+            dict["tags"] = tags
+        }
+        if let categories = frontmatter.categories, !categories.isEmpty {
+            dict["categories"] = categories
+        }
+        if let description = frontmatter.description {
+            dict["description"] = description
+        }
+
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
+            guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+                throw FrontmatterError.jsonSerializationFailed("Could not convert data to UTF-8 string")
+            }
+            return jsonString
+        } catch let error as FrontmatterError {
+            throw error
+        } catch {
+            throw FrontmatterError.jsonSerializationFailed(error.localizedDescription)
+        }
+    }
+
     /// Format date for Hugo (uses simple date format: yyyy-MM-dd)
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
-        return formatter.string(from: date)
+        return Self.hugoDateFormatter.string(from: date)
     }
 }

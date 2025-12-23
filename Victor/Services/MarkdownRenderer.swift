@@ -110,195 +110,46 @@ class MarkdownRenderer {
 
     // MARK: - CSS Styling
 
-    /// GitHub-flavored markdown CSS
-    /// TODO: can we refactor this to be a separate static resource? this is content, it should be outside the code logic of the render
-    private var githubStyleCSS: String {
-        return """
-        /* GitHub-inspired markdown styling */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            font-size: 16px;
-            line-height: 1.6;
-            color: #24292e;
-            background-color: #ffffff;
-            margin: 0;
-            padding: 0;
+    /// GitHub-flavored markdown CSS loaded from external file
+    /// Cached on first access to avoid repeated file I/O
+    private lazy var githubStyleCSS: String = {
+        loadCSSFromBundle() ?? fallbackCSS
+    }()
+
+    /// Load CSS from bundle resources
+    private func loadCSSFromBundle() -> String? {
+        // Try without subdirectory first (resources are typically copied flat)
+        if let cssURL = Bundle.main.url(forResource: "preview-styles", withExtension: "css"),
+           let cssContent = try? String(contentsOf: cssURL, encoding: .utf8) {
+            return cssContent
         }
 
-        .markdown-body {
-            box-sizing: border-box;
-            min-width: 200px;
-            max-width: 980px;
-            margin: 0 auto;
-            padding: 45px;
+        // Fallback: try with subdirectory
+        if let cssURL = Bundle.main.url(forResource: "preview-styles", withExtension: "css", subdirectory: "Resources"),
+           let cssContent = try? String(contentsOf: cssURL, encoding: .utf8) {
+            return cssContent
         }
 
-        /* Dark mode support */
-        @media (prefers-color-scheme: dark) {
-            body {
-                color: #c9d1d9;
-                background-color: #0d1117;
-            }
-            .markdown-body {
-                color: #c9d1d9;
-            }
-            .markdown-body code {
-                background-color: rgba(110,118,129,0.4);
-            }
-            .markdown-body pre {
-                background-color: rgba(110,118,129,0.1);
-            }
-        }
-
-        /* Headings */
-        .markdown-body h1,
-        .markdown-body h2,
-        .markdown-body h3,
-        .markdown-body h4,
-        .markdown-body h5,
-        .markdown-body h6 {
-            margin-top: 24px;
-            margin-bottom: 16px;
-            font-weight: 600;
-            line-height: 1.25;
-        }
-
-        .markdown-body h1 {
-            font-size: 2em;
-            border-bottom: 1px solid #e1e4e8;
-            padding-bottom: 0.3em;
-        }
-
-        .markdown-body h2 {
-            font-size: 1.5em;
-            border-bottom: 1px solid #e1e4e8;
-            padding-bottom: 0.3em;
-        }
-
-        .markdown-body h3 { font-size: 1.25em; }
-        .markdown-body h4 { font-size: 1em; }
-        .markdown-body h5 { font-size: 0.875em; }
-        .markdown-body h6 {
-            font-size: 0.85em;
-            color: #6a737d;
-        }
-
-        /* Paragraphs */
-        .markdown-body p {
-            margin-top: 0;
-            margin-bottom: 16px;
-        }
-
-        /* Links */
-        .markdown-body a {
-            color: #0366d6;
-            text-decoration: none;
-        }
-
-        .markdown-body a:hover {
-            text-decoration: underline;
-        }
-
-        /* Lists */
-        .markdown-body ul,
-        .markdown-body ol {
-            padding-left: 2em;
-            margin-top: 0;
-            margin-bottom: 16px;
-        }
-
-        .markdown-body li {
-            margin-top: 0.25em;
-        }
-
-        /* Code */
-        .markdown-body code {
-            padding: 0.2em 0.4em;
-            margin: 0;
-            font-size: 85%;
-            background-color: rgba(27,31,35,0.05);
-            border-radius: 3px;
-            font-family: "SF Mono", Monaco, "Cascadia Code", "Courier New", monospace;
-        }
-
-        .markdown-body pre {
-            padding: 16px;
-            overflow: auto;
-            font-size: 85%;
-            line-height: 1.45;
-            background-color: #f6f8fa;
-            border-radius: 6px;
-            margin-bottom: 16px;
-        }
-
-        .markdown-body pre code {
-            display: block;
-            padding: 0;
-            margin: 0;
-            overflow: visible;
-            line-height: inherit;
-            word-wrap: normal;
-            background-color: transparent;
-            border: 0;
-        }
-
-        /* Blockquotes */
-        .markdown-body blockquote {
-            padding: 0 1em;
-            color: #6a737d;
-            border-left: 0.25em solid #dfe2e5;
-            margin: 0 0 16px 0;
-        }
-
-        /* Horizontal rule */
-        .markdown-body hr {
-            height: 0.25em;
-            padding: 0;
-            margin: 24px 0;
-            background-color: #e1e4e8;
-            border: 0;
-        }
-
-        /* Tables */
-        .markdown-body table {
-            border-spacing: 0;
-            border-collapse: collapse;
-            margin-bottom: 16px;
-        }
-
-        .markdown-body table th,
-        .markdown-body table td {
-            padding: 6px 13px;
-            border: 1px solid #dfe2e5;
-        }
-
-        .markdown-body table th {
-            font-weight: 600;
-            background-color: #f6f8fa;
-        }
-
-        .markdown-body table tr {
-            background-color: #ffffff;
-            border-top: 1px solid #c6cbd1;
-        }
-
-        .markdown-body table tr:nth-child(2n) {
-            background-color: #f6f8fa;
-        }
-
-        /* Images */
-        .markdown-body img {
-            max-width: 100%;
-            box-sizing: content-box;
-            background-color: #ffffff;
-        }
-
-        /* Task lists */
-        .markdown-body input[type="checkbox"] {
-            margin-right: 0.5em;
-        }
-        """
+        print("⚠️ Could not load preview-styles.css from bundle, using fallback")
+        return nil
     }
+
+    /// Fallback CSS in case file cannot be loaded
+    private let fallbackCSS = """
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        color: #24292e;
+        background-color: #ffffff;
+        margin: 0;
+        padding: 20px;
+    }
+    .markdown-body {
+        max-width: 980px;
+        margin: 0 auto;
+    }
+    """
 }
 
 // MARK: - Errors

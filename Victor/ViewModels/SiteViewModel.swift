@@ -48,6 +48,9 @@ class SiteViewModel {
     /// Set of node IDs that should be auto-expanded during search
     private(set) var autoExpandedNodeIDs: Set<UUID> = []
 
+    /// Task for loading saved site on init
+    private nonisolated(unsafe) var initTask: Task<Void, Never>?
+
     /// Filtered file nodes based on search (recursively searches tree)
     var filteredNodes: [FileNode] {
         guard !searchQuery.isEmpty else {
@@ -110,9 +113,13 @@ class SiteViewModel {
         self.isAutoSaveEnabled = UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? true
 
         // Try to load previously opened site
-        Task {
+        initTask = Task {
             await loadSavedSite()
         }
+    }
+
+    deinit {
+        initTask?.cancel()
     }
 
     // MARK: - Site Operations

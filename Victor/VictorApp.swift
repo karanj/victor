@@ -51,6 +51,26 @@ struct VictorApp: App {
                 }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(editorFormatting == nil)
+
+                Divider()
+
+                Button("Insert Link") {
+                    editorFormatting?(.link)
+                }
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(editorFormatting == nil)
+
+                Button("Insert Image") {
+                    editorFormatting?(.image)
+                }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(editorFormatting == nil)
+
+                Button("Block Quote") {
+                    editorFormatting?(.blockquote)
+                }
+                .keyboardShortcut("'", modifiers: .command)
+                .disabled(editorFormatting == nil)
             }
 
             // View menu - Search

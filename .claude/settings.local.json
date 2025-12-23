@@ -10,7 +10,8 @@
       "Bash(xcodebuild:*)",
       "WebFetch(domain:github.com)",
       "Bash(open:*)",
-      "Bash(gem list:*)"
+      "Bash(gem list:*)",
+      "Bash(ls:*)"
     ]
   }
 }

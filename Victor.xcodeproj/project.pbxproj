@@ -26,6 +26,12 @@
 		1000000000000011 /* FrontmatterEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000011 /* FrontmatterEditorView.swift */; };
 		1000000000000012 /* AutoSaveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000012 /* AutoSaveService.swift */; };
 		1000000000000013 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000013 /* EditorViewModel.swift */; };
+		1000000000000014 /* PreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000014 /* PreviewPanel.swift */; };
+		1000000000000015 /* FrontmatterBottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000015 /* FrontmatterBottomPanel.swift */; };
+		1000000000000016 /* EditorPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000016 /* EditorPanelView.swift */; };
+		1000000000000017 /* FileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000017 /* FileListView.swift */; };
+		1000000000000018 /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000018 /* AppConstants.swift */; };
+		1000000000000019 /* preview-styles.css in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000019 /* preview-styles.css */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +53,12 @@
 		2000000000000011 /* FrontmatterEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterEditorView.swift; sourceTree = "<group>"; };
 		2000000000000012 /* AutoSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveService.swift; sourceTree = "<group>"; };
 		2000000000000013 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
+		2000000000000014 /* PreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPanel.swift; sourceTree = "<group>"; };
+		2000000000000015 /* FrontmatterBottomPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterBottomPanel.swift; sourceTree = "<group>"; };
+		2000000000000016 /* EditorPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPanelView.swift; sourceTree = "<group>"; };
+		2000000000000017 /* FileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileListView.swift; sourceTree = "<group>"; };
+		2000000000000018 /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
+		2000000000000019 /* preview-styles.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = "preview-styles.css"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,11 +87,13 @@
 			isa = PBXGroup;
 			children = (
 				2000000000000001 /* VictorApp.swift */,
+				2000000000000018 /* AppConstants.swift */,
 				200000000000000A /* Victor.entitlements */,
 				5000000000000004 /* Models */,
 				5000000000000005 /* ViewModels */,
 				5000000000000006 /* Views */,
 				5000000000000007 /* Services */,
+				500000000000000B /* Resources */,
 			);
 			path = Victor;
 			sourceTree = "<group>";
@@ -137,7 +151,11 @@
 			isa = PBXGroup;
 			children = (
 				2000000000000002 /* ContentView.swift */,
+				2000000000000016 /* EditorPanelView.swift */,
+				2000000000000015 /* FrontmatterBottomPanel.swift */,
+				2000000000000014 /* PreviewPanel.swift */,
 				2000000000000003 /* SidebarView.swift */,
+				2000000000000017 /* FileListView.swift */,
 			);
 			path = MainWindow;
 			sourceTree = "<group>";
@@ -157,6 +175,14 @@
 				200000000000000F /* PreviewWebView.swift */,
 			);
 			path = Preview;
+			sourceTree = "<group>";
+		};
+		500000000000000B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2000000000000019 /* preview-styles.css */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -227,6 +253,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1000000000000019 /* preview-styles.css in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -253,6 +280,11 @@
 				1000000000000011 /* FrontmatterEditorView.swift in Sources */,
 				1000000000000012 /* AutoSaveService.swift in Sources */,
 				1000000000000013 /* EditorViewModel.swift in Sources */,
+				1000000000000014 /* PreviewPanel.swift in Sources */,
+				1000000000000015 /* FrontmatterBottomPanel.swift in Sources */,
+				1000000000000016 /* EditorPanelView.swift in Sources */,
+				1000000000000017 /* FileListView.swift in Sources */,
+				1000000000000018 /* AppConstants.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

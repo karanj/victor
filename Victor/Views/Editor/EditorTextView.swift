@@ -30,7 +30,7 @@ struct EditorTextView: NSViewRepresentable {
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
-        textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.font = .monospacedSystemFont(ofSize: AppConstants.Editor.fontSize, weight: .regular)
         textView.textColor = .labelColor
         textView.backgroundColor = .textBackgroundColor
 
@@ -108,6 +108,10 @@ struct EditorTextView: NSViewRepresentable {
             self.parent = parent
         }
 
+        deinit {
+            textView?.delegate = nil
+        }
+
         // Called whenever text changes
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
@@ -157,12 +161,16 @@ enum MarkdownFormat {
     case unorderedList
     case orderedList
     case code
+    case link
+    case image
+    case blockquote
 
     var prefix: String {
         switch self {
         case .heading: return "## "
         case .unorderedList: return "- "
         case .orderedList: return "1. "
+        case .blockquote: return "> "
         default: return ""
         }
     }
@@ -172,6 +180,14 @@ enum MarkdownFormat {
         case .bold: return ("**", "**")
         case .italic: return ("*", "*")
         case .code: return ("```\n","\n```")
+        default: return nil
+        }
+    }
+
+    var linkTemplate: (String, String, Int)? {
+        switch self {
+        case .link: return ("[", "](url)", 1) // cursor offset from start
+        case .image: return ("![", "](url)", 2) // cursor offset from start
         default: return nil
         }
     }
@@ -190,7 +206,23 @@ extension NSTextView {
         var newSelectionLocation = selectedRange.location
         var newSelectionLength = 0
 
-        if let (prefix, suffix) = format.wrapper {
+        // Handle link and image templates
+        if let (prefix, suffix, cursorOffset) = format.linkTemplate {
+            if !selectedText.isEmpty {
+                // Use selected text as link text/alt text
+                newText = "\(prefix)\(selectedText)\(suffix)"
+                // Select the URL placeholder
+                newSelectionLocation = selectedRange.location + prefix.count + selectedText.count + 2 // after "]("
+                newSelectionLength = 3 // select "url"
+            } else {
+                // Insert template with placeholders
+                let placeholder = format == .link ? "text" : "alt text"
+                newText = "\(prefix)\(placeholder)\(suffix)"
+                // Select the placeholder text
+                newSelectionLocation = selectedRange.location + cursorOffset
+                newSelectionLength = placeholder.count
+            }
+        } else if let (prefix, suffix) = format.wrapper {
             // Wrap selected text or insert markers
             if !selectedText.isEmpty {
                 newText = "\(prefix)\(selectedText)\(suffix)"

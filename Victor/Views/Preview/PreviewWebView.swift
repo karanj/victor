@@ -7,12 +7,14 @@ struct PreviewWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        configuration.suppressesIncrementalRendering = false
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
 
-        // Configure for local content
-        webView.setValue(false, forKey: "drawsBackground") // Transparent background
+        // Configure for local content - transparent background using setValue (KVC)
+        // Note: WKWebView.isOpaque is read-only, so we still need to use KVC here
+        webView.setValue(false, forKey: "drawsBackground")
 
         return webView
     }

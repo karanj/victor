@@ -5,7 +5,7 @@ actor AutoSaveService {
     static let shared = AutoSaveService()
 
     private var saveTask: Task<Void, Never>?
-    private let debounceInterval: TimeInterval = 2.0 // 2 seconds
+    private let debounceInterval: TimeInterval = AppConstants.AutoSave.debounceInterval
 
     private init() {}
 

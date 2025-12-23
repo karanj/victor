@@ -110,24 +110,27 @@ class EditorViewModel {
                 fileURL: fileNode.url,
                 content: fullContent,
                 lastModified: contentFile.lastModified,
-                onConflict: { @MainActor in
+                onConflict: { @MainActor [weak self] in
+                    guard let self = self else { return .cancel }
                     // Cancel auto-save and show alert
                     self.showConflictAlert = true
                     return .cancel
                 },
-                onSuccess: { @MainActor newModificationDate in
+                onSuccess: { @MainActor [weak self] newModificationDate in
+                    guard let self = self else { return }
                     // Update modification date
                     self.contentFile.lastModified = newModificationDate
                     self.contentFile.markdownContent = self.editableContent
 
                     // Show saved indicator briefly
                     self.showSavedIndicator = true
-                    Task {
+                    Task { [weak self] in
                         try? await Task.sleep(for: .seconds(1))
-                        self.showSavedIndicator = false
+                        self?.showSavedIndicator = false
                     }
                 },
-                onError: { @MainActor error in
+                onError: { @MainActor [weak self] error in
+                    guard let self = self else { return }
                     // Show error in site view model (unless it's a user cancellation)
                     if !(error is AutoSaveError) {
                         self.siteViewModel.errorMessage = error.localizedDescription
