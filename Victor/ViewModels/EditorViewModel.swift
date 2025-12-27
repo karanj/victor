@@ -18,6 +18,10 @@ class EditorViewModel {
     var showSavedIndicator = false
     var showConflictAlert = false
 
+    // Cursor position tracking
+    var cursorLine: Int = 1
+    var cursorColumn: Int = 1
+
     // Track last saved frontmatter state for change detection
     private var lastSavedFrontmatter: FrontmatterSnapshot?
 
@@ -54,6 +58,19 @@ class EditorViewModel {
         hasUnsavedChanges ? "\(contentFile.fileName) • Edited" : contentFile.fileName
     }
 
+    /// Word count for the current document
+    var wordCount: Int {
+        let words = editableContent
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+        return words.count
+    }
+
+    /// Character count for the current document
+    var characterCount: Int {
+        editableContent.count
+    }
+
     // MARK: - Initialization
 
     init(fileNode: FileNode, contentFile: ContentFile, siteViewModel: SiteViewModel) {
@@ -76,15 +93,20 @@ class EditorViewModel {
 
     /// Handle content changes for live preview and auto-save
     func handleContentChange() {
-        // Update live preview if enabled
-        if siteViewModel.isLivePreviewEnabled {
-            siteViewModel.currentEditingContent = editableContent
-        }
+        // Always sync content for preview (needed for tab-based layout)
+        // The preview panel handles its own debouncing
+        siteViewModel.currentEditingContent = editableContent
 
         // Schedule auto-save if enabled and there are unsaved changes
         if hasUnsavedChanges && siteViewModel.isAutoSaveEnabled {
             scheduleAutoSave()
         }
+    }
+
+    /// Update cursor position from editor callback
+    func updateCursorPosition(line: Int, column: Int) {
+        cursorLine = line
+        cursorColumn = column
     }
 
     /// Manually save the file

@@ -11,7 +11,9 @@
       "WebFetch(domain:github.com)",
       "Bash(open:*)",
       "Bash(gem list:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebSearch",
+      "WebFetch(domain:gohugo.io)"
     ]
   }
 }

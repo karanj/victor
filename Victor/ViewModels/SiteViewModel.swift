@@ -1,6 +1,36 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Editor Layout Mode
+
+/// Represents the three layout modes for the editor/preview area
+enum EditorLayoutMode: String, CaseIterable {
+    /// Full-width editor only (preview hidden)
+    case editor
+    /// Full-width preview only (editor hidden)
+    case preview
+    /// Side-by-side editor and preview (default, current behavior)
+    case split
+
+    /// Display name for UI
+    var displayName: String {
+        switch self {
+        case .editor: return "Editor"
+        case .preview: return "Preview"
+        case .split: return "Split"
+        }
+    }
+
+    /// SF Symbol icon name
+    var iconName: String {
+        switch self {
+        case .editor: return "doc.text"
+        case .preview: return "eye"
+        case .split: return "rectangle.split.2x1"
+        }
+    }
+}
+
 /// Main view model managing the Hugo site state
 @MainActor
 @Observable
@@ -17,16 +47,30 @@ class SiteViewModel {
     /// Selected file ID for binding
     var selectedFileID: FileNode.ID?
 
-    /// Current editing content (for live preview)
+    /// Current editing content (for preview sync across layout modes)
     var currentEditingContent: String = ""
 
-    /// Live preview enabled state
-    var isLivePreviewEnabled: Bool = false
+    /// Live preview enabled state (controls real-time updates in split view)
+    var isLivePreviewEnabled: Bool = true
 
     /// Auto-save enabled state (persisted)
     var isAutoSaveEnabled: Bool {
         didSet {
             UserDefaults.standard.set(isAutoSaveEnabled, forKey: "isAutoSaveEnabled")
+        }
+    }
+
+    /// Editor layout mode: editor only, preview only, or split (persisted)
+    var layoutMode: EditorLayoutMode {
+        didSet {
+            UserDefaults.standard.set(layoutMode.rawValue, forKey: "editorLayoutMode")
+        }
+    }
+
+    /// Highlight current line in editor (persisted)
+    var highlightCurrentLine: Bool {
+        didSet {
+            UserDefaults.standard.set(highlightCurrentLine, forKey: "highlightCurrentLine")
         }
     }
 
@@ -48,8 +92,6 @@ class SiteViewModel {
     /// Set of node IDs that should be auto-expanded during search
     private(set) var autoExpandedNodeIDs: Set<UUID> = []
 
-    /// Task for loading saved site on init
-    private nonisolated(unsafe) var initTask: Task<Void, Never>?
 
     /// Filtered file nodes based on search (recursively searches tree)
     var filteredNodes: [FileNode] {
@@ -112,14 +154,21 @@ class SiteViewModel {
         // Load auto-save preference (default: true)
         self.isAutoSaveEnabled = UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? true
 
+        // Load layout mode preference (default: .split for backwards compatibility)
+        if let savedMode = UserDefaults.standard.string(forKey: "editorLayoutMode"),
+           let mode = EditorLayoutMode(rawValue: savedMode) {
+            self.layoutMode = mode
+        } else {
+            self.layoutMode = .split
+        }
+
+        // Load current line highlighting preference (default: true)
+        self.highlightCurrentLine = UserDefaults.standard.object(forKey: "highlightCurrentLine") as? Bool ?? true
+
         // Try to load previously opened site
-        initTask = Task {
+        Task {
             await loadSavedSite()
         }
-    }
-
-    deinit {
-        initTask?.cancel()
     }
 
     // MARK: - Site Operations

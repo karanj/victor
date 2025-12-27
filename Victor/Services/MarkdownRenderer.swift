@@ -11,7 +11,10 @@ class MarkdownRenderer {
     // MARK: - Rendering
 
     /// Convert markdown string to styled HTML (strips frontmatter first)
-    func render(markdown: String) -> Result<String, RenderError> {
+    /// - Parameters:
+    ///   - markdown: The markdown content (may include frontmatter)
+    ///   - title: Optional title from frontmatter to render as h1 heading
+    func render(markdown: String, title: String? = nil) -> Result<String, RenderError> {
         do {
             // Strip frontmatter before rendering
             let markdownWithoutFrontmatter = stripFrontmatter(from: markdown)
@@ -20,8 +23,8 @@ class MarkdownRenderer {
             let down = Down(markdownString: markdownWithoutFrontmatter)
             let htmlBody = try down.toHTML()
 
-            // Wrap in full HTML document with CSS
-            let fullHTML = wrapInHTMLTemplate(htmlBody: htmlBody)
+            // Wrap in full HTML document with CSS, including title if provided
+            let fullHTML = wrapInHTMLTemplate(htmlBody: htmlBody, title: title)
 
             return .success(fullHTML)
         } catch {
@@ -40,8 +43,11 @@ class MarkdownRenderer {
     }
 
     /// Convert markdown to HTML and handle errors by returning error HTML
-    func renderOrError(markdown: String) -> String {
-        switch render(markdown: markdown) {
+    /// - Parameters:
+    ///   - markdown: The markdown content (may include frontmatter)
+    ///   - title: Optional title from frontmatter to render as h1 heading
+    func renderOrError(markdown: String, title: String? = nil) -> String {
+        switch render(markdown: markdown, title: title) {
         case .success(let html):
             return html
         case .failure(let error):
@@ -53,21 +59,34 @@ class MarkdownRenderer {
 
     /// Wrap HTML body in full document with CSS
     /// TODO: investigate if we can load the CSS from the Hugo theme so that the preview is closer to realistic?
-    private func wrapInHTMLTemplate(htmlBody: String) -> String {
+    private func wrapInHTMLTemplate(htmlBody: String, title: String? = nil) -> String {
+        // Build title heading if provided
+        let titleHTML: String
+        if let title = title, !title.isEmpty {
+            // Escape HTML entities in title for safety
+            let escapedTitle = title
+                .replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;")
+            titleHTML = "<h1>\(escapedTitle)</h1>\n"
+        } else {
+            titleHTML = ""
+        }
+
         return """
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Preview</title>
+            <title>\(title ?? "Preview")</title>
             <style>
                 \(githubStyleCSS)
             </style>
         </head>
         <body>
             <div class="markdown-body">
-                \(htmlBody)
+                \(titleHTML)\(htmlBody)
             </div>
         </body>
         </html>

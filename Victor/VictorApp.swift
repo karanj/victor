@@ -81,6 +81,30 @@ struct VictorApp: App {
                 .keyboardShortcut("f", modifiers: .command)
                 .disabled(siteViewModel.site == nil)
             }
+
+            // View menu - Layout modes
+            CommandGroup(after: .toolbar) {
+                Divider()
+
+                Button("Editor Only") {
+                    siteViewModel.layoutMode = .editor
+                }
+                .keyboardShortcut("1", modifiers: .command)
+
+                Button("Preview Only") {
+                    siteViewModel.layoutMode = .preview
+                }
+                .keyboardShortcut("2", modifiers: .command)
+
+                Button("Split View") {
+                    siteViewModel.layoutMode = .split
+                }
+                .keyboardShortcut("3", modifiers: .command)
+
+                Divider()
+
+                Toggle("Highlight Current Line", isOn: $siteViewModel.highlightCurrentLine)
+            }
         }
     }
 }

@@ -21,13 +21,37 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ---
 
-## Current Status: Production Ready ✅
+## Current Status: Production Ready ✅ + UI Enhancements In Progress
 
-**Last Updated**: 2025-12-23
+**Last Updated**: 2025-12-28
 **Build Status**: ✅ Clean build, no errors, no warnings
 **Code Quality**: All critical, high-priority, and medium-priority issues fixed
 
-### Recent Updates (2025-12-23)
+### Recent Updates (2025-12-28) - UI/UX Improvements
+See: `UI-IMPLEMENTATION-ISSUES.yaml` for detailed tracking
+
+**Stage 1: Tab-Based Layout** ✅ COMPLETE
+- EditorLayoutMode enum with .editor/.preview/.split modes
+- TabBarView segmented control for mode switching
+- Keyboard shortcuts Cmd+1/2/3 for modes
+- Preview updates correctly in all modes
+
+**Stage 2: Editor Enhancements** ✅ COMPLETE
+- Current line highlighting (UI-007)
+- Word/character count status bar with cursor position (UI-008)
+  - New file: `Victor/Views/Editor/EditorStatusBar.swift`
+  - Added CursorPosition tracking to EditorTextView
+- Toolbar redesign with grouped controls (UI-009)
+  - 5 logical groups: Text, Headings, Lists, Blocks, Insert
+  - Heading dropdown menu with H1-H6 options
+  - Headings replace in-place (not prepend)
+
+**Next: Stage 3 - Navigation Improvements**
+- UI-010: Breadcrumb navigation bar
+- UI-011: Quick Open dialog (Cmd+P)
+- UI-012: File status indicators in sidebar
+
+### Previous Updates (2025-12-23)
 - ✅ Fixed all 9 medium-priority issues (100% complete)
 - ✅ Fixed all 6 low-priority quick wins
 - ✅ Completed REFACTOR-003 (CSS extraction to external file)

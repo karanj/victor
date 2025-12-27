@@ -41,14 +41,27 @@ struct EditorPanelView: View {
             )
 
             // Markdown Editor (takes priority)
-            EditorTextView(text: $viewModel.editableContent) { coordinator in
-                editorCoordinator = coordinator
-            }
+            EditorTextView(
+                text: $viewModel.editableContent,
+                highlightCurrentLine: siteViewModel.highlightCurrentLine,
+                onCoordinatorReady: { coordinator in
+                    editorCoordinator = coordinator
+                },
+                onCursorPositionChange: { position in
+                    viewModel.updateCursorPosition(line: position.line, column: position.column)
+                }
+            )
+
+            // Status bar with word count, character count, and cursor position
+            EditorStatusBar(
+                wordCount: viewModel.wordCount,
+                characterCount: viewModel.characterCount,
+                cursorLine: viewModel.cursorLine,
+                cursorColumn: viewModel.cursorColumn
+            )
 
             // Bottom Frontmatter Panel (collapsible)
             if contentFile.frontmatter != nil {
-                Divider()
-
                 FrontmatterBottomPanel(
                     frontmatter: contentFile.frontmatter!,
                     isExpanded: $isFrontmatterExpanded
@@ -121,7 +134,62 @@ struct EditorToolbar: View {
     let onFormat: (MarkdownFormat) -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 0) {
+            // Group 1: Text Formatting
+            ToolbarGroup {
+                ToolbarButton(icon: "bold", label: "Bold", help: "Bold (⌘B)") {
+                    onFormat(.bold)
+                }
+                ToolbarButton(icon: "italic", label: "Italic", help: "Italic (⌘I)") {
+                    onFormat(.italic)
+                }
+            }
+
+            ToolbarSeparator()
+
+            // Group 2: Headings
+            ToolbarGroup {
+                HeadingMenu(onFormat: onFormat)
+            }
+
+            ToolbarSeparator()
+
+            // Group 3: Lists
+            ToolbarGroup {
+                ToolbarButton(icon: "list.bullet", label: "Bullet List", help: "Bullet List") {
+                    onFormat(.unorderedList)
+                }
+                ToolbarButton(icon: "list.number", label: "Numbered List", help: "Numbered List") {
+                    onFormat(.orderedList)
+                }
+            }
+
+            ToolbarSeparator()
+
+            // Group 4: Block Elements
+            ToolbarGroup {
+                ToolbarButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code", help: "Code Block") {
+                    onFormat(.code)
+                }
+                ToolbarButton(icon: "text.quote", label: "Quote", help: "Block Quote (⌘')") {
+                    onFormat(.blockquote)
+                }
+            }
+
+            ToolbarSeparator()
+
+            // Group 5: Insert Elements
+            ToolbarGroup {
+                ToolbarButton(icon: "link", label: "Link", help: "Insert Link (⌘K)") {
+                    onFormat(.link)
+                }
+                ToolbarButton(icon: "photo", label: "Image", help: "Insert Image (⌘⇧I)") {
+                    onFormat(.image)
+                }
+            }
+
+            Spacer()
+
             // Live Preview Toggle
             Button(action: { isLivePreviewEnabled.toggle() }) {
                 Label(
@@ -134,76 +202,10 @@ struct EditorToolbar: View {
             .buttonStyle(.bordered)
             .help(isLivePreviewEnabled ? "Disable live preview" : "Enable live preview")
 
+            // Action separator (thicker visual break)
             Divider()
-                .frame(height: 20)
-
-            // Markdown Formatting Buttons
-            HStack(spacing: 6) {
-                Button(action: { onFormat(.bold) }) {
-                    Label("Bold", systemImage: "bold")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Bold (⌘B)")
-
-                Button(action: { onFormat(.italic) }) {
-                    Label("Italic", systemImage: "italic")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Italic (⌘I)")
-
-                Button(action: { onFormat(.heading) }) {
-                    Label("Heading", systemImage: "textformat.size")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Heading")
-
-                Button(action: { onFormat(.unorderedList) }) {
-                    Label("Unordered List", systemImage: "list.bullet")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Unordered List")
-
-                Button(action: { onFormat(.orderedList) }) {
-                    Label("Ordered List", systemImage: "list.number")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Ordered List")
-
-                Button(action: { onFormat(.code) }) {
-                    Label("Code", systemImage: "text.word.spacing")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Code Block")
-
-                Button(action: { onFormat(.link) }) {
-                    Label("Link", systemImage: "link")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Insert Link (⌘K)")
-
-                Button(action: { onFormat(.image) }) {
-                    Label("Image", systemImage: "photo")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Insert Image (⌘⇧I)")
-
-                Button(action: { onFormat(.blockquote) }) {
-                    Label("Quote", systemImage: "quote.opening")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Block Quote (⌘')")
-            }
-
-            Spacer()
+                .frame(height: 24)
+                .padding(.horizontal, 12)
 
             // Save Button
             if showSavedIndicator {
@@ -231,5 +233,65 @@ struct EditorToolbar: View {
         .overlay(alignment: .bottom) {
             Divider()
         }
+    }
+}
+
+// MARK: - Toolbar Components
+
+/// A group of toolbar buttons with consistent spacing
+struct ToolbarGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 4) {
+            content
+        }
+    }
+}
+
+/// Visual separator between toolbar groups
+struct ToolbarSeparator: View {
+    var body: some View {
+        Divider()
+            .frame(height: 20)
+            .padding(.horizontal, 8)
+    }
+}
+
+/// Standard toolbar button with icon, label, and tooltip
+struct ToolbarButton: View {
+    let icon: String
+    let label: String
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.bordered)
+        .help(help)
+    }
+}
+
+/// Heading dropdown menu with H1-H6 options
+struct HeadingMenu: View {
+    let onFormat: (MarkdownFormat) -> Void
+
+    var body: some View {
+        Menu {
+            Button("Heading 1") { onFormat(.heading(level: 1)) }
+            Button("Heading 2") { onFormat(.heading(level: 2)) }
+            Button("Heading 3") { onFormat(.heading(level: 3)) }
+            Button("Heading 4") { onFormat(.heading(level: 4)) }
+            Button("Heading 5") { onFormat(.heading(level: 5)) }
+            Button("Heading 6") { onFormat(.heading(level: 6)) }
+        } label: {
+            Label("Heading", systemImage: "h.square")
+                .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.bordered)
+        .help("Insert Heading (H1-H6)")
     }
 }

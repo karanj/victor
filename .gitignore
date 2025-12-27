@@ -90,3 +90,4 @@ iOSInjectionProject/
 
 # macOS
 .DS_Store
+.vscode/

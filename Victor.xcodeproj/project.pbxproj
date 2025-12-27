@@ -32,6 +32,8 @@
 		1000000000000017 /* FileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000017 /* FileListView.swift */; };
 		1000000000000018 /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000018 /* AppConstants.swift */; };
 		1000000000000019 /* preview-styles.css in Resources */ = {isa = PBXBuildFile; fileRef = 2000000000000019 /* preview-styles.css */; };
+		100000000000001A /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000001A /* TabBarView.swift */; };
+		100000000000001B /* EditorStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000001B /* EditorStatusBar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -59,6 +61,8 @@
 		2000000000000017 /* FileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileListView.swift; sourceTree = "<group>"; };
 		2000000000000018 /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
 		2000000000000019 /* preview-styles.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = "preview-styles.css"; sourceTree = "<group>"; };
+		200000000000001A /* TabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarView.swift; sourceTree = "<group>"; };
+		200000000000001B /* EditorStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorStatusBar.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -156,6 +160,7 @@
 				2000000000000014 /* PreviewPanel.swift */,
 				2000000000000003 /* SidebarView.swift */,
 				2000000000000017 /* FileListView.swift */,
+				200000000000001A /* TabBarView.swift */,
 			);
 			path = MainWindow;
 			sourceTree = "<group>";
@@ -164,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000D /* EditorTextView.swift */,
+				200000000000001B /* EditorStatusBar.swift */,
 				2000000000000011 /* FrontmatterEditorView.swift */,
 			);
 			path = Editor;
@@ -285,6 +291,8 @@
 				1000000000000016 /* EditorPanelView.swift in Sources */,
 				1000000000000017 /* FileListView.swift in Sources */,
 				1000000000000018 /* AppConstants.swift in Sources */,
+				100000000000001A /* TabBarView.swift in Sources */,
+				100000000000001B /* EditorStatusBar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

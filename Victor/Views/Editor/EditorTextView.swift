@@ -1,14 +1,103 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Custom Text View with Line Highlighting
+
+/// Custom NSTextView subclass that highlights the current line
+final class HighlightingTextView: NSTextView {
+
+    /// Whether to show current line highlighting
+    var highlightCurrentLine: Bool = true {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    /// Color for the current line highlight
+    private var highlightColor: NSColor {
+        NSColor.controlAccentColor.withAlphaComponent(0.08)
+    }
+
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+
+        guard highlightCurrentLine,
+              let layoutManager = layoutManager,
+              textContainer != nil else { return }
+
+        // Get cursor position
+        let cursorPosition = selectedRange().location
+
+        // Handle empty document
+        guard cursorPosition <= string.count else { return }
+
+        // Get the glyph range for the cursor position
+        let charRange = NSRange(location: min(cursorPosition, max(0, string.count - 1)), length: 0)
+
+        // Handle empty string case
+        if string.isEmpty {
+            // Draw highlight for the first line when empty
+            var lineRect = NSRect(x: 0, y: textContainerInset.height, width: bounds.width, height: 20)
+            lineRect.origin.x = 0
+            lineRect.size.width = bounds.width
+            highlightColor.setFill()
+            lineRect.fill()
+            return
+        }
+
+        let glyphRange = layoutManager.glyphRange(forCharacterRange: charRange, actualCharacterRange: nil)
+
+        // Get the line fragment rect
+        var lineRect = layoutManager.lineFragmentRect(forGlyphAt: max(0, glyphRange.location), effectiveRange: nil)
+
+        // Adjust for text container inset
+        lineRect.origin.y += textContainerInset.height
+        lineRect.origin.x = 0
+        lineRect.size.width = bounds.width
+
+        // Draw the highlight
+        highlightColor.setFill()
+        lineRect.fill()
+    }
+
+    override func setSelectedRange(_ charRange: NSRange) {
+        super.setSelectedRange(charRange)
+        // Redraw to update highlight position
+        needsDisplay = true
+    }
+
+    override func setSelectedRange(_ charRange: NSRange, affinity: NSSelectionAffinity, stillSelecting stillSelectingFlag: Bool) {
+        super.setSelectedRange(charRange, affinity: affinity, stillSelecting: stillSelectingFlag)
+        // Redraw to update highlight position
+        needsDisplay = true
+    }
+}
+
+// MARK: - Editor Text View
+
+/// Cursor position in the document
+struct CursorPosition: Equatable {
+    let line: Int
+    let column: Int
+}
+
 /// NSViewRepresentable wrapper around NSTextView for high-performance markdown editing
 struct EditorTextView: NSViewRepresentable {
     @Binding var text: String
+    var highlightCurrentLine: Bool
     var onCoordinatorReady: ((Coordinator) -> Void)?
+    var onCursorPositionChange: ((CursorPosition) -> Void)?
 
-    init(text: Binding<String>, onCoordinatorReady: ((Coordinator) -> Void)? = nil) {
+    init(
+        text: Binding<String>,
+        highlightCurrentLine: Bool = true,
+        onCoordinatorReady: ((Coordinator) -> Void)? = nil,
+        onCursorPositionChange: ((CursorPosition) -> Void)? = nil
+    ) {
         self._text = text
+        self.highlightCurrentLine = highlightCurrentLine
         self.onCoordinatorReady = onCoordinatorReady
+        self.onCursorPositionChange = onCursorPositionChange
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -19,8 +108,9 @@ struct EditorTextView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
 
-        // Create text view with proper frame
-        let textView = NSTextView(frame: scrollView.bounds)
+        // Create text view with proper frame (using custom subclass for line highlighting)
+        let textView = HighlightingTextView(frame: scrollView.bounds)
+        textView.highlightCurrentLine = highlightCurrentLine
 
         // Store reference in coordinator
         context.coordinator.textView = textView
@@ -68,7 +158,12 @@ struct EditorTextView: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
+        guard let textView = scrollView.documentView as? HighlightingTextView else { return }
+
+        // Update line highlighting preference
+        if textView.highlightCurrentLine != highlightCurrentLine {
+            textView.highlightCurrentLine = highlightCurrentLine
+        }
 
         // Update text container width if scroll view size changed
         if let textContainer = textView.textContainer {
@@ -102,7 +197,7 @@ struct EditorTextView: NSViewRepresentable {
 
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: EditorTextView
-        weak var textView: NSTextView?
+        weak var textView: HighlightingTextView?
 
         init(_ parent: EditorTextView) {
             self.parent = parent
@@ -118,6 +213,46 @@ struct EditorTextView: NSViewRepresentable {
 
             // Update binding
             parent.text = textView.string
+
+            // Also update cursor position on text change
+            updateCursorPosition()
+        }
+
+        // Called when selection changes (cursor movement)
+        func textViewDidChangeSelection(_ notification: Notification) {
+            updateCursorPosition()
+        }
+
+        // Calculate and report cursor position
+        private func updateCursorPosition() {
+            guard let textView = textView else { return }
+
+            let text = textView.string
+            let cursorLocation = textView.selectedRange().location
+
+            // Calculate line and column
+            let position = calculateLineAndColumn(text: text, cursorLocation: cursorLocation)
+            parent.onCursorPositionChange?(position)
+        }
+
+        /// Calculate line number and column from cursor location
+        private func calculateLineAndColumn(text: String, cursorLocation: Int) -> CursorPosition {
+            guard !text.isEmpty, cursorLocation >= 0 else {
+                return CursorPosition(line: 1, column: 1)
+            }
+
+            let nsString = text as NSString
+            let safeLocation = min(cursorLocation, nsString.length)
+
+            // Count newlines up to cursor position to get line number
+            let textUpToCursor = nsString.substring(to: safeLocation)
+            let lines = textUpToCursor.components(separatedBy: "\n")
+            let lineNumber = lines.count
+
+            // Column is the length of the last line + 1 (1-based)
+            let column = (lines.last?.count ?? 0) + 1
+
+            return CursorPosition(line: lineNumber, column: column)
         }
 
         // Apply markdown formatting
@@ -157,7 +292,7 @@ struct EditorTextView: NSViewRepresentable {
 enum MarkdownFormat {
     case bold
     case italic
-    case heading
+    case heading(level: Int)
     case unorderedList
     case orderedList
     case code
@@ -167,7 +302,9 @@ enum MarkdownFormat {
 
     var prefix: String {
         switch self {
-        case .heading: return "## "
+        case .heading(let level):
+            let clampedLevel = max(1, min(6, level))
+            return String(repeating: "#", count: clampedLevel) + " "
         case .unorderedList: return "- "
         case .orderedList: return "1. "
         case .blockquote: return "> "
@@ -191,9 +328,35 @@ enum MarkdownFormat {
         default: return nil
         }
     }
+
+    /// Whether this format is a link (used for placeholder text selection)
+    var isLink: Bool {
+        if case .link = self { return true }
+        return false
+    }
+
+    /// Whether this format is a heading (used for replacement logic)
+    var isHeading: Bool {
+        if case .heading = self { return true }
+        return false
+    }
 }
 
 extension NSTextView {
+    /// Replace existing heading markers (e.g., "## ") with new ones, or add if none exist
+    static func replaceHeadingPrefix(in line: String, with newPrefix: String) -> String {
+        // Pattern matches 1-6 # characters followed by a space at the start of the line
+        let headingPattern = "^#{1,6} "
+
+        if let range = line.range(of: headingPattern, options: .regularExpression) {
+            // Replace existing heading markers
+            return line.replacingCharacters(in: range, with: newPrefix)
+        } else {
+            // No existing heading, add the new prefix
+            return line.isEmpty ? line : "\(newPrefix)\(line)"
+        }
+    }
+
     func applyMarkdownFormat(_ format: MarkdownFormat) {
         guard let textStorage = self.textStorage else { return }
 
@@ -216,7 +379,7 @@ extension NSTextView {
                 newSelectionLength = 3 // select "url"
             } else {
                 // Insert template with placeholders
-                let placeholder = format == .link ? "text" : "alt text"
+                let placeholder = format.isLink ? "text" : "alt text"
                 newText = "\(prefix)\(placeholder)\(suffix)"
                 // Select the placeholder text
                 newSelectionLocation = selectedRange.location + cursorOffset
@@ -242,15 +405,26 @@ extension NSTextView {
                 // Prefix each line
                 let lines = lineText.components(separatedBy: .newlines)
                 let prefixedLines = lines.map { line in
-                    line.isEmpty ? line : "\(format.prefix)\(line)"
+                    if format.isHeading {
+                        // Replace existing heading markers
+                        return Self.replaceHeadingPrefix(in: line, with: format.prefix)
+                    }
+                    return line.isEmpty ? line : "\(format.prefix)\(line)"
                 }
                 newText = prefixedLines.joined(separator: "\n")
                 newSelectionLocation = lineRange.location
                 newSelectionLength = newText.count
             } else {
-                // Insert prefix at current line
+                // Insert/replace prefix at current line
                 let lineStart = lineRange.location
-                newText = lineText.replacingOccurrences(of: "^", with: format.prefix, options: .regularExpression)
+
+                if format.isHeading {
+                    // Replace existing heading markers or add new ones
+                    newText = Self.replaceHeadingPrefix(in: lineText, with: format.prefix)
+                } else {
+                    newText = "\(format.prefix)\(lineText)"
+                }
+
                 newSelectionLocation = lineStart + format.prefix.count
                 newSelectionLength = 0
 
