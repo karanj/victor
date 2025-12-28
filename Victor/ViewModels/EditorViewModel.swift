@@ -97,6 +97,13 @@ class EditorViewModel {
         // The preview panel handles its own debouncing
         siteViewModel.currentEditingContent = editableContent
 
+        // Update file status in sidebar
+        if hasUnsavedChanges {
+            siteViewModel.markFileModified(fileNode.id)
+        } else {
+            siteViewModel.clearFileModified(fileNode.id)
+        }
+
         // Schedule auto-save if enabled and there are unsaved changes
         if hasUnsavedChanges && siteViewModel.isAutoSaveEnabled {
             scheduleAutoSave()
@@ -125,6 +132,9 @@ class EditorViewModel {
 
             // Snapshot the frontmatter state after successful save
             lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
+
+            // Update file status in sidebar
+            siteViewModel.markFileSaved(fileNode.id)
 
             // Show saved indicator briefly
             showSavedIndicator = true
@@ -175,6 +185,9 @@ class EditorViewModel {
 
                     // Snapshot the frontmatter state after successful auto-save
                     self.lastSavedFrontmatter = self.contentFile.frontmatter?.snapshot()
+
+                    // Update file status in sidebar
+                    self.siteViewModel.markFileSaved(self.fileNode.id)
 
                     // Show saved indicator briefly
                     self.showSavedIndicator = true

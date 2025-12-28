@@ -2,7 +2,6 @@ import SwiftUI
 
 // MARK: - File List View
 
-/// TODO: add new post - maybe as a right-click, it should prompt to create a new file with a title slug
 struct FileListView: View {
     @Bindable var siteViewModel: SiteViewModel
 
@@ -18,15 +17,9 @@ struct FileListView: View {
                         FileTreeRow(node: child, siteViewModel: siteViewModel)
                     }
                 } label: {
-                    FileRowView(node: node)
+                    FileRowView(node: node, siteViewModel: siteViewModel)
                         .contextMenu {
-                            Button {
-                                Task {
-                                    await siteViewModel.createMarkdownFile(in: node)
-                                }
-                            } label: {
-                                Label("New Markdown File", systemImage: "doc.badge.plus")
-                            }
+                            FolderContextMenu(node: node, siteViewModel: siteViewModel)
                         }
                         .onTapGesture(count: 2) {
                             // Double-click to expand/collapse folder
@@ -41,8 +34,11 @@ struct FileListView: View {
                 }
             } else {
                 // Regular file row
-                FileRowView(node: node)
+                FileRowView(node: node, siteViewModel: siteViewModel)
                     .tag(node.id)
+                    .contextMenu {
+                        FileContextMenu(node: node, siteViewModel: siteViewModel)
+                    }
                     .onTapGesture {
                         siteViewModel.selectNode(node)
                     }
@@ -89,15 +85,9 @@ struct FileTreeRow: View {
                     FileTreeRow(node: child, siteViewModel: siteViewModel)
                 }
             } label: {
-                FileRowView(node: node)
+                FileRowView(node: node, siteViewModel: siteViewModel)
                     .contextMenu {
-                        Button {
-                            Task {
-                                await siteViewModel.createMarkdownFile(in: node)
-                            }
-                        } label: {
-                            Label("New Markdown File", systemImage: "doc.badge.plus")
-                        }
+                        FolderContextMenu(node: node, siteViewModel: siteViewModel)
                     }
                     .onTapGesture(count: 2) {
                         // Double-click to expand/collapse folder
@@ -111,8 +101,11 @@ struct FileTreeRow: View {
                     }
             }
         } else {
-            FileRowView(node: node)
+            FileRowView(node: node, siteViewModel: siteViewModel)
                 .tag(node.id)
+                .contextMenu {
+                    FileContextMenu(node: node, siteViewModel: siteViewModel)
+                }
                 .onTapGesture {
                     siteViewModel.selectNode(node)
                 }
@@ -125,6 +118,21 @@ struct FileTreeRow: View {
 
 struct FileRowView: View {
     let node: FileNode
+    var siteViewModel: SiteViewModel? = nil
+
+    /// File status for indicator display
+    private var fileStatus: FileStatus {
+        guard let viewModel = siteViewModel, node.isMarkdownFile else {
+            return .none
+        }
+
+        if viewModel.isFileModified(node.id) {
+            return .modified
+        } else if viewModel.isFileRecentlySaved(node.id) {
+            return .saved
+        }
+        return .none
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -163,6 +171,9 @@ struct FileRowView: View {
             }
 
             Spacer()
+
+            // File status indicator
+            FileStatusIndicator(status: fileStatus)
         }
         .contentShape(Rectangle())
     }
@@ -194,6 +205,138 @@ struct FileRowView: View {
             return "Folder"
         } else {
             return "Markdown file"
+        }
+    }
+}
+
+// MARK: - File Status
+
+/// Represents the current status of a file
+enum FileStatus {
+    case none
+    case modified   // Has unsaved changes (orange dot)
+    case saved      // Recently saved (green checkmark)
+}
+
+/// Visual indicator for file status in the sidebar
+struct FileStatusIndicator: View {
+    let status: FileStatus
+
+    var body: some View {
+        switch status {
+        case .none:
+            EmptyView()
+
+        case .modified:
+            Circle()
+                .fill(.orange)
+                .frame(width: 8, height: 8)
+                .help("Unsaved changes")
+                .accessibilityLabel("Unsaved changes")
+                .transition(.scale.combined(with: .opacity))
+
+        case .saved:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(.green)
+                .help("Saved")
+                .accessibilityLabel("Recently saved")
+                .transition(.scale.combined(with: .opacity))
+        }
+    }
+}
+
+// MARK: - Context Menus
+
+/// Context menu for folder nodes
+struct FolderContextMenu: View {
+    let node: FileNode
+    let siteViewModel: SiteViewModel
+
+    @State private var isRenaming = false
+    @State private var newName = ""
+
+    var body: some View {
+        // Create operations
+        Button {
+            Task {
+                await siteViewModel.createMarkdownFile(in: node)
+            }
+        } label: {
+            Label("New Markdown File", systemImage: "doc.badge.plus")
+        }
+
+        Button {
+            Task {
+                await siteViewModel.createFolder(in: node)
+            }
+        } label: {
+            Label("New Folder", systemImage: "folder.badge.plus")
+        }
+
+        Divider()
+
+        // File operations
+        Button {
+            siteViewModel.revealInFinder(node: node)
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Button {
+            siteViewModel.copyPath(node: node)
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.clipboard")
+        }
+    }
+}
+
+/// Context menu for file nodes
+struct FileContextMenu: View {
+    let node: FileNode
+    let siteViewModel: SiteViewModel
+
+    var body: some View {
+        // Open
+        Button {
+            siteViewModel.selectNode(node)
+        } label: {
+            Label("Open", systemImage: "doc.text")
+        }
+
+        Divider()
+
+        // File operations
+        Button {
+            Task {
+                await siteViewModel.duplicateFile(node: node)
+            }
+        } label: {
+            Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            Task {
+                await siteViewModel.moveToTrash(node: node)
+            }
+        } label: {
+            Label("Move to Trash", systemImage: "trash")
+        }
+
+        Divider()
+
+        Button {
+            siteViewModel.revealInFinder(node: node)
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Button {
+            siteViewModel.copyPath(node: node)
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.clipboard")
         }
     }
 }

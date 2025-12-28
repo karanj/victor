@@ -74,6 +74,16 @@ class SiteViewModel {
         }
     }
 
+    /// Inspector panel visibility (persisted)
+    var isInspectorVisible: Bool {
+        didSet {
+            UserDefaults.standard.set(isInspectorVisible, forKey: "isInspectorVisible")
+        }
+    }
+
+    /// Focus mode active state (not persisted - always starts inactive)
+    var isFocusModeActive: Bool = false
+
     /// Loading state
     var isLoading = false
 
@@ -85,6 +95,26 @@ class SiteViewModel {
 
     /// Trigger to focus search field
     var shouldFocusSearch = false
+
+    /// Quick Open dialog visibility
+    var isQuickOpenVisible = false
+
+    /// Recently opened files (for Quick Open)
+    var recentFiles: [FileNode] = []
+
+    /// Maximum number of recent files to track
+    private let maxRecentFiles = 10
+
+    // MARK: - File Status Tracking
+
+    /// Files with unsaved changes (tracked by node ID)
+    var modifiedFileIDs: Set<UUID> = []
+
+    /// Files that were recently saved (node ID -> save timestamp)
+    var recentlySavedFileIDs: [UUID: Date] = [:]
+
+    /// Duration to show "saved" indicator before fading
+    private let savedIndicatorDuration: TimeInterval = 3.0
 
     /// File system service
     private let fileSystemService = FileSystemService.shared
@@ -101,6 +131,24 @@ class SiteViewModel {
         }
         autoExpandedNodeIDs.removeAll()
         return filterNodesRecursively(fileNodes, query: searchQuery)
+    }
+
+    /// Total count of markdown files (leaf nodes) in the site
+    var totalFileCount: Int {
+        countFilesRecursively(fileNodes)
+    }
+
+    /// Recursively count markdown files in the tree
+    private func countFilesRecursively(_ nodes: [FileNode]) -> Int {
+        var count = 0
+        for node in nodes {
+            if node.isDirectory {
+                count += countFilesRecursively(node.children)
+            } else if node.isMarkdownFile {
+                count += 1
+            }
+        }
+        return count
     }
 
     /// Check if a node should be auto-expanded during search
@@ -164,6 +212,9 @@ class SiteViewModel {
 
         // Load current line highlighting preference (default: true)
         self.highlightCurrentLine = UserDefaults.standard.object(forKey: "highlightCurrentLine") as? Bool ?? true
+
+        // Load inspector visibility preference (default: false)
+        self.isInspectorVisible = UserDefaults.standard.object(forKey: "isInspectorVisible") as? Bool ?? false
 
         // Try to load previously opened site
         Task {
@@ -255,6 +306,95 @@ class SiteViewModel {
         }
     }
 
+    // MARK: - Quick Open
+
+    /// Add a file to the recent files list
+    func addRecentFile(_ node: FileNode) {
+        // Remove if already in list (to move to front)
+        recentFiles.removeAll { $0.id == node.id }
+
+        // Add to front
+        recentFiles.insert(node, at: 0)
+
+        // Trim to max size
+        if recentFiles.count > maxRecentFiles {
+            recentFiles = Array(recentFiles.prefix(maxRecentFiles))
+        }
+    }
+
+    /// Toggle Quick Open dialog
+    func toggleQuickOpen() {
+        isQuickOpenVisible.toggle()
+    }
+
+    /// Toggle Inspector panel
+    func toggleInspector() {
+        isInspectorVisible.toggle()
+    }
+
+    /// Toggle Focus Mode
+    func toggleFocusMode() {
+        // When entering focus mode, ensure content is initialized from the file
+        if !isFocusModeActive {
+            if let contentFile = selectedNode?.contentFile {
+                // Initialize editing content from file if empty
+                if currentEditingContent.isEmpty {
+                    currentEditingContent = contentFile.markdownContent
+                }
+            }
+        }
+        isFocusModeActive.toggle()
+    }
+
+    /// Exit Focus Mode
+    func exitFocusMode() {
+        isFocusModeActive = false
+    }
+
+    // MARK: - File Status Management
+
+    /// Mark a file as having unsaved changes
+    func markFileModified(_ nodeID: UUID) {
+        modifiedFileIDs.insert(nodeID)
+    }
+
+    /// Clear the modified state for a file
+    func clearFileModified(_ nodeID: UUID) {
+        modifiedFileIDs.remove(nodeID)
+    }
+
+    /// Mark a file as recently saved (shows green checkmark that fades)
+    func markFileSaved(_ nodeID: UUID) {
+        // Clear modified state
+        modifiedFileIDs.remove(nodeID)
+
+        // Add to recently saved
+        recentlySavedFileIDs[nodeID] = Date()
+
+        // Schedule removal after duration
+        Task {
+            try? await Task.sleep(for: .seconds(savedIndicatorDuration))
+            // Only remove if the timestamp hasn't been updated
+            if let savedDate = recentlySavedFileIDs[nodeID],
+               Date().timeIntervalSince(savedDate) >= savedIndicatorDuration {
+                recentlySavedFileIDs.removeValue(forKey: nodeID)
+            }
+        }
+    }
+
+    /// Check if a file has unsaved changes
+    func isFileModified(_ nodeID: UUID) -> Bool {
+        modifiedFileIDs.contains(nodeID)
+    }
+
+    /// Check if a file was recently saved
+    func isFileRecentlySaved(_ nodeID: UUID) -> Bool {
+        guard let savedDate = recentlySavedFileIDs[nodeID] else {
+            return false
+        }
+        return Date().timeIntervalSince(savedDate) < savedIndicatorDuration
+    }
+
     /// Load content for a file node
     private func loadFileContent(for node: FileNode) async {
         do {
@@ -334,6 +474,109 @@ class SiteViewModel {
         } catch {
             errorMessage = "Failed to reload file: \(error.localizedDescription)"
             print("Error reloading file: \(error)")
+        }
+    }
+
+    // MARK: - Context Menu File Operations
+
+    /// Rename a file node
+    func renameFile(node: FileNode, to newName: String) async {
+        do {
+            let newURL = try await fileSystemService.renameFile(at: node.url, to: newName)
+
+            // Update the node's URL
+            node.url = newURL
+
+            // Clear selection if this was selected (will need to re-select)
+            if selectedNode?.id == node.id {
+                // Force UI update
+                selectedNode = nil
+                selectedNode = node
+            }
+        } catch {
+            errorMessage = "Failed to rename file: \(error.localizedDescription)"
+            print("Error renaming file: \(error)")
+        }
+    }
+
+    /// Duplicate a file node
+    func duplicateFile(node: FileNode) async {
+        do {
+            let newURL = try await fileSystemService.duplicateFile(at: node.url)
+
+            // Create a new FileNode for the duplicate
+            let newNode = FileNode(url: newURL, isDirectory: node.isDirectory, isPageBundle: node.isPageBundle)
+
+            // Add to parent's children
+            if let parent = node.parent {
+                parent.addChild(newNode)
+            } else {
+                // Top-level file
+                fileNodes.append(newNode)
+                fileNodes.sort { lhs, rhs in
+                    if lhs.isDirectory != rhs.isDirectory {
+                        return lhs.isDirectory
+                    }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+            }
+
+            // Select the new file
+            selectNode(newNode)
+        } catch {
+            errorMessage = "Failed to duplicate file: \(error.localizedDescription)"
+            print("Error duplicating file: \(error)")
+        }
+    }
+
+    /// Move a file node to trash
+    func moveToTrash(node: FileNode) async {
+        do {
+            try await fileSystemService.moveToTrash(at: node.url)
+
+            // Remove from parent's children
+            if let parent = node.parent {
+                parent.children.removeAll { $0.id == node.id }
+            } else {
+                // Top-level file
+                fileNodes.removeAll { $0.id == node.id }
+            }
+
+            // Clear selection if this was selected
+            if selectedNode?.id == node.id {
+                selectedNode = nil
+                selectedFileID = nil
+                currentEditingContent = ""
+            }
+        } catch {
+            errorMessage = "Failed to move to trash: \(error.localizedDescription)"
+            print("Error moving to trash: \(error)")
+        }
+    }
+
+    /// Reveal a file in Finder
+    func revealInFinder(node: FileNode) {
+        fileSystemService.revealInFinder(url: node.url)
+    }
+
+    /// Copy file path to clipboard
+    func copyPath(node: FileNode) {
+        fileSystemService.copyPathToClipboard(url: node.url)
+    }
+
+    /// Create a new folder inside the given directory
+    func createFolder(in parent: FileNode) async {
+        guard parent.isDirectory else { return }
+
+        do {
+            let newURL = try await fileSystemService.createFolder(in: parent.url)
+
+            // Create a FileNode for the new folder
+            let newNode = FileNode(url: newURL, isDirectory: true, isPageBundle: false)
+            parent.addChild(newNode)
+        } catch {
+            errorMessage = "Failed to create folder: \(error.localizedDescription)"
+            print("Error creating folder: \(error)")
         }
     }
 }

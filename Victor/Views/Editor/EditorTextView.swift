@@ -135,13 +135,22 @@ struct EditorTextView: NSViewRepresentable {
         textView.isAutomaticTextReplacementEnabled = false
 
         // Configure text container for proper wrapping
-        textView.textContainerInset = NSSize(width: 10, height: 10)
+        // Horizontal padding provides breathing room from scrollbar/resize gutter
+        textView.textContainerInset = NSSize(width: 16, height: 10)
         textView.autoresizingMask = [.width]
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
 
         if let textContainer = textView.textContainer {
             textContainer.widthTracksTextView = true
-            textContainer.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+            textContainer.heightTracksTextView = false
+            // Set height to infinity for vertical scrolling, width will track text view
+            textContainer.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         }
+
+        // Set min/max size to allow vertical growth but constrain horizontal
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
 
         // Set initial text
         textView.string = text
@@ -149,8 +158,12 @@ struct EditorTextView: NSViewRepresentable {
         // Set as document view
         scrollView.documentView = textView
 
-        // Notify that coordinator is ready
+        // Force layout after view is in hierarchy to ensure proper text display
         DispatchQueue.main.async {
+            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+            textView.needsLayout = true
+            textView.needsDisplay = true
+            scrollView.needsLayout = true
             onCoordinatorReady?(context.coordinator)
         }
 
@@ -163,15 +176,6 @@ struct EditorTextView: NSViewRepresentable {
         // Update line highlighting preference
         if textView.highlightCurrentLine != highlightCurrentLine {
             textView.highlightCurrentLine = highlightCurrentLine
-        }
-
-        // Update text container width if scroll view size changed
-        if let textContainer = textView.textContainer {
-            let newWidth = scrollView.contentSize.width
-            if textContainer.containerSize.width != newWidth {
-                textContainer.containerSize = NSSize(width: newWidth, height: CGFloat.greatestFiniteMagnitude)
-                textView.frame.size.width = newWidth
-            }
         }
 
         // Only update if text has changed (avoid cursor jumping)

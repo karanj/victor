@@ -5,58 +5,60 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             if siteViewModel.site == nil {
-                OpenFolderPrompt(siteViewModel: siteViewModel)
+                // Empty state - centered prompt to open a site
+                EmptySiteView(siteViewModel: siteViewModel)
             } else {
+                // Site header
                 SiteHeader(siteViewModel: siteViewModel)
-            }
 
-            Divider()
+                Divider()
 
-            // Search bar
-            if siteViewModel.site != nil {
+                // Search bar
                 SearchBar(searchText: $siteViewModel.searchQuery, siteViewModel: siteViewModel)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
 
                 Divider()
-            }
 
-            // File list
-            if siteViewModel.isLoading {
-                LoadingView()
-            } else if siteViewModel.site != nil {
-                FileListView(siteViewModel: siteViewModel)
-            } else {
-                ContentUnavailableView(
-                    "No Site Opened",
-                    systemImage: "folder",
-                    description: Text("Click above to open a Hugo site folder")
-                )
+                // File list
+                if siteViewModel.isLoading {
+                    LoadingView()
+                } else {
+                    FileListView(siteViewModel: siteViewModel)
+                }
             }
         }
     }
 }
 
-// MARK: - Open Folder Prompt
+// MARK: - Empty Site View
 
-struct OpenFolderPrompt: View {
+struct EmptySiteView: View {
     let siteViewModel: SiteViewModel
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
+            Image(systemName: "folder.badge.plus")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+
+            Text("No Site Open")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
             Button {
                 Task {
                     await siteViewModel.openSiteFolder()
                 }
             } label: {
-                Label("Open Hugo Site", systemImage: "folder.badge.plus")
-                    .frame(maxWidth: .infinity)
+                Text("Open Hugo Site")
+                    .frame(minWidth: 140)
             }
             .buttonStyle(.borderedProminent)
-            .padding()
+            .controlSize(.large)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -72,7 +74,7 @@ struct SiteHeader: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                Text("\(siteViewModel.fileNodes.count) files")
+                Text("\(siteViewModel.totalFileCount) files")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -28,6 +28,9 @@ struct EditorPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Breadcrumb navigation
+            BreadcrumbBar(fileNode: fileNode, siteViewModel: siteViewModel)
+
             // Toolbar
             EditorToolbar(
                 isLivePreviewEnabled: $siteViewModel.isLivePreviewEnabled,

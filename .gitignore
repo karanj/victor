@@ -91,3 +91,6 @@ iOSInjectionProject/
 # macOS
 .DS_Store
 .vscode/
+
+# XcodeGen - generated project (regenerate with: xcodegen generate)
+Victor.xcodeproj

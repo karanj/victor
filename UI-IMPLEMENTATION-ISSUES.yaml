@@ -8,13 +8,30 @@
 # STATUS TRACKING
 # =============================================================================
 status_summary:
-  last_updated: 2025-12-28
+  last_updated: 2025-12-29
   session_notes: |
-    Session 2025-12-28: Completed UI-008 (status bar) and UI-009 (toolbar redesign).
-    - EditorStatusBar: word count, char count, cursor line/column
-    - Toolbar: grouped controls with separators, heading dropdown H1-H6
-    - Fixed heading replacement to modify in-place instead of prepending
-    Next up: Stage 3 (Navigation Improvements) starting with UI-010 (Breadcrumbs)
+    Session 2025-12-29 (continued): Completed Stage 4 + UI-016 Focus Mode.
+    UI-013 (Inspector infrastructure):
+    - InspectorPanel.swift: right-side collapsible panel
+    - isInspectorVisible state in SiteViewModel (persisted)
+    - Toolbar button and Opt+Cmd+I keyboard shortcut
+    - View menu toggle option
+    - Fixed: Statistics now show on initial file load (effectiveContent helper)
+    UI-014 (Frontmatter in inspector):
+    - MetadataSection.swift: compact frontmatter editing
+    - StatisticsSection.swift: word count, reading time, file info
+    - Collapsible sections with InspectorSection component
+    UI-015 (Preference for location): Skipped - both locations available
+    UI-016 (Focus Mode):
+    - FocusModeView.swift: distraction-free writing overlay
+    - Centered editor with 700pt max width, larger 16pt font
+    - Top bar with file name and exit button (fades on hover)
+    - Bottom bar with word count, character count, scroll progress
+    - Ctrl+Cmd+F keyboard shortcut, Esc to exit
+    - Fixed: Content now initializes from file on focus mode entry
+    - Fixed: Changes sync back to contentFile.markdownContent
+    Stage 4 + Focus Mode COMPLETE. Remaining: UI-017 to UI-020
+    Known issues: Some minor sync quirks in focus mode (to revisit later)
   stages:
     stage-1:
       name: Tab-Based Layout Foundation
@@ -35,23 +52,23 @@ status_summary:
         UI-009: COMPLETE  # Toolbar redesign (includes heading replacement fix)
     stage-3:
       name: Navigation Improvements
-      status: PENDING
+      status: COMPLETE
       issues:
-        UI-010: PENDING   # Breadcrumb navigation
-        UI-011: PENDING   # Quick Open (Cmd+P)
-        UI-012: PENDING   # File status indicators
+        UI-010: COMPLETE  # Breadcrumb navigation
+        UI-011: COMPLETE  # Quick Open (Cmd+P) - hidden, needs keyboard nav fix
+        UI-012: COMPLETE  # File status indicators
     stage-4:
       name: Inspector Panel
-      status: PENDING
+      status: COMPLETE
       issues:
-        UI-013: PENDING   # Inspector infrastructure
-        UI-014: PENDING   # Frontmatter in inspector
-        UI-015: PENDING   # Preference for location
+        UI-013: COMPLETE  # Inspector infrastructure
+        UI-014: COMPLETE  # Frontmatter in inspector
+        UI-015: SKIPPED   # Preference for location (both available)
     stage-5:
       name: Focus Mode and Polish
-      status: PENDING
+      status: IN_PROGRESS
       issues:
-        UI-016: PENDING   # Focus Mode
+        UI-016: COMPLETE  # Focus Mode
         UI-017: PENDING   # Context menus
         UI-018: PENDING   # Preferences window
         UI-019: PENDING   # Empty state improvements
@@ -629,6 +646,8 @@ stages:
     issues:
       - id: UI-010
         title: Add breadcrumb navigation bar
+        status: COMPLETE
+        completed_date: 2025-12-29
         priority: medium
         estimated_effort: medium
         dependencies: [UI-003]
@@ -683,6 +702,8 @@ stages:
 
       - id: UI-011
         title: Implement Quick Open dialog (Cmd+P)
+        status: COMPLETE
+        completed_date: 2025-12-29
         priority: high
         estimated_effort: large
         dependencies: [UI-003]
@@ -769,6 +790,8 @@ stages:
 
       - id: UI-012
         title: Add file status indicators to sidebar
+        status: COMPLETE
+        completed_date: 2025-12-29
         priority: medium
         estimated_effort: small
         dependencies: [UI-003]

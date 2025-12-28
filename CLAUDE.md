@@ -16,7 +16,7 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 - **Platform**: macOS 14.0+ (Sonoma)
 - **Framework**: SwiftUI with AppKit integration (NSTextView, WKWebView)
 - **Architecture**: MVVM with `@Observable`
-- **Build System**: Swift Package Manager via Xcode Project
+- **Build System**: XcodeGen + Swift Package Manager (project.yml → .xcodeproj)
 - **Dependencies**: Down (Markdown), Yams (YAML), TOMLKit (TOML)
 
 ---
@@ -224,35 +224,35 @@ Preview/
 
 ## Development Guide
 
-### ⚠️ CRITICAL: Xcode Project Updates
+### XcodeGen Workflow
 
-**IMPORTANT: When creating new Swift files, ALWAYS update the Xcode project file immediately.**
+This project uses **XcodeGen** to generate the Xcode project from `project.yml`. The `.xcodeproj` is gitignored and regenerated as needed.
 
-The project uses both SPM (auto-discovers files) and Xcode (requires manual updates).
+**Adding new files is simple:**
+1. Create new Swift file(s) in the appropriate directory
+2. Regenerate: `xcodegen generate`
+3. Build to verify: `xcodebuild -project Victor.xcodeproj -scheme Victor build`
 
-**See:** `XCODE-PROJECT-UPDATE-PROTOCOL.md` for detailed step-by-step instructions.
-
-**Quick reminder:**
-1. Create new Swift file(s)
-2. Update `Victor.xcodeproj/project.pbxproj` (4 sections: PBXBuildFile, PBXFileReference, PBXGroup, PBXSourcesBuildPhase)
-3. Verify: `xcodebuild -project Victor.xcodeproj -scheme Victor clean build`
+**See:** `XCODE-PROJECT-UPDATE-PROTOCOL.md` for more details.
 
 ### Build & Run
 
 **Primary Method (Xcode):**
 ```bash
-open Victor.xcodeproj
+xcodegen generate          # Regenerate project if needed
+open Victor.xcodeproj      # Open in Xcode
 # Then press ⌘R in Xcode
 ```
 
-**Alternative (Command Line):**
+**Command Line Build:**
 ```bash
-# Build with xcodebuild
 xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
+```
 
-# Or use Swift Package Manager
-swift build
-swift run Victor
+**First-time setup (if XcodeGen not installed):**
+```bash
+brew install xcodegen
+xcodegen generate
 ```
 
 ### Code Style & Conventions

@@ -13,7 +13,8 @@
       "Bash(gem list:*)",
       "Bash(ls:*)",
       "WebSearch",
-      "WebFetch(domain:gohugo.io)"
+      "WebFetch(domain:gohugo.io)",
+      "Bash(xcodegen generate:*)"
     ]
   }
 }

@@ -4,7 +4,7 @@ import Foundation
 @Observable
 class FileNode: Identifiable, Hashable {
     let id: UUID
-    let url: URL
+    var url: URL
     let isDirectory: Bool
     /// Whether this is a Hugo page bundle (directory with index.md/_index.md)
     /// Cached at creation time to avoid file I/O on main thread

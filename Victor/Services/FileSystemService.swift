@@ -258,6 +258,118 @@ class FileSystemService {
             return nil
         }
     }
+
+    // MARK: - File Operations (Context Menu)
+
+    /// Rename a file or folder
+    func renameFile(at url: URL, to newName: String) async throws -> URL {
+        let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+
+        // Check if destination already exists
+        if FileManager.default.fileExists(atPath: newURL.path) {
+            throw FileError.fileAlreadyExists
+        }
+
+        let coordinator = NSFileCoordinator()
+        var coordinatorError: NSError?
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+
+            coordinator.coordinate(writingItemAt: url, options: .forMoving, writingItemAt: newURL, options: .forReplacing, error: &coordinatorError) { oldURL, targetURL in
+                do {
+                    try FileManager.default.moveItem(at: oldURL, to: targetURL)
+                    continuation.resume(returning: targetURL)
+                    didResume = true
+                } catch {
+                    continuation.resume(throwing: error)
+                    didResume = true
+                }
+            }
+
+            if !didResume, let error = coordinatorError {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    /// Duplicate a file
+    func duplicateFile(at url: URL) async throws -> URL {
+        let fileManager = FileManager.default
+        let directory = url.deletingLastPathComponent()
+        let baseName = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+
+        // Find a unique name for the duplicate
+        var copyNumber = 1
+        var newName = "\(baseName) copy.\(ext)"
+        var newURL = directory.appendingPathComponent(newName)
+
+        while fileManager.fileExists(atPath: newURL.path) {
+            copyNumber += 1
+            newName = "\(baseName) copy \(copyNumber).\(ext)"
+            newURL = directory.appendingPathComponent(newName)
+        }
+
+        let coordinator = NSFileCoordinator()
+        var coordinatorError: NSError?
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+
+            coordinator.coordinate(readingItemAt: url, options: [], writingItemAt: newURL, options: .forReplacing, error: &coordinatorError) { sourceURL, destURL in
+                do {
+                    try fileManager.copyItem(at: sourceURL, to: destURL)
+                    continuation.resume(returning: destURL)
+                    didResume = true
+                } catch {
+                    continuation.resume(throwing: error)
+                    didResume = true
+                }
+            }
+
+            if !didResume, let error = coordinatorError {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    /// Move a file or folder to the trash
+    func moveToTrash(at url: URL) async throws {
+        var trashedURL: NSURL?
+        try FileManager.default.trashItem(at: url, resultingItemURL: &trashedURL)
+    }
+
+    /// Reveal a file in Finder
+    func revealInFinder(url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// Copy file path to clipboard
+    func copyPathToClipboard(url: URL) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(url.path, forType: .string)
+    }
+
+    /// Create a new folder inside the given directory
+    func createFolder(in directory: URL, name: String = "New Folder") async throws -> URL {
+        let fileManager = FileManager.default
+
+        // Find a unique name for the folder
+        var folderName = name
+        var folderURL = directory.appendingPathComponent(folderName)
+        var counter = 1
+
+        while fileManager.fileExists(atPath: folderURL.path) {
+            counter += 1
+            folderName = "\(name) \(counter)"
+            folderURL = directory.appendingPathComponent(folderName)
+        }
+
+        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: false)
+        return folderURL
+    }
 }
 
 // MARK: - File Errors
@@ -268,6 +380,7 @@ enum FileError: LocalizedError {
     case corruptedFrontmatter
     case writeFailure
     case notAHugoSite
+    case fileAlreadyExists
 
     var errorDescription: String? {
         switch self {
@@ -281,6 +394,8 @@ enum FileError: LocalizedError {
             return "Failed to save file."
         case .notAHugoSite:
             return "Selected folder does not appear to be a Hugo site."
+        case .fileAlreadyExists:
+            return "A file with that name already exists."
         }
     }
 }

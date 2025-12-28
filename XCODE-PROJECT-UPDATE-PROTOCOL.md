@@ -1,175 +1,109 @@
 # Xcode Project Update Protocol
 
-## ⚠️ CRITICAL: ALWAYS UPDATE XCODE PROJECT WHEN CREATING NEW FILES
+## XcodeGen Setup (Recommended)
 
-**This must be done SYSTEMATICALLY every time new Swift files are created.**
-
----
-
-## Why This Matters
-
-The project uses both:
-1. **Swift Package Manager** (Package.swift) - for command-line builds (`swift build`)
-2. **Xcode Project** (Victor.xcodeproj) - for Xcode IDE builds
-
-SPM automatically discovers new files, but **Xcode requires manual project file updates**.
+This project uses **XcodeGen** to generate the Xcode project from `project.yml`. This eliminates the need to manually edit `.pbxproj` files.
 
 ---
 
-## When to Update
+## Adding New Files
 
-**IMMEDIATELY after creating any new Swift file using Write tool.**
+**No manual project updates needed!** XcodeGen automatically discovers all Swift files in the `Victor/` directory.
 
-Example: If you create `NewView.swift`, you must update `Victor.xcodeproj/project.pbxproj` in the same response.
+1. Create your new Swift file(s) in the appropriate directory
+2. Regenerate the Xcode project:
+   ```bash
+   xcodegen generate
+   ```
+3. Build to verify:
+   ```bash
+   xcodebuild -project Victor.xcodeproj -scheme Victor build
+   ```
+
+That's it!
 
 ---
 
-## How to Update (Step-by-Step)
+## Common Operations
 
-### Step 1: Generate Unique IDs
-For each new file, you need 2 unique IDs:
-- **Build File ID**: `1000000000000XXX` (increment XXX from last used)
-- **File Reference ID**: `2000000000000XXX` (same XXX value)
-
-Example for 4 new files:
-- PreviewPanel.swift → `1000000000000014` / `2000000000000014`
-- FrontmatterBottomPanel.swift → `1000000000000015` / `2000000000000015`
-- EditorPanelView.swift → `1000000000000016` / `2000000000000016`
-- FileListView.swift → `1000000000000017` / `2000000000000017`
-
-### Step 2: Add to PBXBuildFile Section
-Find `/* End PBXBuildFile section */` and add entries BEFORE it:
-
-```
-1000000000000014 /* PreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000014 /* PreviewPanel.swift */; };
-```
-
-### Step 3: Add to PBXFileReference Section
-Find `/* End PBXFileReference section */` and add entries BEFORE it:
-
-```
-2000000000000014 /* PreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPanel.swift; sourceTree = "<group>"; };
-```
-
-### Step 4: Add to Appropriate PBXGroup
-Find the correct group (e.g., `5000000000000008 /* MainWindow */`) and add file references to children array:
-
-```
-5000000000000008 /* MainWindow */ = {
-    isa = PBXGroup;
-    children = (
-        2000000000000002 /* ContentView.swift */,
-        2000000000000014 /* PreviewPanel.swift */,  // <-- NEW
-        ...
-    );
-```
-
-**Group Mapping:**
-- `MainWindow` → Views/MainWindow/*.swift
-- `Editor` → Views/Editor/*.swift
-- `Preview` → Views/Preview/*.swift
-- `Models` → Models/*.swift
-- `ViewModels` → ViewModels/*.swift
-- `Services` → Services/*.swift
-
-### Step 5: Add to PBXSourcesBuildPhase
-Find `8000000000000001 /* Sources */` section and add to `files` array:
-
-```
-1000000000000014 /* PreviewPanel.swift in Sources */,
-```
-
-### Step 6: Verify Build
-**ALWAYS verify the Xcode build works:**
-
+### Regenerate Project
 ```bash
-xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug clean build
+xcodegen generate
 ```
 
-Look for `** BUILD SUCCEEDED **` at the end.
+### Add a New Directory/Group
+New directories are automatically picked up. Just create the directory, add files, and regenerate.
+
+### Add a New Dependency
+Edit `project.yml` and add to the `packages` section:
+```yaml
+packages:
+  NewPackage:
+    url: https://github.com/owner/repo.git
+    from: 1.0.0
+```
+
+Then add to target dependencies:
+```yaml
+targets:
+  Victor:
+    dependencies:
+      - package: NewPackage
+```
+
+Regenerate: `xcodegen generate`
+
+### Modify Build Settings
+Edit the `settings` section in `project.yml` for the appropriate target.
 
 ---
 
-## Complete Example (4 Files Added)
+## Project Structure
 
-### Files Created:
-1. `Victor/Views/MainWindow/PreviewPanel.swift`
-2. `Victor/Views/MainWindow/FrontmatterBottomPanel.swift`
-3. `Victor/Views/MainWindow/EditorPanelView.swift`
-4. `Victor/Views/MainWindow/FileListView.swift`
-
-### Edit 1: PBXBuildFile Section
-```diff
-  1000000000000013 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000013 /* EditorViewModel.swift */; };
-+ 1000000000000014 /* PreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000014 /* PreviewPanel.swift */; };
-+ 1000000000000015 /* FrontmatterBottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000015 /* FrontmatterBottomPanel.swift */; };
-+ 1000000000000016 /* EditorPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000016 /* EditorPanelView.swift */; };
-+ 1000000000000017 /* FileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000000000017 /* FileListView.swift */; };
-/* End PBXBuildFile section */
 ```
-
-### Edit 2: PBXFileReference Section
-```diff
-  2000000000000013 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
-+ 2000000000000014 /* PreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPanel.swift; sourceTree = "<group>"; };
-+ 2000000000000015 /* FrontmatterBottomPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterBottomPanel.swift; sourceTree = "<group>"; };
-+ 2000000000000016 /* EditorPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPanelView.swift; sourceTree = "<group>"; };
-+ 2000000000000017 /* FileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileListView.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
-```
-
-### Edit 3: MainWindow PBXGroup
-```diff
-  5000000000000008 /* MainWindow */ = {
-      isa = PBXGroup;
-      children = (
-          2000000000000002 /* ContentView.swift */,
-+         2000000000000016 /* EditorPanelView.swift */,
-+         2000000000000015 /* FrontmatterBottomPanel.swift */,
-+         2000000000000014 /* PreviewPanel.swift */,
-          2000000000000003 /* SidebarView.swift */,
-+         2000000000000017 /* FileListView.swift */,
-      );
-```
-
-### Edit 4: Sources Build Phase
-```diff
-  1000000000000013 /* EditorViewModel.swift in Sources */,
-+ 1000000000000014 /* PreviewPanel.swift in Sources */,
-+ 1000000000000015 /* FrontmatterBottomPanel.swift in Sources */,
-+ 1000000000000016 /* EditorPanelView.swift in Sources */,
-+ 1000000000000017 /* FileListView.swift in Sources */,
-);
+project.yml          # XcodeGen configuration (commit this)
+Victor.xcodeproj/    # Generated by XcodeGen (gitignored)
+Victor/              # Source files (auto-discovered)
+VictorTests/         # Test files (auto-discovered)
 ```
 
 ---
 
-## Checklist
+## Installation
 
-After creating new Swift files:
-
-- [ ] Determine next available ID numbers (check last `1000000000000XXX` used)
-- [ ] Add entries to **PBXBuildFile section**
-- [ ] Add entries to **PBXFileReference section**
-- [ ] Add files to appropriate **PBXGroup** (MainWindow, Editor, Preview, Models, ViewModels, Services)
-- [ ] Add entries to **PBXSourcesBuildPhase**
-- [ ] **Verify Xcode build**: `xcodebuild -project Victor.xcodeproj -scheme Victor clean build`
-- [ ] Confirm `** BUILD SUCCEEDED **`
+If XcodeGen is not installed:
+```bash
+brew install xcodegen
+```
 
 ---
 
-## Last Session Update (2025-12-23)
+## Troubleshooting
 
-**Files Added (Session 1):**
-- PreviewPanel.swift (ID: 14)
-- FrontmatterBottomPanel.swift (ID: 15)
-- EditorPanelView.swift (ID: 16)
-- FileListView.swift (ID: 17)
+### "Project out of sync with files"
+Just regenerate: `xcodegen generate`
 
-**Files Added (Session 2 - Quick Wins):**
-- AppConstants.swift (ID: 18)
-- preview-styles.css (ID: 19) - Resource file
+### Build errors after adding files
+Regenerate and clean build:
+```bash
+xcodegen generate
+xcodebuild -project Victor.xcodeproj -scheme Victor clean build
+```
 
-**Next available ID: 20**
+### Xcode not seeing new files
+Close Xcode, regenerate, reopen the project.
 
-**Build Status:** ✅ SUCCEEDED
+---
+
+## Legacy: Manual pbxproj Editing
+
+**No longer needed.** The old manual process is obsolete with XcodeGen.
+
+If you ever need to check what XcodeGen generated:
+- The project file is at `Victor.xcodeproj/project.pbxproj`
+- But you should never edit it manually
+
+---
+
+**Last Updated**: 2025-12-29
+**XcodeGen Version**: 2.44.1

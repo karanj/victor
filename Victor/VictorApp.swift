@@ -73,8 +73,15 @@ struct VictorApp: App {
                 .disabled(editorFormatting == nil)
             }
 
-            // View menu - Search
+            // View menu - Search and Navigation
             CommandGroup(after: .sidebar) {
+                // Quick Open disabled temporarily - needs keyboard navigation fix
+                // Button("Quick Open...") {
+                //     siteViewModel.toggleQuickOpen()
+                // }
+                // .keyboardShortcut("p", modifiers: .command)
+                // .disabled(siteViewModel.site == nil)
+
                 Button("Focus Search") {
                     siteViewModel.shouldFocusSearch = true
                 }
@@ -100,6 +107,25 @@ struct VictorApp: App {
                     siteViewModel.layoutMode = .split
                 }
                 .keyboardShortcut("3", modifiers: .command)
+
+                Divider()
+
+                Button(siteViewModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        siteViewModel.toggleInspector()
+                    }
+                }
+                .keyboardShortcut("i", modifiers: [.option, .command])
+
+                Divider()
+
+                Button(siteViewModel.isFocusModeActive ? "Exit Focus Mode" : "Enter Focus Mode") {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        siteViewModel.toggleFocusMode()
+                    }
+                }
+                .keyboardShortcut("f", modifiers: [.control, .command])
+                .disabled(siteViewModel.selectedNode == nil)
 
                 Divider()
 
