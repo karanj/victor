@@ -42,6 +42,26 @@ class FrontmatterParser {
         return formatter
     }()
 
+    /// Known fields that are handled explicitly (not stored in customFields)
+    private static let knownFields: Set<String> = [
+        // Essential
+        "title", "date", "draft", "description", "tags", "categories",
+        // Publishing
+        "publishDate", "expiryDate", "lastmod", "weight",
+        // URL
+        "slug", "url", "aliases",
+        // SEO
+        "keywords", "summary", "linkTitle",
+        // Layout
+        "type", "layout",
+        // Flags
+        "headless", "isCJKLanguage", "markup", "translationKey",
+        // Complex
+        "menus", "menu", "build", "sitemap", "outputs", "resources", "cascade",
+        // Params
+        "params"
+    ]
+
     private init() {}
 
     // MARK: - Parsing
@@ -199,7 +219,7 @@ class FrontmatterParser {
         } catch {
             // Log the error for debugging, but return the frontmatter with rawContent
             // This allows users to still see/edit the raw frontmatter even if parsing fails
-            print("⚠️ Frontmatter parsing error: \(error.localizedDescription)")
+            print("FrontmatterParser: parsing error - \(error.localizedDescription)")
         }
 
         return frontmatter
@@ -250,7 +270,7 @@ class FrontmatterParser {
                 throw FrontmatterError.yamlParsingFailed("Could not parse as dictionary")
             }
 
-            extractCommonFields(from: yaml, into: frontmatter)
+            extractAllFields(from: yaml, into: frontmatter)
         } catch let error as FrontmatterError {
             throw error
         } catch {
@@ -263,35 +283,34 @@ class FrontmatterParser {
         do {
             let table = try TOMLTable(string: content)
 
-            // Extract common fields directly from table
-            if let title = table["title"] as? String {
-                frontmatter.title = title
-            }
-            if let dateString = table["date"] as? String {
-                frontmatter.date = parseDate(dateString)
-            }
-            if let draft = table["draft"] as? Bool {
-                frontmatter.draft = draft
-            }
-            if let tags = table["tags"] as? [String] {
-                frontmatter.tags = tags
-            }
-            if let categories = table["categories"] as? [String] {
-                frontmatter.categories = categories
-            }
-            if let description = table["description"] as? String {
-                frontmatter.description = description
+            // Convert TOML table to dictionary for unified parsing
+            var dict: [String: Any] = [:]
+            for key in table.keys {
+                dict[key] = convertTOMLValue(table[key])
             }
 
-            // Store custom fields (all other keys)
-            let knownKeys = Set(["title", "date", "draft", "tags", "categories", "description"])
-            var customFields: [String: Any] = [:]
-            for key in table.keys where !knownKeys.contains(key) {
-                customFields[key] = table[key]
-            }
-            frontmatter.customFields = customFields
+            extractAllFields(from: dict, into: frontmatter)
         } catch {
             throw FrontmatterError.tomlParsingFailed(error.localizedDescription)
+        }
+    }
+
+    /// Convert TOML value to Swift type
+    private func convertTOMLValue(_ value: Any?) -> Any? {
+        guard let value = value else { return nil }
+
+        if let table = value as? TOMLTable {
+            var dict: [String: Any] = [:]
+            for key in table.keys {
+                if let converted = convertTOMLValue(table[key]) {
+                    dict[key] = converted
+                }
+            }
+            return dict
+        } else if let array = value as? [Any] {
+            return array.compactMap { convertTOMLValue($0) }
+        } else {
+            return value
         }
     }
 
@@ -306,7 +325,7 @@ class FrontmatterParser {
                 throw FrontmatterError.jsonParsingFailed("Could not parse as dictionary")
             }
 
-            extractCommonFields(from: json, into: frontmatter)
+            extractAllFields(from: json, into: frontmatter)
         } catch let error as FrontmatterError {
             throw error
         } catch {
@@ -314,12 +333,45 @@ class FrontmatterParser {
         }
     }
 
-    /// Extract common Hugo fields from dictionary
-    private func extractCommonFields(from dict: [String: Any], into frontmatter: Frontmatter) {
-        // Title
-        if let title = dict["title"] as? String {
-            frontmatter.title = title
-        }
+    // MARK: - Field Extraction
+
+    /// Extract all Hugo fields from dictionary
+    private func extractAllFields(from dict: [String: Any], into frontmatter: Frontmatter) {
+        // Essential fields
+        extractEssentialFields(from: dict, into: frontmatter)
+
+        // Publishing fields
+        extractPublishingFields(from: dict, into: frontmatter)
+
+        // URL fields
+        extractURLFields(from: dict, into: frontmatter)
+
+        // SEO fields
+        extractSEOFields(from: dict, into: frontmatter)
+
+        // Layout fields
+        extractLayoutFields(from: dict, into: frontmatter)
+
+        // Flag fields
+        extractFlagFields(from: dict, into: frontmatter)
+
+        // Complex fields
+        extractMenus(from: dict, into: frontmatter)
+        extractBuildOptions(from: dict, into: frontmatter)
+        extractSitemap(from: dict, into: frontmatter)
+        extractOutputs(from: dict, into: frontmatter)
+        extractResources(from: dict, into: frontmatter)
+        extractCascade(from: dict, into: frontmatter)
+        extractParams(from: dict, into: frontmatter)
+
+        // Store unknown fields as customFields
+        let customFields = dict.filter { !Self.knownFields.contains($0.key) }
+        frontmatter.customFields = customFields
+    }
+
+    /// Extract essential fields (title, date, draft, description, tags, categories)
+    private func extractEssentialFields(from dict: [String: Any], into frontmatter: Frontmatter) {
+        frontmatter.title = dict["title"] as? String
 
         // Date (can be String or Date from YAML parser)
         if let date = dict["date"] as? Date {
@@ -328,10 +380,9 @@ class FrontmatterParser {
             frontmatter.date = parseDate(dateString)
         }
 
-        // Draft
-        if let draft = dict["draft"] as? Bool {
-            frontmatter.draft = draft
-        }
+        frontmatter.draft = dict["draft"] as? Bool
+
+        frontmatter.description = dict["description"] as? String
 
         // Tags
         if let tags = dict["tags"] as? [String] {
@@ -346,16 +397,243 @@ class FrontmatterParser {
         } else if let categories = dict["categories"] as? [Any] {
             frontmatter.categories = categories.compactMap { $0 as? String }
         }
+    }
 
-        // Description
-        if let description = dict["description"] as? String {
-            frontmatter.description = description
+    /// Extract publishing fields (publishDate, expiryDate, lastmod, weight)
+    private func extractPublishingFields(from dict: [String: Any], into frontmatter: Frontmatter) {
+        // Publish Date
+        if let date = dict["publishDate"] as? Date {
+            frontmatter.publishDate = date
+        } else if let dateString = dict["publishDate"] as? String {
+            frontmatter.publishDate = parseDate(dateString)
         }
 
-        // Store custom fields (everything except known fields)
-        let knownKeys = Set(["title", "date", "draft", "tags", "categories", "description"])
-        let customFields = dict.filter { !knownKeys.contains($0.key) }
-        frontmatter.customFields = customFields
+        // Expiry Date
+        if let date = dict["expiryDate"] as? Date {
+            frontmatter.expiryDate = date
+        } else if let dateString = dict["expiryDate"] as? String {
+            frontmatter.expiryDate = parseDate(dateString)
+        }
+
+        // Last Modified
+        if let date = dict["lastmod"] as? Date {
+            frontmatter.lastmod = date
+        } else if let dateString = dict["lastmod"] as? String {
+            frontmatter.lastmod = parseDate(dateString)
+        }
+
+        // Weight
+        frontmatter.weight = dict["weight"] as? Int
+    }
+
+    /// Extract URL fields (slug, url, aliases)
+    private func extractURLFields(from dict: [String: Any], into frontmatter: Frontmatter) {
+        frontmatter.slug = dict["slug"] as? String
+        frontmatter.url = dict["url"] as? String
+
+        // Aliases
+        if let aliases = dict["aliases"] as? [String] {
+            frontmatter.aliases = aliases
+        } else if let aliases = dict["aliases"] as? [Any] {
+            frontmatter.aliases = aliases.compactMap { $0 as? String }
+        }
+    }
+
+    /// Extract SEO fields (keywords, summary, linkTitle)
+    private func extractSEOFields(from dict: [String: Any], into frontmatter: Frontmatter) {
+        // Keywords
+        if let keywords = dict["keywords"] as? [String] {
+            frontmatter.keywords = keywords
+        } else if let keywords = dict["keywords"] as? [Any] {
+            frontmatter.keywords = keywords.compactMap { $0 as? String }
+        }
+
+        frontmatter.summary = dict["summary"] as? String
+        frontmatter.linkTitle = dict["linkTitle"] as? String
+    }
+
+    /// Extract layout fields (type, layout)
+    private func extractLayoutFields(from dict: [String: Any], into frontmatter: Frontmatter) {
+        frontmatter.type = dict["type"] as? String
+        frontmatter.layout = dict["layout"] as? String
+    }
+
+    /// Extract flag fields (headless, isCJKLanguage, markup, translationKey)
+    private func extractFlagFields(from dict: [String: Any], into frontmatter: Frontmatter) {
+        frontmatter.headless = dict["headless"] as? Bool
+        frontmatter.isCJKLanguage = dict["isCJKLanguage"] as? Bool
+        frontmatter.markup = dict["markup"] as? String
+        frontmatter.translationKey = dict["translationKey"] as? String
+    }
+
+    /// Extract menu configuration
+    private func extractMenus(from dict: [String: Any], into frontmatter: Frontmatter) {
+        // Hugo supports both "menu" and "menus" keys
+        let menuData = dict["menus"] ?? dict["menu"]
+
+        guard let menuData = menuData else { return }
+
+        var entries: [MenuEntry] = []
+
+        // Simple string format: menu: "main"
+        if let menuName = menuData as? String {
+            entries.append(MenuEntry(menuName: menuName))
+        }
+        // Array format: menu: ["main", "footer"]
+        else if let menuNames = menuData as? [String] {
+            for name in menuNames {
+                entries.append(MenuEntry(menuName: name))
+            }
+        }
+        // Map format: menu: main: { weight: 10, ... }
+        else if let menuMap = menuData as? [String: Any] {
+            for (menuName, config) in menuMap {
+                if let configDict = config as? [String: Any] {
+                    let entry = MenuEntry(
+                        menuName: menuName,
+                        name: configDict["name"] as? String,
+                        weight: configDict["weight"] as? Int,
+                        parent: configDict["parent"] as? String,
+                        identifier: configDict["identifier"] as? String,
+                        pre: configDict["pre"] as? String,
+                        post: configDict["post"] as? String,
+                        title: configDict["title"] as? String,
+                        params: (configDict["params"] as? [String: String]) ?? [:]
+                    )
+                    entries.append(entry)
+                } else {
+                    // Simple entry without config
+                    entries.append(MenuEntry(menuName: menuName))
+                }
+            }
+        }
+
+        frontmatter.menus = entries
+    }
+
+    /// Extract build options
+    private func extractBuildOptions(from dict: [String: Any], into frontmatter: Frontmatter) {
+        guard let buildDict = dict["build"] as? [String: Any] else { return }
+
+        var build = BuildOptions()
+
+        if let listString = buildDict["list"] as? String,
+           let list = BuildOptions.ListOption(rawValue: listString) {
+            build.list = list
+        }
+
+        if let renderString = buildDict["render"] as? String,
+           let render = BuildOptions.RenderOption(rawValue: renderString) {
+            build.render = render
+        }
+
+        if let publishResources = buildDict["publishResources"] as? Bool {
+            build.publishResources = publishResources
+        }
+
+        frontmatter.build = build
+    }
+
+    /// Extract sitemap configuration
+    private func extractSitemap(from dict: [String: Any], into frontmatter: Frontmatter) {
+        guard let sitemapDict = dict["sitemap"] as? [String: Any] else { return }
+
+        var sitemap = SitemapConfig()
+
+        if let freqString = sitemapDict["changefreq"] as? String,
+           let freq = SitemapConfig.ChangeFreq(rawValue: freqString) {
+            sitemap.changefreq = freq
+        }
+
+        if let priority = sitemapDict["priority"] as? Double {
+            sitemap.priority = priority
+        } else if let priority = sitemapDict["priority"] as? Int {
+            sitemap.priority = Double(priority)
+        }
+
+        if let disable = sitemapDict["disable"] as? Bool {
+            sitemap.disable = disable
+        }
+
+        frontmatter.sitemap = sitemap
+    }
+
+    /// Extract output formats
+    private func extractOutputs(from dict: [String: Any], into frontmatter: Frontmatter) {
+        if let outputs = dict["outputs"] as? [String] {
+            frontmatter.outputs = outputs
+        } else if let outputs = dict["outputs"] as? [Any] {
+            frontmatter.outputs = outputs.compactMap { $0 as? String }
+        }
+    }
+
+    /// Extract page resources
+    private func extractResources(from dict: [String: Any], into frontmatter: Frontmatter) {
+        guard let resourcesArray = dict["resources"] as? [[String: Any]] else { return }
+
+        var resources: [ResourceConfig] = []
+
+        for resourceDict in resourcesArray {
+            guard let src = resourceDict["src"] as? String else { continue }
+
+            let resource = ResourceConfig(
+                src: src,
+                name: resourceDict["name"] as? String,
+                title: resourceDict["title"] as? String,
+                params: (resourceDict["params"] as? [String: String]) ?? [:]
+            )
+            resources.append(resource)
+        }
+
+        frontmatter.resources = resources
+    }
+
+    /// Extract cascade configuration
+    private func extractCascade(from dict: [String: Any], into frontmatter: Frontmatter) {
+        guard let cascadeData = dict["cascade"] else { return }
+
+        var entries: [CascadeEntry] = []
+
+        // Single cascade entry (map)
+        if let cascadeDict = cascadeData as? [String: Any] {
+            let entry = parseCascadeEntry(cascadeDict)
+            entries.append(entry)
+        }
+        // Multiple cascade entries (array)
+        else if let cascadeArray = cascadeData as? [[String: Any]] {
+            for cascadeDict in cascadeArray {
+                let entry = parseCascadeEntry(cascadeDict)
+                entries.append(entry)
+            }
+        }
+
+        frontmatter.cascade = entries
+    }
+
+    /// Parse a single cascade entry
+    private func parseCascadeEntry(_ dict: [String: Any]) -> CascadeEntry {
+        var target: CascadeTarget?
+
+        if let targetDict = dict["target"] as? [String: Any] {
+            target = CascadeTarget(
+                path: targetDict["path"] as? String,
+                kind: targetDict["kind"] as? String,
+                lang: targetDict["lang"] as? String,
+                environment: targetDict["environment"] as? String
+            )
+        }
+
+        // Values are everything except "target"
+        let values = dict.filter { $0.key != "target" }
+
+        return CascadeEntry(values: values, target: target)
+    }
+
+    /// Extract params (custom parameters in params section)
+    private func extractParams(from dict: [String: Any], into frontmatter: Frontmatter) {
+        if let params = dict["params"] as? [String: Any] {
+            frontmatter.params = params
+        }
     }
 
     /// Parse date string (supports multiple Hugo date formats)
@@ -370,6 +648,7 @@ class FrontmatterParser {
         for format in formatters {
             let formatter = DateFormatter()
             formatter.dateFormat = format
+            formatter.locale = Locale(identifier: "en_US_POSIX")
             if let date = formatter.date(from: dateString) {
                 return date
             }
@@ -417,11 +696,11 @@ class FrontmatterParser {
         }
     }
 
-    /// Serialize to YAML format (non-throwing, falls back to rawContent)
-    private func serializeYAML(_ frontmatter: Frontmatter) -> String {
+    /// Build dictionary from frontmatter for serialization
+    private func buildSerializationDict(_ frontmatter: Frontmatter) -> [String: Any] {
         var dict: [String: Any] = frontmatter.customFields
 
-        // Add common fields
+        // Essential fields
         if let title = frontmatter.title {
             dict["title"] = title
         }
@@ -431,50 +710,234 @@ class FrontmatterParser {
         if let draft = frontmatter.draft {
             dict["draft"] = draft
         }
+        if let description = frontmatter.description {
+            dict["description"] = description
+        }
         if let tags = frontmatter.tags, !tags.isEmpty {
             dict["tags"] = tags
         }
         if let categories = frontmatter.categories, !categories.isEmpty {
             dict["categories"] = categories
         }
-        if let description = frontmatter.description {
-            dict["description"] = description
+
+        // Publishing fields
+        if let publishDate = frontmatter.publishDate {
+            dict["publishDate"] = formatDate(publishDate)
         }
+        if let expiryDate = frontmatter.expiryDate {
+            dict["expiryDate"] = formatDate(expiryDate)
+        }
+        if let lastmod = frontmatter.lastmod {
+            dict["lastmod"] = formatDate(lastmod)
+        }
+        if let weight = frontmatter.weight {
+            dict["weight"] = weight
+        }
+
+        // URL fields
+        if let slug = frontmatter.slug {
+            dict["slug"] = slug
+        }
+        if let url = frontmatter.url {
+            dict["url"] = url
+        }
+        if let aliases = frontmatter.aliases, !aliases.isEmpty {
+            dict["aliases"] = aliases
+        }
+
+        // SEO fields
+        if let keywords = frontmatter.keywords, !keywords.isEmpty {
+            dict["keywords"] = keywords
+        }
+        if let summary = frontmatter.summary {
+            dict["summary"] = summary
+        }
+        if let linkTitle = frontmatter.linkTitle {
+            dict["linkTitle"] = linkTitle
+        }
+
+        // Layout fields
+        if let type = frontmatter.type {
+            dict["type"] = type
+        }
+        if let layout = frontmatter.layout {
+            dict["layout"] = layout
+        }
+
+        // Flags
+        if let headless = frontmatter.headless {
+            dict["headless"] = headless
+        }
+        if let isCJKLanguage = frontmatter.isCJKLanguage {
+            dict["isCJKLanguage"] = isCJKLanguage
+        }
+        if let markup = frontmatter.markup {
+            dict["markup"] = markup
+        }
+        if let translationKey = frontmatter.translationKey {
+            dict["translationKey"] = translationKey
+        }
+
+        // Complex fields
+        if !frontmatter.menus.isEmpty {
+            dict["menus"] = serializeMenus(frontmatter.menus)
+        }
+        if let build = frontmatter.build, !build.isDefault {
+            dict["build"] = serializeBuildOptions(build)
+        }
+        if let sitemap = frontmatter.sitemap, !sitemap.isEmpty {
+            dict["sitemap"] = serializeSitemap(sitemap)
+        }
+        if let outputs = frontmatter.outputs, !outputs.isEmpty {
+            dict["outputs"] = outputs
+        }
+        if !frontmatter.resources.isEmpty {
+            dict["resources"] = serializeResources(frontmatter.resources)
+        }
+        if !frontmatter.cascade.isEmpty {
+            dict["cascade"] = serializeCascade(frontmatter.cascade)
+        }
+        if !frontmatter.params.isEmpty {
+            dict["params"] = frontmatter.params
+        }
+
+        return dict
+    }
+
+    /// Serialize menus to dictionary
+    private func serializeMenus(_ menus: [MenuEntry]) -> [String: Any] {
+        var result: [String: Any] = [:]
+
+        for menu in menus {
+            var menuDict: [String: Any] = [:]
+
+            if let name = menu.name {
+                menuDict["name"] = name
+            }
+            if let weight = menu.weight {
+                menuDict["weight"] = weight
+            }
+            if let parent = menu.parent {
+                menuDict["parent"] = parent
+            }
+            if let identifier = menu.identifier {
+                menuDict["identifier"] = identifier
+            }
+            if let pre = menu.pre {
+                menuDict["pre"] = pre
+            }
+            if let post = menu.post {
+                menuDict["post"] = post
+            }
+            if let title = menu.title {
+                menuDict["title"] = title
+            }
+            if !menu.params.isEmpty {
+                menuDict["params"] = menu.params
+            }
+
+            // If no properties, store as empty dict
+            result[menu.menuName] = menuDict.isEmpty ? [:] : menuDict
+        }
+
+        return result
+    }
+
+    /// Serialize build options to dictionary
+    private func serializeBuildOptions(_ build: BuildOptions) -> [String: Any] {
+        var dict: [String: Any] = [:]
+
+        if build.list != .always {
+            dict["list"] = build.list.rawValue
+        }
+        if build.render != .always {
+            dict["render"] = build.render.rawValue
+        }
+        if !build.publishResources {
+            dict["publishResources"] = build.publishResources
+        }
+
+        return dict
+    }
+
+    /// Serialize sitemap config to dictionary
+    private func serializeSitemap(_ sitemap: SitemapConfig) -> [String: Any] {
+        var dict: [String: Any] = [:]
+
+        if let changefreq = sitemap.changefreq {
+            dict["changefreq"] = changefreq.rawValue
+        }
+        if let priority = sitemap.priority {
+            dict["priority"] = priority
+        }
+        if sitemap.disable {
+            dict["disable"] = sitemap.disable
+        }
+
+        return dict
+    }
+
+    /// Serialize resources to array of dictionaries
+    private func serializeResources(_ resources: [ResourceConfig]) -> [[String: Any]] {
+        return resources.map { resource in
+            var dict: [String: Any] = ["src": resource.src]
+
+            if let name = resource.name {
+                dict["name"] = name
+            }
+            if let title = resource.title {
+                dict["title"] = title
+            }
+            if !resource.params.isEmpty {
+                dict["params"] = resource.params
+            }
+
+            return dict
+        }
+    }
+
+    /// Serialize cascade entries to array
+    private func serializeCascade(_ cascade: [CascadeEntry]) -> [[String: Any]] {
+        return cascade.map { entry in
+            var dict = entry.values
+
+            if let target = entry.target, !target.isEmpty {
+                var targetDict: [String: Any] = [:]
+                if let path = target.path {
+                    targetDict["path"] = path
+                }
+                if let kind = target.kind {
+                    targetDict["kind"] = kind
+                }
+                if let lang = target.lang {
+                    targetDict["lang"] = lang
+                }
+                if let environment = target.environment {
+                    targetDict["environment"] = environment
+                }
+                dict["target"] = targetDict
+            }
+
+            return dict
+        }
+    }
+
+    /// Serialize to YAML format (non-throwing, falls back to rawContent)
+    private func serializeYAML(_ frontmatter: Frontmatter) -> String {
+        let dict = buildSerializationDict(frontmatter)
 
         do {
             let yaml = try Yams.dump(object: dict)
             return "---\n\(yaml)---"
         } catch {
-            // Log the error with a clear warning
-            print("⚠️ YAML serialization error: \(error.localizedDescription)")
-            print("   Falling back to raw frontmatter content")
+            print("FrontmatterParser: YAML serialization error - \(error.localizedDescription)")
             return frontmatter.rawContent
         }
     }
 
     /// Serialize to YAML format (throwing variant)
     private func serializeYAMLThrowing(_ frontmatter: Frontmatter) throws -> String {
-        var dict: [String: Any] = frontmatter.customFields
-
-        // Add common fields
-        if let title = frontmatter.title {
-            dict["title"] = title
-        }
-        if let date = frontmatter.date {
-            dict["date"] = formatDate(date)
-        }
-        if let draft = frontmatter.draft {
-            dict["draft"] = draft
-        }
-        if let tags = frontmatter.tags, !tags.isEmpty {
-            dict["tags"] = tags
-        }
-        if let categories = frontmatter.categories, !categories.isEmpty {
-            dict["categories"] = categories
-        }
-        if let description = frontmatter.description {
-            dict["description"] = description
-        }
+        let dict = buildSerializationDict(frontmatter)
 
         do {
             let yaml = try Yams.dump(object: dict)
@@ -486,73 +949,43 @@ class FrontmatterParser {
 
     /// Serialize to TOML format
     private func serializeTOML(_ frontmatter: Frontmatter) -> String {
+        let dict = buildSerializationDict(frontmatter)
         let tomlTable = TOMLTable()
 
-        // Add common fields (order matters for readability)
-        if let title = frontmatter.title {
-            tomlTable["title"] = title
-        }
-        if let date = frontmatter.date {
-            tomlTable["date"] = formatDate(date)
-        }
-        if let draft = frontmatter.draft {
-            tomlTable["draft"] = draft
-        }
-        if let description = frontmatter.description {
-            tomlTable["description"] = description
-        }
-        if let tags = frontmatter.tags, !tags.isEmpty {
-            tomlTable["tags"] = tags
-        }
-        if let categories = frontmatter.categories, !categories.isEmpty {
-            tomlTable["categories"] = categories
+        // Convert dictionary to TOML table
+        for (key, value) in dict {
+            addToTOMLTable(key: key, value: value, table: tomlTable)
         }
 
-        // Add custom fields (only basic types supported by TOML)
-        for (key, value) in frontmatter.customFields {
-            // Only add values that are TOMLValueConvertible
-            if let stringValue = value as? String {
-                tomlTable[key] = stringValue
-            } else if let intValue = value as? Int {
-                tomlTable[key] = intValue
-            } else if let doubleValue = value as? Double {
-                tomlTable[key] = doubleValue
-            } else if let boolValue = value as? Bool {
-                tomlTable[key] = boolValue
-            } else if let arrayValue = value as? [String] {
-                tomlTable[key] = arrayValue
-            }
-            // Skip other types for now
-        }
-
-        // Convert to string (TOMLTable has built-in toString)
         let tomlString = String(describing: tomlTable)
         return "+++\n\(tomlString)+++"
     }
 
+    /// Add a value to TOML table
+    private func addToTOMLTable(key: String, value: Any, table: TOMLTable) {
+        if let stringValue = value as? String {
+            table[key] = stringValue
+        } else if let intValue = value as? Int {
+            table[key] = intValue
+        } else if let doubleValue = value as? Double {
+            table[key] = doubleValue
+        } else if let boolValue = value as? Bool {
+            table[key] = boolValue
+        } else if let arrayValue = value as? [String] {
+            table[key] = arrayValue
+        } else if let dictValue = value as? [String: Any] {
+            let subTable = TOMLTable()
+            for (subKey, subValue) in dictValue {
+                addToTOMLTable(key: subKey, value: subValue, table: subTable)
+            }
+            table[key] = subTable
+        }
+        // Skip other types
+    }
+
     /// Serialize to JSON format (non-throwing, falls back to rawContent)
     private func serializeJSON(_ frontmatter: Frontmatter) -> String {
-        var dict: [String: Any] = frontmatter.customFields
-
-        // Add common fields
-        if let title = frontmatter.title {
-            dict["title"] = title
-        }
-        if let date = frontmatter.date {
-            dict["date"] = formatDate(date)
-        }
-        if let draft = frontmatter.draft {
-            dict["draft"] = draft
-        }
-        if let tags = frontmatter.tags, !tags.isEmpty {
-            dict["tags"] = tags
-        }
-        if let categories = frontmatter.categories, !categories.isEmpty {
-            dict["categories"] = categories
-        }
-        if let description = frontmatter.description {
-            dict["description"] = description
-        }
+        let dict = buildSerializationDict(frontmatter)
 
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
@@ -560,9 +993,7 @@ class FrontmatterParser {
                 return jsonString
             }
         } catch {
-            // Log the error with a clear warning
-            print("⚠️ JSON serialization error: \(error.localizedDescription)")
-            print("   Falling back to raw frontmatter content")
+            print("FrontmatterParser: JSON serialization error - \(error.localizedDescription)")
         }
 
         return frontmatter.rawContent
@@ -570,27 +1001,7 @@ class FrontmatterParser {
 
     /// Serialize to JSON format (throwing variant)
     private func serializeJSONThrowing(_ frontmatter: Frontmatter) throws -> String {
-        var dict: [String: Any] = frontmatter.customFields
-
-        // Add common fields
-        if let title = frontmatter.title {
-            dict["title"] = title
-        }
-        if let date = frontmatter.date {
-            dict["date"] = formatDate(date)
-        }
-        if let draft = frontmatter.draft {
-            dict["draft"] = draft
-        }
-        if let tags = frontmatter.tags, !tags.isEmpty {
-            dict["tags"] = tags
-        }
-        if let categories = frontmatter.categories, !categories.isEmpty {
-            dict["categories"] = categories
-        }
-        if let description = frontmatter.description {
-            dict["description"] = description
-        }
+        let dict = buildSerializationDict(frontmatter)
 
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])

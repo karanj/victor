@@ -14,6 +14,7 @@ struct EditorPanelView: View {
     @State private var editorCoordinator: EditorTextView.Coordinator?
     @State private var isFrontmatterExpanded = false
     @State private var contentOpacity: Double = 0
+    @State private var showShortcodePicker = false
 
     // Editor preferences (using @AppStorage for live updates from Preferences window)
     @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
@@ -42,6 +43,7 @@ struct EditorPanelView: View {
             // Toolbar
             EditorToolbar(
                 isLivePreviewEnabled: $siteViewModel.isLivePreviewEnabled,
+                showShortcodePicker: $showShortcodePicker,
                 isSaving: viewModel.isSaving,
                 showSavedIndicator: viewModel.showSavedIndicator,
                 hasUnsavedChanges: viewModel.hasUnsavedChanges,
@@ -97,6 +99,10 @@ struct EditorPanelView: View {
         // Provide formatting function to focused value system for keyboard shortcuts
         .focusedValue(\.editorFormatting) { format in
             editorCoordinator?.applyFormat(format)
+        }
+        // Provide shortcode picker toggle for keyboard shortcut
+        .focusedValue(\.showShortcodePicker) {
+            showShortcodePicker = true
         }
         // When the selected file changes, reset the editor view model so it
         // points at the new file node and content instead of the previous one.
@@ -154,6 +160,11 @@ struct EditorPanelView: View {
         } message: {
             Text("This file was modified by another application. Auto-save has been cancelled. You can reload the file to see external changes, or keep editing to manually save your version.")
         }
+        .sheet(isPresented: $showShortcodePicker) {
+            ShortcodePickerView { shortcodeText in
+                editorCoordinator?.insertText(shortcodeText)
+            }
+        }
     }
 }
 
@@ -161,6 +172,7 @@ struct EditorPanelView: View {
 
 struct EditorToolbar: View {
     @Binding var isLivePreviewEnabled: Bool
+    @Binding var showShortcodePicker: Bool
     let isSaving: Bool
     let showSavedIndicator: Bool
     let hasUnsavedChanges: Bool
@@ -225,6 +237,9 @@ struct EditorToolbar: View {
                 ToolbarButton(icon: "photo", label: "Image", help: "Insert Image (⌘⇧I)") {
                     onFormat(.image)
                 }
+                ToolbarButton(icon: "curlybraces", label: "Shortcode", help: "Insert Shortcode (⌘⇧K)") {
+                    showShortcodePicker = true
+                }
             }
 
             Spacer()
@@ -272,8 +287,7 @@ struct EditorToolbar: View {
                     }
             } else if isSaving {
                 ProgressView()
-                    .scaleEffect(0.7)
-                    .frame(width: 20, height: 20)
+                    .controlSize(.small)
             } else {
                 Button(action: onSave) {
                     Label("Save", systemImage: "arrow.down.doc.fill")

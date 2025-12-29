@@ -1,111 +1,89 @@
 import SwiftUI
 
-/// View for editing Hugo frontmatter fields
-struct FrontmatterEditorView: View {
-    @Bindable var frontmatter: Frontmatter
+/// Tab selection for frontmatter editor
+enum FrontmatterTab: String, CaseIterable {
+    case essential = "Essential"
+    case publishing = "Publishing"
+    case seo = "SEO"
+    case menus = "Menus"
+    case advanced = "Advanced"
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Title
-                FormFieldView(label: "Title") {
-                    TextField("Post title", text: Binding(
-                        get: { frontmatter.title ?? "" },
-                        set: { frontmatter.title = $0.isEmpty ? nil : $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                }
-
-                // Date (Optional)
-                FormFieldView(label: "Date") {
-                    HStack {
-                        Toggle("Include date", isOn: Binding(
-                            get: { frontmatter.date != nil },
-                            set: { isOn in
-                                if isOn {
-                                    frontmatter.date = Date()
-                                } else {
-                                    frontmatter.date = nil
-                                }
-                            }
-                        ))
-                        .toggleStyle(.checkbox)
-
-                        if frontmatter.date != nil {
-                            DatePicker(
-                                "",
-                                selection: Binding(
-                                    get: { frontmatter.date ?? Date() },
-                                    set: { frontmatter.date = $0 }
-                                ),
-                                displayedComponents: [.date, .hourAndMinute]
-                            )
-                            .labelsHidden()
-                        }
-                    }
-                }
-
-                // Draft Status
-                FormFieldView(label: "Draft") {
-                    Toggle("Mark as draft", isOn: Binding(
-                        get: { frontmatter.draft ?? false },
-                        set: { frontmatter.draft = $0 }
-                    ))
-                }
-
-                // Description
-                FormFieldView(label: "Description") {
-                    TextEditor(text: Binding(
-                        get: { frontmatter.description ?? "" },
-                        set: { frontmatter.description = $0.isEmpty ? nil : $0 }
-                    ))
-                    .frame(height: 60)
-                    .font(.body)
-                    .border(Color(nsColor: .separatorColor), width: 1)
-                }
-
-                // Tags
-                FormFieldView(label: "Tags") {
-                    TagInputView(tags: Binding(
-                        get: { frontmatter.tags ?? [] },
-                        set: { frontmatter.tags = $0.isEmpty ? nil : $0 }
-                    ))
-                }
-
-                // Categories
-                FormFieldView(label: "Categories") {
-                    TagInputView(tags: Binding(
-                        get: { frontmatter.categories ?? [] },
-                        set: { frontmatter.categories = $0.isEmpty ? nil : $0 }
-                    ))
-                }
-
-                // Custom fields (read-only display for now)
-                if !frontmatter.customFields.isEmpty {
-                    Divider()
-                        .padding(.vertical, 4)
-
-                    Text("Custom Fields")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    ForEach(Array(frontmatter.customFields.keys.sorted()), id: \.self) { key in
-                        HStack {
-                            Text(key)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(String(describing: frontmatter.customFields[key] ?? ""))
-                                .font(.caption)
-                                .foregroundStyle(.primary)
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
+    var icon: String {
+        switch self {
+        case .essential: return "doc.text"
+        case .publishing: return "calendar.badge.clock"
+        case .seo: return "magnifyingglass"
+        case .menus: return "list.bullet"
+        case .advanced: return "gearshape"
         }
     }
 }
 
-// MARK: - Form Field View
+/// View for editing Hugo frontmatter fields with tabbed interface
+struct FrontmatterEditorView: View {
+    @Bindable var frontmatter: Frontmatter
+    @State private var selectedTab: FrontmatterTab = .essential
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Tab bar
+            tabBar
+
+            Divider()
+
+            // Tab content
+            ScrollView {
+                tabContent
+                    .padding()
+            }
+        }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(FrontmatterTab.allCases, id: \.self) { tab in
+                tabButton(for: tab)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+    }
+
+    private func tabButton(for tab: FrontmatterTab) -> some View {
+        Button(action: { selectedTab = tab }) {
+            HStack(spacing: 4) {
+                Image(systemName: tab.icon)
+                    .font(.caption)
+                Text(tab.rawValue)
+                    .font(.caption)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .essential:
+            EssentialFieldsTab(frontmatter: frontmatter)
+        case .publishing:
+            PublishingTab(frontmatter: frontmatter)
+        case .seo:
+            SEOTab(frontmatter: frontmatter)
+        case .menus:
+            MenusTab(frontmatter: frontmatter)
+        case .advanced:
+            AdvancedTab(frontmatter: frontmatter)
+        }
+    }
+}
+
+// MARK: - Form Field View (legacy support)
 
 struct FormFieldView<Content: View>: View {
     let label: String
@@ -125,6 +103,7 @@ struct FormFieldView<Content: View>: View {
 
 struct TagInputView: View {
     @Binding var tags: [String]
+    var placeholder: String = "Add tag (press Enter)"
     @State private var newTag: String = ""
     @FocusState private var isFocused: Bool
 
@@ -144,7 +123,7 @@ struct TagInputView: View {
 
             // Input for new tags
             HStack {
-                TextField("Add tag (press Enter)", text: $newTag)
+                TextField(placeholder, text: $newTag)
                     .textFieldStyle(.roundedBorder)
                     .focused($isFocused)
                     .onSubmit {
@@ -259,7 +238,7 @@ struct FlowLayout: Layout {
 // MARK: - Preview
 
 #Preview {
-    @Previewable @State var sampleFrontmatter = Frontmatter(
+    let sampleFrontmatter = Frontmatter(
         rawContent: """
         ---
         title: "Sample Blog Post"
@@ -279,9 +258,9 @@ struct FlowLayout: Layout {
     sampleFrontmatter.tags = ["swift", "swiftui", "macos"]
     sampleFrontmatter.categories = ["development"]
     sampleFrontmatter.description = "A sample blog post demonstrating frontmatter editing"
+    sampleFrontmatter.menus = [MenuEntry(menuName: "main", weight: 10)]
+    sampleFrontmatter.params = ["author": "Jane Doe", "featured": true]
 
-    return ScrollView {
-        FrontmatterEditorView(frontmatter: sampleFrontmatter)
-    }
-    .frame(width: 400, height: 600)
+    return FrontmatterEditorView(frontmatter: sampleFrontmatter)
+        .frame(width: 450, height: 600)
 }

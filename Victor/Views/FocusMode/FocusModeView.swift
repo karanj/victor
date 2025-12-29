@@ -228,15 +228,9 @@ struct FocusModeEditor: NSViewRepresentable {
         // Store reference in coordinator
         context.coordinator.textView = textView
 
-        // Focus the text view and ensure layout after view is in hierarchy
-        DispatchQueue.main.async {
-            // Re-apply text in case it changed during setup
-            if textView.string != text {
-                textView.string = text
-            }
-            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-            textView.needsLayout = true
-            textView.needsDisplay = true
+        // Focus the text view after it's in the hierarchy
+        // Use RunLoop to ensure we're outside any layout pass
+        RunLoop.main.perform {
             textView.window?.makeFirstResponder(textView)
         }
 
@@ -252,9 +246,6 @@ struct FocusModeEditor: NSViewRepresentable {
             if selectedRange.location <= text.count {
                 textView.setSelectedRange(selectedRange)
             }
-            // Force layout after content change
-            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-            textView.needsDisplay = true
         }
     }
 

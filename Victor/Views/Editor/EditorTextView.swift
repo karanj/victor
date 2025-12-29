@@ -295,12 +295,9 @@ struct EditorTextView: NSViewRepresentable {
         // Set as document view
         scrollView.documentView = textView
 
-        // Force layout after view is in hierarchy to ensure proper text display
-        DispatchQueue.main.async {
-            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-            textView.needsLayout = true
-            textView.needsDisplay = true
-            scrollView.needsLayout = true
+        // Notify coordinator is ready after view is in hierarchy
+        // Use RunLoop to ensure we're outside any layout pass
+        RunLoop.main.perform {
             onCoordinatorReady?(context.coordinator)
         }
 
@@ -404,6 +401,21 @@ struct EditorTextView: NSViewRepresentable {
         // Apply markdown formatting
         func applyFormat(_ format: MarkdownFormat) {
             textView?.applyMarkdownFormat(format)
+        }
+
+        /// Insert text at the current cursor position
+        func insertText(_ text: String) {
+            guard let textView = textView else { return }
+            let selectedRange = textView.selectedRange()
+
+            if textView.shouldChangeText(in: selectedRange, replacementString: text) {
+                textView.textStorage?.replaceCharacters(in: selectedRange, with: text)
+                textView.didChangeText()
+
+                // Position cursor after inserted text
+                let newPosition = selectedRange.location + text.count
+                textView.setSelectedRange(NSRange(location: newPosition, length: 0))
+            }
         }
     }
 }

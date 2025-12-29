@@ -6,10 +6,19 @@ struct EditorFormattingKey: FocusedValueKey {
     typealias Value = (MarkdownFormat) -> Void
 }
 
+struct ShortcodePickerKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var editorFormatting: EditorFormattingKey.Value? {
         get { self[EditorFormattingKey.self] }
         set { self[EditorFormattingKey.self] = newValue }
+    }
+
+    var showShortcodePicker: ShortcodePickerKey.Value? {
+        get { self[ShortcodePickerKey.self] }
+        set { self[ShortcodePickerKey.self] = newValue }
     }
 }
 
@@ -17,6 +26,7 @@ extension FocusedValues {
 struct VictorApp: App {
     @State private var siteViewModel = SiteViewModel()
     @FocusedValue(\.editorFormatting) private var editorFormatting
+    @FocusedValue(\.showShortcodePicker) private var showShortcodePicker
 
     // Editor preferences (using @AppStorage for sync with Preferences window)
     @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
@@ -72,6 +82,12 @@ struct VictorApp: App {
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(editorFormatting == nil)
+
+                Button("Insert Shortcode...") {
+                    showShortcodePicker?()
+                }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .disabled(showShortcodePicker == nil)
 
                 Button("Block Quote") {
                     editorFormatting?(.blockquote)
