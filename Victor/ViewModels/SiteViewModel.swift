@@ -113,9 +113,6 @@ class SiteViewModel {
     /// Trigger to focus search field
     var shouldFocusSearch = false
 
-    /// Quick Open dialog visibility
-    var isQuickOpenVisible = false
-
     /// Recently opened files (for Quick Open)
     var recentFiles: [FileNode] = []
 
@@ -430,8 +427,6 @@ class SiteViewModel {
         }
     }
 
-    // MARK: - Quick Open
-
     /// Add a file to the recent files list
     func addRecentFile(_ node: FileNode) {
         // Remove if already in list (to move to front)
@@ -444,11 +439,6 @@ class SiteViewModel {
         if recentFiles.count > maxRecentFiles {
             recentFiles = Array(recentFiles.prefix(maxRecentFiles))
         }
-    }
-
-    /// Toggle Quick Open dialog
-    func toggleQuickOpen() {
-        isQuickOpenVisible.toggle()
     }
 
     /// Toggle Inspector panel

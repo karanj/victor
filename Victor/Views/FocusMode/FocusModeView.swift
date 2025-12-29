@@ -7,9 +7,6 @@ struct FocusModeView: View {
     let fileName: String
     let contentFile: ContentFile
 
-    /// Track scroll position for progress indicator
-    @State private var scrollProgress: Double = 0
-
     /// Maximum comfortable reading/writing width
     private let maxEditorWidth: CGFloat = 700
 
@@ -43,17 +40,11 @@ struct FocusModeView: View {
                         })
                     }
                     .coordinateSpace(name: "scroll")
-                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                        // Calculate scroll progress (0 to 1)
-                        let contentHeight = max(1, geometry.size.height * 2) // Estimate
-                        scrollProgress = min(1, max(0, -offset / contentHeight))
-                    }
                 }
 
                 // Bottom bar with progress and word count
                 FocusModeBottomBar(
-                    text: text,
-                    progress: scrollProgress
+                    text: text
                 )
             }
         }
@@ -122,7 +113,6 @@ struct FocusModeTopBar: View {
 
 struct FocusModeBottomBar: View {
     let text: String
-    let progress: Double
 
     private var wordCount: Int {
         text.components(separatedBy: .whitespacesAndNewlines)
@@ -147,21 +137,6 @@ struct FocusModeBottomBar: View {
             Text("\(characterCount) characters")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-            Spacer()
-
-            // Progress indicator
-            HStack(spacing: 6) {
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-                    .frame(width: 60)
-
-                Text("\(Int(progress * 100))%")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .trailing)
-            }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 10)

@@ -361,9 +361,9 @@ struct HeadingMenu: View {
             Button("Heading 6") { onFormat(.heading(level: 6)) }
         } label: {
             Label("Heading", systemImage: "h.square")
-                .labelStyle(.iconOnly)
         }
         .buttonStyle(.bordered)
         .help("Insert Heading (H1-H6)")
+        .frame(width: 100)
     }
 }

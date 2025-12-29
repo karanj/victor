@@ -78,7 +78,7 @@ struct ContentView: View {
             if siteViewModel.isLoading || siteViewModel.isLoadingFile {
                 ToolbarItem {
                     ProgressView()
-                        .scaleEffect(0.7)
+                        .controlSize(.small)
                         .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
                 }
             }
@@ -111,17 +111,6 @@ struct ContentView: View {
                 Text(errorMessage)
             }
         }
-        // Quick Open overlay - disabled temporarily (needs keyboard navigation fix)
-        // .overlay {
-        //     if siteViewModel.isQuickOpenVisible {
-        //         QuickOpenView(
-        //             siteViewModel: siteViewModel,
-        //             isPresented: $siteViewModel.isQuickOpenVisible
-        //         )
-        //         .transition(.opacity.combined(with: .move(edge: .top)))
-        //     }
-        // }
-        // .animation(.easeOut(duration: 0.15), value: siteViewModel.isQuickOpenVisible)
     }
 
     // MARK: - Layout Content

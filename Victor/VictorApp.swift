@@ -98,14 +98,8 @@ struct VictorApp: App {
 
             // View menu - Search and Navigation
             CommandGroup(after: .sidebar) {
-                // Quick Open disabled temporarily - needs keyboard navigation fix
-                // Button("Quick Open...") {
-                //     siteViewModel.toggleQuickOpen()
-                // }
-                // .keyboardShortcut("p", modifiers: .command)
-                // .disabled(siteViewModel.site == nil)
 
-                Button("Focus Search") {
+                Button("Search for file") {
                     siteViewModel.shouldFocusSearch = true
                 }
                 .keyboardShortcut("f", modifiers: .command)

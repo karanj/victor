@@ -16,8 +16,20 @@ struct FrontmatterBottomPanel: View {
     @State private var rawText: String = ""
     @State private var parseError: String?
 
+    /// Panel height - stored in AppStorage for persistence
+    @AppStorage("frontmatterPanelHeight") private var panelHeight: Double = 300
+
+    /// Minimum and maximum heights for the panel
+    private let minHeight: CGFloat = 150
+    private let maxHeight: CGFloat = 600
+
     var body: some View {
         VStack(spacing: 0) {
+            // Resize handle (only when expanded)
+            if isExpanded {
+                resizeHandle
+            }
+
             // Collapsible header
             Button(action: { isExpanded.toggle() }) {
                 HStack {
@@ -68,14 +80,10 @@ struct FrontmatterBottomPanel: View {
                 Divider()
 
                 if viewMode == .form {
-                    // Form view
-                    ScrollView {
-                        FrontmatterEditorView(frontmatter: frontmatter)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                    }
-                    .frame(maxHeight: 250)
-                    .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                    // Form view - FrontmatterEditorView has its own ScrollView
+                    FrontmatterEditorView(frontmatter: frontmatter)
+                        .frame(height: panelHeight)
+                        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
                 } else {
                     // Raw view
                     VStack(spacing: 0) {
@@ -101,10 +109,10 @@ struct FrontmatterBottomPanel: View {
 
                         TextEditor(text: $rawText)
                             .font(.system(size: 12, design: .monospaced))
-                            .frame(maxHeight: parseError != nil ? 200 : 250)
                             .padding(8)
                             .background(Color(nsColor: .textBackgroundColor))
                     }
+                    .frame(height: panelHeight)
                 }
             }
         }
@@ -133,6 +141,39 @@ struct FrontmatterBottomPanel: View {
         }
     }
 
+    // MARK: - Resize Handle
+
+    private var resizeHandle: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(height: 1)
+            .overlay(alignment: .center) {
+                // Visible drag indicator
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(width: 36, height: 4)
+                    .padding(.vertical, 3)
+            }
+            .frame(height: 10)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        // Dragging up increases height (negative translation)
+                        let newHeight = panelHeight - value.translation.height
+                        panelHeight = min(maxHeight, max(minHeight, newHeight))
+                    }
+            )
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .help("Drag to resize panel")
+    }
+
     private var frontmatterFormatBadge: String {
         switch frontmatter.format {
         case .yaml: return "YAML"
@@ -152,12 +193,48 @@ struct FrontmatterBottomPanel: View {
         }
 
         // Update the frontmatter object with parsed values
+        // Essential fields
         frontmatter.title = parsedFrontmatter.title
         frontmatter.date = parsedFrontmatter.date
         frontmatter.draft = parsedFrontmatter.draft
         frontmatter.tags = parsedFrontmatter.tags
         frontmatter.categories = parsedFrontmatter.categories
         frontmatter.description = parsedFrontmatter.description
+
+        // Publishing fields
+        frontmatter.publishDate = parsedFrontmatter.publishDate
+        frontmatter.expiryDate = parsedFrontmatter.expiryDate
+        frontmatter.lastmod = parsedFrontmatter.lastmod
+        frontmatter.weight = parsedFrontmatter.weight
+
+        // URL fields
+        frontmatter.slug = parsedFrontmatter.slug
+        frontmatter.url = parsedFrontmatter.url
+        frontmatter.aliases = parsedFrontmatter.aliases
+
+        // SEO fields
+        frontmatter.keywords = parsedFrontmatter.keywords
+        frontmatter.summary = parsedFrontmatter.summary
+        frontmatter.linkTitle = parsedFrontmatter.linkTitle
+
+        // Layout fields
+        frontmatter.type = parsedFrontmatter.type
+        frontmatter.layout = parsedFrontmatter.layout
+
+        // Flags
+        frontmatter.headless = parsedFrontmatter.headless
+        frontmatter.isCJKLanguage = parsedFrontmatter.isCJKLanguage
+        frontmatter.markup = parsedFrontmatter.markup
+        frontmatter.translationKey = parsedFrontmatter.translationKey
+
+        // Complex fields
+        frontmatter.menus = parsedFrontmatter.menus
+        frontmatter.build = parsedFrontmatter.build
+        frontmatter.sitemap = parsedFrontmatter.sitemap
+        frontmatter.outputs = parsedFrontmatter.outputs
+        frontmatter.resources = parsedFrontmatter.resources
+        frontmatter.cascade = parsedFrontmatter.cascade
+        frontmatter.params = parsedFrontmatter.params
         frontmatter.customFields = parsedFrontmatter.customFields
 
         // Clear any previous errors

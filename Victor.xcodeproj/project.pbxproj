@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -15,7 +15,6 @@
 		191C191C9DAC62DC001530F3 /* EditorTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7788DB7550B1240381DEFEC /* EditorTextView.swift */; };
 		27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */; };
 		281A23A15B2B0AAC8668F4CC /* MenuEntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B70F82D5687B1A912977787 /* MenuEntryEditor.swift */; };
-		30DAD372CC320205B82B4977 /* FuzzyMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35C02CF0E80A51F571BBBBA4 /* FuzzyMatcher.swift */; };
 		33E672AB082D3ED5838ED7F4 /* HugoShortcode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF18C11530F31087472421D /* HugoShortcode.swift */; };
 		35B52DF7CCC9B4AAA2349319 /* HelpTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 062838065437851B5ABB7404 /* HelpTooltip.swift */; };
 		36E5FC2D4F693C6C41D83C05 /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */; };
@@ -39,7 +38,6 @@
 		9AD72BC7D7D317FBFE58951B /* BreadcrumbBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A675A95C53D709DA512994 /* BreadcrumbBar.swift */; };
 		9B728D3E62FDC83B62A62935 /* AdvancedTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2430A3C7888FF7CC094C6E7 /* AdvancedTab.swift */; };
 		ACCFC7D5781CAF89BC72599D /* MenusTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C64E4BC3CB89092AD3D394 /* MenusTab.swift */; };
-		AD43F3797C1C2724F4287942 /* QuickOpenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E170D600C1A9BA9FE9807C04 /* QuickOpenView.swift */; };
 		B24FE34CA8F800E79A2639A8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E394C27DB0DEEF088DDEC4C /* Assets.xcassets */; };
 		B618E4399B0A3A3F9A00F5BD /* ShortcodeFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD201981E79241B53455BF5 /* ShortcodeFormView.swift */; };
 		BA894FADE169193B513F4318 /* SEOTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0BBFA1B7290B46E6F0291C9 /* SEOTab.swift */; };
@@ -82,7 +80,6 @@
 		2E394C27DB0DEEF088DDEC4C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3029686F52381DE7B1046E6A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		333D3CD4F0CCA5F20CEF7E7A /* FocusModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusModeView.swift; sourceTree = "<group>"; };
-		35C02CF0E80A51F571BBBBA4 /* FuzzyMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FuzzyMatcher.swift; sourceTree = "<group>"; };
 		38A675A95C53D709DA512994 /* BreadcrumbBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreadcrumbBar.swift; sourceTree = "<group>"; };
 		3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
 		3F51F8DDFBFAE5CBCAE2AC50 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
@@ -112,7 +109,6 @@
 		D03696993E969C4B2AEFF0AC /* preview-styles.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = "preview-styles.css"; sourceTree = "<group>"; };
 		D0F71B5CB356171D3521AB28 /* EssentialFieldsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EssentialFieldsTab.swift; sourceTree = "<group>"; };
 		D3B404F98684163BC1F29FB3 /* PreviewWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWebView.swift; sourceTree = "<group>"; };
-		E170D600C1A9BA9FE9807C04 /* QuickOpenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenView.swift; sourceTree = "<group>"; };
 		E47231FACC5F28F3FB428392 /* FileSystemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemService.swift; sourceTree = "<group>"; };
 		ECFE88CA8C8E2F13D02BAC38 /* MetadataSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSection.swift; sourceTree = "<group>"; };
 		F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VictorApp.swift; sourceTree = "<group>"; };
@@ -158,7 +154,6 @@
 				A3F46E0A71220B160B3FDD02 /* AutoSaveService.swift */,
 				E47231FACC5F28F3FB428392 /* FileSystemService.swift */,
 				4677CA9101F20BE0B2C8D145 /* FrontmatterParser.swift */,
-				35C02CF0E80A51F571BBBBA4 /* FuzzyMatcher.swift */,
 				3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */,
 			);
 			path = Services;
@@ -330,17 +325,8 @@
 				7682DE18DB8FF777B046436C /* MainWindow */,
 				0B5A01BE8DDE89A7B36C0734 /* Preferences */,
 				CC3C4B92ED23870AB560ED7C /* Preview */,
-				F6FD046DEB6E836737245578 /* QuickOpen */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		F6FD046DEB6E836737245578 /* QuickOpen */ = {
-			isa = PBXGroup;
-			children = (
-				E170D600C1A9BA9FE9807C04 /* QuickOpenView.swift */,
-			);
-			path = QuickOpen;
 			sourceTree = "<group>";
 		};
 		FF7C26B7DBE6136F365A2051 /* ViewModels */ = {
@@ -428,7 +414,6 @@
 				DC1398A0762D3C7987D0CEBC /* XCRemoteSwiftPackageReference "TOMLKit" */,
 				1EFA41719CE1ADAB8DD3C8D9 /* XCRemoteSwiftPackageReference "Yams" */,
 			);
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -477,7 +462,6 @@
 				D6DE0F087D565ED5E1E45B08 /* FrontmatterEditorView.swift in Sources */,
 				0D3B061D0E213B081F3F6161 /* FrontmatterParser.swift in Sources */,
 				54DD741D23FA651B168E4207 /* FrontmatterTypes.swift in Sources */,
-				30DAD372CC320205B82B4977 /* FuzzyMatcher.swift in Sources */,
 				35B52DF7CCC9B4AAA2349319 /* HelpTooltip.swift in Sources */,
 				33E672AB082D3ED5838ED7F4 /* HugoShortcode.swift in Sources */,
 				52ABCFDF402217689C1661AC /* HugoSite.swift in Sources */,
@@ -490,7 +474,6 @@
 				DAE3A9BCBFDF5E4B5529B05E /* PreviewPanel.swift in Sources */,
 				D6DD6E852E061238FCBDF0CF /* PreviewWebView.swift in Sources */,
 				C7C16AAEBEB1B6427E7E004B /* PublishingTab.swift in Sources */,
-				AD43F3797C1C2724F4287942 /* QuickOpenView.swift in Sources */,
 				BA894FADE169193B513F4318 /* SEOTab.swift in Sources */,
 				27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */,
 				B618E4399B0A3A3F9A00F5BD /* ShortcodeFormView.swift in Sources */,
