@@ -2,6 +2,8 @@ import SwiftUI
 import WebKit
 
 /// NSViewRepresentable wrapper around WKWebView for displaying HTML preview
+/// Note: WKProcessPool sharing is NOT needed - it was deprecated in macOS 12.0 and
+/// process pooling is now automatic. Do not add manual WKProcessPool management.
 struct PreviewWebView: NSViewRepresentable {
     let html: String
 
@@ -11,6 +13,7 @@ struct PreviewWebView: NSViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        context.coordinator.webView = webView
 
         // Configure for local content - transparent background using setValue (KVC)
         // Note: WKWebView.isOpaque is read-only, so we still need to use KVC here
@@ -35,6 +38,11 @@ struct PreviewWebView: NSViewRepresentable {
 
     class Coordinator: NSObject, WKNavigationDelegate {
         var currentHTML: String = ""
+        weak var webView: WKWebView?
+
+        deinit {
+            webView?.navigationDelegate = nil
+        }
 
         // Handle navigation
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -58,11 +66,11 @@ struct PreviewWebView: NSViewRepresentable {
 
         // Handle navigation errors
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            print("Preview web view navigation failed: \(error.localizedDescription)")
+            Logger.shared.error("Preview web view navigation failed", error: error)
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            print("Preview web view provisional navigation failed: \(error.localizedDescription)")
+            Logger.shared.error("Preview web view provisional navigation failed", error: error)
         }
     }
 }

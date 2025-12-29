@@ -89,10 +89,14 @@ struct EditorPanelView: View {
             if reduceMotion {
                 contentOpacity = 1
             } else {
-                withAnimation(.easeInOut(duration: 0.15)) {
+                withAnimation(.easeInOut(duration: AppConstants.Animation.fast)) {
                     contentOpacity = 1
                 }
             }
+        }
+        .onDisappear {
+            // Release reference to pending tasks when editor is dismissed
+            viewModel.cleanup()
         }
         .navigationTitle(viewModel.navigationTitle)
         .navigationSubtitle(viewModel.navigationSubtitle)
@@ -107,6 +111,8 @@ struct EditorPanelView: View {
         // When the selected file changes, reset the editor view model so it
         // points at the new file node and content instead of the previous one.
         .onChange(of: contentFile.id) { _, _ in
+            // Release old ViewModel's task reference (save continues in background)
+            viewModel.cleanup()
             // Reset opacity for fade-in animation on new file
             contentOpacity = 0
             viewModel = EditorViewModel(
@@ -118,7 +124,7 @@ struct EditorPanelView: View {
             if reduceMotion {
                 contentOpacity = 1
             } else {
-                withAnimation(.easeInOut(duration: 0.15)) {
+                withAnimation(.easeInOut(duration: AppConstants.Animation.fast)) {
                     contentOpacity = 1
                 }
             }
@@ -180,11 +186,31 @@ struct EditorToolbar: View {
     let onSave: () -> Void
     let onFormat: (MarkdownFormat) -> Void
 
-    // Animation state for save indicator
-    @State private var saveIndicatorScale: CGFloat = 0.5
-    @State private var saveIndicatorOpacity: Double = 0
-
     var body: some View {
+        HStack(spacing: 0) {
+            formattingGroups
+            Spacer()
+            LivePreviewToggle(isEnabled: $isLivePreviewEnabled)
+            actionSeparator
+            SaveButton(
+                isSaving: isSaving,
+                showSavedIndicator: showSavedIndicator,
+                hasUnsavedChanges: hasUnsavedChanges,
+                reduceMotion: reduceMotion,
+                onSave: onSave
+            )
+        }
+        .padding(.horizontal, AppConstants.Toolbar.horizontalPadding)
+        .padding(.vertical, AppConstants.Toolbar.verticalPadding)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+    }
+
+    // MARK: - Formatting Groups
+
+    private var formattingGroups: some View {
         HStack(spacing: 0) {
             // Group 1: Text Formatting
             ToolbarGroup {
@@ -241,70 +267,13 @@ struct EditorToolbar: View {
                     showShortcodePicker = true
                 }
             }
-
-            Spacer()
-
-            // Live Preview Toggle
-            Button(action: { isLivePreviewEnabled.toggle() }) {
-                Label(
-                    isLivePreviewEnabled ? "Live Preview On" : "Live Preview Off",
-                    systemImage: isLivePreviewEnabled ? "eye.fill" : "eye.slash.fill"
-                )
-                .labelStyle(.titleAndIcon)
-                .font(.callout)
-            }
-            .buttonStyle(.bordered)
-            .help(isLivePreviewEnabled ? "Disable live preview" : "Enable live preview")
-
-            // Action separator (thicker visual break)
-            Divider()
-                .frame(height: 24)
-                .padding(.horizontal, 12)
-
-            // Save Button
-            if showSavedIndicator {
-                Label("Saved", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.callout)
-                    .scaleEffect(saveIndicatorScale)
-                    .opacity(saveIndicatorOpacity)
-                    .onAppear {
-                        if reduceMotion {
-                            saveIndicatorScale = 1.0
-                            saveIndicatorOpacity = 1.0
-                        } else {
-                            // Pop-in animation
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                saveIndicatorScale = 1.0
-                                saveIndicatorOpacity = 1.0
-                            }
-                        }
-                    }
-                    .onDisappear {
-                        // Reset for next appearance
-                        saveIndicatorScale = 0.5
-                        saveIndicatorOpacity = 0
-                    }
-            } else if isSaving {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Button(action: onSave) {
-                    Label("Save", systemImage: "arrow.down.doc.fill")
-                        .labelStyle(.titleAndIcon)
-                        .font(.callout)
-                }
-                .keyboardShortcut("s", modifiers: .command)
-                .disabled(!hasUnsavedChanges)
-                .buttonStyle(.bordered)
-            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
+    }
+
+    private var actionSeparator: some View {
+        Divider()
+            .frame(height: AppConstants.Toolbar.actionSeparatorHeight)
+            .padding(.horizontal, AppConstants.Toolbar.horizontalPadding)
     }
 }
 
@@ -315,7 +284,7 @@ struct ToolbarGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: AppConstants.Toolbar.groupSpacing) {
             content
         }
     }
@@ -325,8 +294,8 @@ struct ToolbarGroup<Content: View>: View {
 struct ToolbarSeparator: View {
     var body: some View {
         Divider()
-            .frame(height: 20)
-            .padding(.horizontal, 8)
+            .frame(height: AppConstants.Toolbar.separatorHeight)
+            .padding(.horizontal, AppConstants.Toolbar.separatorPadding)
     }
 }
 
@@ -364,6 +333,84 @@ struct HeadingMenu: View {
         }
         .buttonStyle(.bordered)
         .help("Insert Heading (H1-H6)")
-        .frame(width: 100)
+        .frame(width: AppConstants.Toolbar.headingMenuWidth)
+    }
+}
+
+/// Toggle button for enabling/disabling live preview
+struct LivePreviewToggle: View {
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        Button(action: { isEnabled.toggle() }) {
+            Label(
+                isEnabled ? "Live Preview On" : "Live Preview Off",
+                systemImage: isEnabled ? "eye.fill" : "eye.slash.fill"
+            )
+            .labelStyle(.titleAndIcon)
+            .font(.callout)
+        }
+        .buttonStyle(.bordered)
+        .help(isEnabled ? "Disable live preview" : "Enable live preview")
+    }
+}
+
+/// Save button with animated indicator showing save state
+struct SaveButton: View {
+    let isSaving: Bool
+    let showSavedIndicator: Bool
+    let hasUnsavedChanges: Bool
+    let reduceMotion: Bool
+    let onSave: () -> Void
+
+    @State private var indicatorScale: CGFloat = 0.5
+    @State private var indicatorOpacity: Double = 0
+
+    var body: some View {
+        if showSavedIndicator {
+            savedIndicator
+        } else if isSaving {
+            ProgressView()
+                .controlSize(.small)
+        } else {
+            saveButton
+        }
+    }
+
+    private var savedIndicator: some View {
+        Label("Saved", systemImage: "checkmark.circle.fill")
+            .foregroundStyle(.green)
+            .font(.callout)
+            .scaleEffect(indicatorScale)
+            .opacity(indicatorOpacity)
+            .onAppear {
+                if reduceMotion {
+                    indicatorScale = 1.0
+                    indicatorOpacity = 1.0
+                } else {
+                    withAnimation(.spring(
+                        response: AppConstants.Toolbar.saveSpringResponse,
+                        dampingFraction: AppConstants.Toolbar.saveSpringDamping
+                    )) {
+                        indicatorScale = 1.0
+                        indicatorOpacity = 1.0
+                    }
+                }
+            }
+            .onDisappear {
+                indicatorScale = 0.5
+                indicatorOpacity = 0
+            }
+    }
+
+    private var saveButton: some View {
+        Button(action: onSave) {
+            Label("Save", systemImage: "arrow.down.doc.fill")
+                .labelStyle(.titleAndIcon)
+                .font(.callout)
+        }
+        .keyboardShortcut("s", modifiers: .command)
+        .disabled(!hasUnsavedChanges)
+        .buttonStyle(.bordered)
     }
 }

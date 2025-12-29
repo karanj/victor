@@ -273,7 +273,10 @@ struct EditorTextView: NSViewRepresentable {
 
         // Configure text container for proper wrapping
         // Horizontal padding provides breathing room from scrollbar/resize gutter
-        textView.textContainerInset = NSSize(width: 16, height: 10)
+        textView.textContainerInset = NSSize(
+            width: AppConstants.Editor.textContainerInsetWidth,
+            height: AppConstants.Editor.textContainerInsetHeight
+        )
         textView.autoresizingMask = [.width]
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
@@ -305,10 +308,12 @@ struct EditorTextView: NSViewRepresentable {
             textView.needsDisplay = true
         }
 
-        // Notify coordinator is ready after view is in hierarchy
+        // Notify coordinator is ready and request focus after view is in hierarchy
         // Use RunLoop to ensure we're outside any layout pass
         RunLoop.main.perform {
             onCoordinatorReady?(context.coordinator)
+            // Request focus so user can start typing immediately
+            textView.window?.makeFirstResponder(textView)
         }
 
         return scrollView

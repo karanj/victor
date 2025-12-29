@@ -25,7 +25,7 @@ struct ContentView: View {
                 .zIndex(100)
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: siteViewModel.isFocusModeActive)
+        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.slow), value: siteViewModel.isFocusModeActive)
     }
 
     // MARK: - Main Content
@@ -35,7 +35,11 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar - File navigation
             SidebarView(siteViewModel: siteViewModel)
-                .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 400)
+                .navigationSplitViewColumnWidth(
+                    min: AppConstants.Sidebar.minWidth,
+                    ideal: AppConstants.Sidebar.idealWidth,
+                    max: AppConstants.Sidebar.maxWidth
+                )
         } detail: {
             // Main content area with optional inspector
             HSplitView {
@@ -48,12 +52,12 @@ struct ContentView: View {
                     if let selectedNode = siteViewModel.selectedNode,
                        let contentFile = selectedNode.contentFile {
                         layoutContent(for: selectedNode, contentFile: contentFile)
-                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: siteViewModel.layoutMode)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.layoutMode)
                     } else {
                         noFileSelectedView
                     }
                 }
-                .frame(minWidth: 400)
+                .frame(minWidth: AppConstants.Content.minWidth)
 
                 // Inspector panel (right side)
                 if siteViewModel.isInspectorVisible {
@@ -65,7 +69,7 @@ struct ContentView: View {
                     .transition(.move(edge: .trailing))
                 }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: siteViewModel.isInspectorVisible)
+            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.isInspectorVisible)
         }
         .navigationTitle(siteViewModel.site?.displayName ?? "Victor")
         .toolbar {
@@ -88,7 +92,7 @@ struct ContentView: View {
                     if reduceMotion {
                         siteViewModel.toggleInspector()
                     } else {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(.easeInOut(duration: AppConstants.Animation.standard)) {
                             siteViewModel.toggleInspector()
                         }
                     }
@@ -139,10 +143,10 @@ struct ContentView: View {
                     fileNode: node,
                     siteViewModel: siteViewModel
                 )
-                .frame(minWidth: 300)
+                .frame(minWidth: AppConstants.Content.panelMinWidth)
 
                 PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
-                    .frame(minWidth: 300)
+                    .frame(minWidth: AppConstants.Content.panelMinWidth)
             }
         }
     }

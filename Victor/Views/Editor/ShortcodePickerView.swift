@@ -74,7 +74,7 @@ struct ShortcodePickerView: View {
                 )
             }
         }
-        .frame(minWidth: 800, minHeight: 500)
+        .frame(minWidth: AppConstants.Dialog.shortcodePickerWidth, minHeight: AppConstants.Dialog.shortcodePickerHeight)
         .navigationTitle("Insert Shortcode")
     }
 

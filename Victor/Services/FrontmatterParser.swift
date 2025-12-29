@@ -219,7 +219,7 @@ class FrontmatterParser {
         } catch {
             // Log the error for debugging, but return the frontmatter with rawContent
             // This allows users to still see/edit the raw frontmatter even if parsing fails
-            print("FrontmatterParser: parsing error - \(error.localizedDescription)")
+            Logger.shared.error("FrontmatterParser: parsing error", error: error)
         }
 
         return frontmatter
@@ -930,7 +930,7 @@ class FrontmatterParser {
             let yaml = try Yams.dump(object: dict)
             return "---\n\(yaml)---"
         } catch {
-            print("FrontmatterParser: YAML serialization error - \(error.localizedDescription)")
+            Logger.shared.error("FrontmatterParser: YAML serialization error", error: error)
             return frontmatter.rawContent
         }
     }
@@ -993,7 +993,7 @@ class FrontmatterParser {
                 return jsonString
             }
         } catch {
-            print("FrontmatterParser: JSON serialization error - \(error.localizedDescription)")
+            Logger.shared.error("FrontmatterParser: JSON serialization error", error: error)
         }
 
         return frontmatter.rawContent

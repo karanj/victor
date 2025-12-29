@@ -59,7 +59,7 @@ See: `UI-IMPLEMENTATION-ISSUES.yaml` for detailed tracking
 - ✅ Added proper error handling in FrontmatterParser (throwing variants)
 - ✅ Fixed retain cycles in EditorViewModel (weak self captures)
 - ✅ Centralized constants in AppConstants.swift
-- ✅ Optimized WKWebView with shared process pool
+- ✅ WKWebView uses system-managed process pooling (automatic in macOS 12+)
 - ✅ Created systematic Xcode project update protocol
 
 ### Previous Updates (2025-12-22)
@@ -472,6 +472,15 @@ Four specialized agents to review the codebase from multiple perspectives:
 - Code Quality and Maintainability Expert
 - AppKit Integration Expert
 
+### Code Review False Positives ⚠️
+These issues may be flagged by code review but should NOT be "fixed":
+
+1. **WKProcessPool sharing** - Do NOT add manual `WKProcessPool` sharing.
+   - `WKProcessPool` was deprecated in macOS 12.0
+   - Process pooling is now automatic on macOS 12.0+
+   - Adding it generates deprecation warnings with no benefit
+   - Victor targets macOS 14.0+, so this is handled by the system
+
 ### Outstanding Issues 📋
 
 #### Low-Priority Issues (Remaining)
@@ -499,7 +508,7 @@ These are minor improvements and can be addressed opportunistically:
 - Memory usage optimized (70-80% reduction in search)
 - All file I/O on background threads
 - Smooth, responsive UI on large sites (500+ files)
-- Optimized WKWebView with shared process pool
+- WKWebView uses system-managed process pooling (automatic in macOS 12+)
 
 **File Organization**:
 - ContentView.swift: 545 lines → 72 lines (87% reduction)

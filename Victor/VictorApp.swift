@@ -38,7 +38,7 @@ struct VictorApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(siteViewModel: siteViewModel)
-                .frame(minWidth: 1000, minHeight: 600)
+                .frame(minWidth: AppConstants.Window.minWidth, minHeight: AppConstants.Window.minHeight)
         }
         .commands {
             // File menu commands

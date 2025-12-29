@@ -56,42 +56,42 @@ class SiteViewModel {
     /// Auto-save enabled state (persisted)
     var isAutoSaveEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(isAutoSaveEnabled, forKey: "isAutoSaveEnabled")
+            UserDefaults.standard.set(isAutoSaveEnabled, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         }
     }
 
     /// Editor layout mode: editor only, preview only, or split (persisted)
     var layoutMode: EditorLayoutMode {
         didSet {
-            UserDefaults.standard.set(layoutMode.rawValue, forKey: "editorLayoutMode")
+            UserDefaults.standard.set(layoutMode.rawValue, forKey: AppConstants.UserDefaultsKeys.editorLayoutMode)
         }
     }
 
     /// Highlight current line in editor (persisted)
     var highlightCurrentLine: Bool {
         didSet {
-            UserDefaults.standard.set(highlightCurrentLine, forKey: "highlightCurrentLine")
+            UserDefaults.standard.set(highlightCurrentLine, forKey: AppConstants.UserDefaultsKeys.highlightCurrentLine)
         }
     }
 
     /// Editor font size (persisted)
     var editorFontSize: Double {
         didSet {
-            UserDefaults.standard.set(editorFontSize, forKey: "editorFontSize")
+            UserDefaults.standard.set(editorFontSize, forKey: AppConstants.UserDefaultsKeys.editorFontSize)
         }
     }
 
     /// Auto-save delay in seconds (persisted)
     var autoSaveDelay: Double {
         didSet {
-            UserDefaults.standard.set(autoSaveDelay, forKey: "autoSaveDelay")
+            UserDefaults.standard.set(autoSaveDelay, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
         }
     }
 
     /// Inspector panel visibility (persisted)
     var isInspectorVisible: Bool {
         didSet {
-            UserDefaults.standard.set(isInspectorVisible, forKey: "isInspectorVisible")
+            UserDefaults.standard.set(isInspectorVisible, forKey: AppConstants.UserDefaultsKeys.isInspectorVisible)
         }
     }
 
@@ -128,7 +128,7 @@ class SiteViewModel {
 
     /// Recently opened sites (paths stored in UserDefaults)
     var recentSitePaths: [String] {
-        UserDefaults.standard.stringArray(forKey: "recentSitePaths") ?? []
+        UserDefaults.standard.stringArray(forKey: AppConstants.UserDefaultsKeys.recentSitePaths) ?? []
     }
 
     /// Maximum number of recent sites to track
@@ -229,10 +229,10 @@ class SiteViewModel {
 
     init() {
         // Load auto-save preference (default: true)
-        self.isAutoSaveEnabled = UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? true
+        self.isAutoSaveEnabled = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled) as? Bool ?? true
 
         // Load layout mode preference (default: .split for backwards compatibility)
-        if let savedMode = UserDefaults.standard.string(forKey: "editorLayoutMode"),
+        if let savedMode = UserDefaults.standard.string(forKey: AppConstants.UserDefaultsKeys.editorLayoutMode),
            let mode = EditorLayoutMode(rawValue: savedMode) {
             self.layoutMode = mode
         } else {
@@ -240,20 +240,20 @@ class SiteViewModel {
         }
 
         // Load current line highlighting preference (default: true)
-        self.highlightCurrentLine = UserDefaults.standard.object(forKey: "highlightCurrentLine") as? Bool ?? true
+        self.highlightCurrentLine = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.highlightCurrentLine) as? Bool ?? true
 
         // Load editor font size preference (default: 13)
-        self.editorFontSize = UserDefaults.standard.object(forKey: "editorFontSize") as? Double ?? 13.0
+        self.editorFontSize = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.editorFontSize) as? Double ?? 13.0
 
         // Load auto-save delay preference (default: 2 seconds)
-        self.autoSaveDelay = UserDefaults.standard.object(forKey: "autoSaveDelay") as? Double ?? 2.0
+        self.autoSaveDelay = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) as? Double ?? 2.0
 
         // Load inspector visibility preference (default: false)
-        self.isInspectorVisible = UserDefaults.standard.object(forKey: "isInspectorVisible") as? Bool ?? false
+        self.isInspectorVisible = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.isInspectorVisible) as? Bool ?? false
 
         // Try to load previously opened site
-        Task {
-            await loadSavedSite()
+        Task { [weak self] in
+            await self?.loadSavedSite()
         }
     }
 
@@ -274,11 +274,11 @@ class SiteViewModel {
         errorMessage = nil
 
         do {
-            // Create site
-            let site = HugoSite(rootURL: url)
+            // Create site asynchronously (file I/O on background thread)
+            let site = await HugoSite.create(rootURL: url)
 
-            // Validate it's a Hugo site
-            guard site.isValid else {
+            // Validate it's a Hugo site (async to avoid blocking main thread)
+            guard await site.validateAsync() else {
                 errorMessage = "Selected folder does not appear to be a Hugo site. Make sure it has a 'content' directory or config file."
                 isLoading = false
                 return
@@ -298,12 +298,12 @@ class SiteViewModel {
             // Track this site in recent sites
             addRecentSite(url.path)
 
-            print("Loaded Hugo site: \(site.displayName)")
-            print("Found \(nodes.count) markdown files")
+            Logger.shared.info("Loaded Hugo site: \(site.displayName)")
+            Logger.shared.info("Found \(nodes.count) markdown files")
 
         } catch {
             errorMessage = "Failed to load site: \(error.localizedDescription)"
-            print("Error loading site: \(error)")
+            Logger.shared.error("Error loading site", error: error)
         }
 
         isLoading = false
@@ -324,7 +324,7 @@ class SiteViewModel {
             paths = Array(paths.prefix(maxRecentSites))
         }
 
-        UserDefaults.standard.set(paths, forKey: "recentSitePaths")
+        UserDefaults.standard.set(paths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
     }
 
     /// Open a recent site by path
@@ -336,7 +336,7 @@ class SiteViewModel {
             // Remove from recent sites if it no longer exists
             var paths = recentSitePaths
             paths.removeAll { $0 == path }
-            UserDefaults.standard.set(paths, forKey: "recentSitePaths")
+            UserDefaults.standard.set(paths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
             errorMessage = "Site folder no longer exists at: \(path)"
             return
         }
@@ -392,11 +392,12 @@ class SiteViewModel {
                 // Content not loaded - load it first, then switch
                 // Keep the old file visible while loading
                 isLoadingFile = true
-                Task {
-                    await loadFileContent(for: node)
+                Task { [weak self] in
+                    guard let self = self else { return }
+                    await self.loadFileContent(for: node)
                     // Now switch to the new file with content ready
-                    performFileSwitch(to: node)
-                    isLoadingFile = false
+                    self.performFileSwitch(to: node)
+                    self.isLoadingFile = false
                 }
             }
         } else {
@@ -486,12 +487,13 @@ class SiteViewModel {
         recentlySavedFileIDs[nodeID] = Date()
 
         // Schedule removal after duration
-        Task {
-            try? await Task.sleep(for: .seconds(savedIndicatorDuration))
+        Task { [weak self] in
+            guard let self = self else { return }
+            try? await Task.sleep(for: .seconds(self.savedIndicatorDuration))
             // Only remove if the timestamp hasn't been updated
-            if let savedDate = recentlySavedFileIDs[nodeID],
-               Date().timeIntervalSince(savedDate) >= savedIndicatorDuration {
-                recentlySavedFileIDs.removeValue(forKey: nodeID)
+            if let savedDate = self.recentlySavedFileIDs[nodeID],
+               Date().timeIntervalSince(savedDate) >= self.savedIndicatorDuration {
+                self.recentlySavedFileIDs.removeValue(forKey: nodeID)
             }
         }
     }
@@ -519,7 +521,7 @@ class SiteViewModel {
             updateContentCache(accessedNodeID: node.id)
         } catch {
             errorMessage = "Failed to load file: \(error.localizedDescription)"
-            print("Error loading file content: \(error)")
+            Logger.shared.error("Error loading file content", error: error)
         }
     }
 
@@ -549,7 +551,7 @@ class SiteViewModel {
             // Find the node and release its content
             if let node = findNodeByID(oldestID, in: fileNodes) {
                 node.contentFile = nil
-                print("Cache eviction: released content for \(node.name)")
+                Logger.shared.debug("Cache eviction: released content for \(node.name)")
             }
         }
     }
@@ -584,11 +586,11 @@ class SiteViewModel {
             contentFile.markdownContent = content
             contentFile.lastModified = Date()
 
-            print("Saved file: \(node.name)")
+            Logger.shared.info("Saved file: \(node.name)")
             return true
         } catch {
             errorMessage = "Failed to save file: \(error.localizedDescription)"
-            print("Error saving file: \(error)")
+            Logger.shared.error("Error saving file", error: error)
             return false
         }
     }
@@ -609,7 +611,7 @@ class SiteViewModel {
             selectNode(newNode)
         } catch {
             errorMessage = "Failed to create file: \(error.localizedDescription)"
-            print("Error creating markdown file: \(error)")
+            Logger.shared.error("Error creating markdown file", error: error)
         }
     }
 
@@ -634,7 +636,7 @@ class SiteViewModel {
             }
         } catch {
             errorMessage = "Failed to reload file: \(error.localizedDescription)"
-            print("Error reloading file: \(error)")
+            Logger.shared.error("Error reloading file", error: error)
         }
     }
 
@@ -656,7 +658,7 @@ class SiteViewModel {
             }
         } catch {
             errorMessage = "Failed to rename file: \(error.localizedDescription)"
-            print("Error renaming file: \(error)")
+            Logger.shared.error("Error renaming file", error: error)
         }
     }
 
@@ -686,7 +688,7 @@ class SiteViewModel {
             selectNode(newNode)
         } catch {
             errorMessage = "Failed to duplicate file: \(error.localizedDescription)"
-            print("Error duplicating file: \(error)")
+            Logger.shared.error("Error duplicating file", error: error)
         }
     }
 
@@ -711,7 +713,7 @@ class SiteViewModel {
             }
         } catch {
             errorMessage = "Failed to move to trash: \(error.localizedDescription)"
-            print("Error moving to trash: \(error)")
+            Logger.shared.error("Error moving to trash", error: error)
         }
     }
 
@@ -737,7 +739,7 @@ class SiteViewModel {
             parent.addChild(newNode)
         } catch {
             errorMessage = "Failed to create folder: \(error.localizedDescription)"
-            print("Error creating folder: \(error)")
+            Logger.shared.error("Error creating folder", error: error)
         }
     }
 }

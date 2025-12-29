@@ -2,9 +2,9 @@
 
 A native macOS app built with SwiftUI that provides a sophisticated editing experience for Hugo static sites.
 
-**Last Updated**: December 29, 2025
+**Last Updated**: December 30, 2025
 **Build Status**: Clean build, no errors, no warnings
-**Code Quality**: All critical, high-priority, and medium-priority issues fixed
+**Code Quality**: All critical and high-priority issues fixed; most low-priority issues addressed
 **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based auto-save
 
 ## Features
@@ -122,15 +122,24 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 | ⌘I | Italic selected text |
 | ⌘K | Insert link |
 | ⌘⇧I | Insert image |
+| ⌘⇧K | Open shortcode picker |
 | ⌘' | Block quote |
 | Esc | Exit Focus Mode / Clear search |
+
+### Hugo Shortcodes
+
+- Shortcode picker (⌘⇧K) with searchable list
+- Built-in Hugo shortcodes (figure, highlight, ref, relref, etc.)
+- Form-based parameter configuration
+- Live preview of generated shortcode syntax
 
 ### Performance
 
 - LRU content cache (20 files) for efficient memory usage
 - File preloading for smooth transitions
-- Optimized WKWebView with shared process pool
+- System-managed WKWebView process pooling (automatic in macOS 12+)
 - Background file I/O with async/await
+- Centralized logging with os.log integration
 
 ### Accessibility
 
@@ -193,7 +202,8 @@ Victor/
 │   ├── HugoSite.swift
 │   ├── ContentFile.swift
 │   ├── FileNode.swift
-│   └── Frontmatter.swift
+│   ├── Frontmatter.swift
+│   └── HugoShortcode.swift
 ├── ViewModels/          # State management
 │   ├── SiteViewModel.swift
 │   └── EditorViewModel.swift
@@ -210,7 +220,9 @@ Victor/
 │   ├── Editor/
 │   │   ├── EditorTextView.swift
 │   │   ├── EditorStatusBar.swift
-│   │   └── FrontmatterEditorView.swift
+│   │   ├── FrontmatterEditorView.swift
+│   │   ├── ShortcodePickerView.swift
+│   │   └── ShortcodeFormView.swift
 │   ├── Preview/
 │   │   └── PreviewWebView.swift
 │   ├── Inspector/
@@ -225,7 +237,8 @@ Victor/
 │   ├── FileSystemService.swift
 │   ├── FrontmatterParser.swift
 │   ├── MarkdownRenderer.swift
-│   └── AutoSaveService.swift
+│   ├── AutoSaveService.swift
+│   └── Logger.swift
 ├── AppConstants.swift
 └── Resources/
     └── preview-styles.css

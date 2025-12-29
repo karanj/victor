@@ -236,6 +236,10 @@ struct FocusModeEditor: NSViewRepresentable {
             self.parent = parent
         }
 
+        deinit {
+            textView?.delegate = nil
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string

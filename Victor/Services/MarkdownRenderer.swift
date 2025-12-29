@@ -2,7 +2,8 @@ import Foundation
 import Down
 
 /// Service for rendering markdown content to HTML
-@MainActor
+/// Note: Render methods are stateless and can be called from any thread.
+/// Callers should decide execution context based on their needs.
 class MarkdownRenderer {
     static let shared = MarkdownRenderer()
 
@@ -58,7 +59,7 @@ class MarkdownRenderer {
     // MARK: - HTML Templates
 
     /// Wrap HTML body in full document with CSS
-    /// TODO: investigate if we can load the CSS from the Hugo theme so that the preview is closer to realistic?
+    /// Note: See GitHub issue #1 for planned Hugo theme CSS integration
     private func wrapInHTMLTemplate(htmlBody: String, title: String? = nil) -> String {
         // Build title heading if provided
         let titleHTML: String
@@ -149,7 +150,7 @@ class MarkdownRenderer {
             return cssContent
         }
 
-        print("⚠️ Could not load preview-styles.css from bundle, using fallback")
+        Logger.shared.warning("Could not load preview-styles.css from bundle, using fallback")
         return nil
     }
 

@@ -60,7 +60,7 @@ struct ShortcodeFormView: View {
                 onInsert: { onInsert(generatedShortcode) }
             )
         }
-        .frame(minWidth: 400)
+        .frame(minWidth: AppConstants.Dialog.shortcodeFormWidth)
         .onAppear {
             // Initialize with default values
             for param in shortcode.parameters {

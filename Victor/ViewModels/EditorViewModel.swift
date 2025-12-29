@@ -25,6 +25,9 @@ class EditorViewModel {
     // Track last saved frontmatter state for change detection
     private var lastSavedFrontmatter: FrontmatterSnapshot?
 
+    // Track pending auto-save task for cleanup on file switch
+    private var autoSaveTask: Task<Void, Never>?
+
     // MARK: - Computed Properties
 
     var hasUnsavedChanges: Bool {
@@ -140,7 +143,7 @@ class EditorViewModel {
 
             // Show saved indicator briefly
             showSavedIndicator = true
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(AppConstants.Timing.savedIndicatorDuration))
             showSavedIndicator = false
         }
 
@@ -150,6 +153,16 @@ class EditorViewModel {
     /// Handle conflict when file is modified externally
     func reloadFromDisk() async {
         await siteViewModel.reloadFile(node: fileNode)
+    }
+
+    /// Release reference to pending auto-save task when ViewModel is replaced
+    /// The task will continue to completion in the background - it has already
+    /// captured the content and file URL, so the save will complete correctly.
+    /// Callbacks use [weak self] so they'll safely no-op after ViewModel is gone.
+    func cleanup() {
+        // Don't cancel - let the pending save complete in background
+        // Just release our reference so we don't hold onto the task
+        autoSaveTask = nil
     }
 
     // MARK: - Private Methods
@@ -168,7 +181,10 @@ class EditorViewModel {
     private func scheduleAutoSave() {
         let fullContent = buildFullContent()
 
-        Task {
+        // Cancel any pending auto-save task before scheduling a new one
+        autoSaveTask?.cancel()
+
+        autoSaveTask = Task {
             await AutoSaveService.shared.scheduleAutoSave(
                 fileURL: fileNode.url,
                 content: fullContent,
@@ -194,7 +210,7 @@ class EditorViewModel {
                     // Show saved indicator briefly
                     self.showSavedIndicator = true
                     Task { [weak self] in
-                        try? await Task.sleep(for: .seconds(1))
+                        try? await Task.sleep(for: .seconds(AppConstants.Timing.autoSaveIndicatorDuration))
                         self?.showSavedIndicator = false
                     }
                 },

@@ -1,0 +1,810 @@
+# Victor Code Review - Expert Panel Analysis
+# Date: 2025-12-29
+# Reviewers: SwiftUI Architecture, Performance/Concurrency, Code Quality, AppKit Integration
+
+metadata:
+  project: Victor - macOS Hugo CMS
+  files_analyzed: 43 Swift files (~2,200 LOC)
+  overall_grade: B+ (Good, production-ready with improvements needed)
+  summary: |
+    The codebase demonstrates strong engineering practices with proper MVVM separation,
+    modern Swift concurrency, and good error handling. Key areas for improvement include
+    file I/O optimization, memory management, and code consistency.
+
+# ============================================================================
+# CRITICAL PRIORITY - Must Fix Before Next Release
+# ============================================================================
+critical:
+  - id: CRIT-001
+    title: Memory Leak When Switching Files
+    severity: critical
+    category: memory
+    source: SwiftUI Architecture Expert
+    status: PARTIAL_FIX
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/Views/MainWindow/EditorPanelView.swift
+        lines: [113-131]
+      - path: Victor/ViewModels/EditorViewModel.swift
+        lines: [158-166]
+    description: |
+      EditorViewModel is recreated on contentFile.id change, but old instances may not be
+      deallocated if async tasks (auto-save) are still running. This can cause multiple
+      auto-save operations running simultaneously for the same file.
+    impact: |
+      - Memory leaks from accumulated ViewModel instances
+      - Potential file corruption from concurrent saves
+      - Degraded performance over long editing sessions
+    current_fix: |
+      Implemented Option 3 (don't cancel, let complete):
+      - cleanup() releases task reference without cancelling
+      - Pending auto-save continues in background with captured content/URL
+      - Callbacks use [weak self] so they safely no-op
+      - File is saved, UI indicator may not show (acceptable trade-off)
+    future_improvement: |
+      TODO: Implement unsaved changes cache to hold content in memory for a
+      reasonable period. This would allow recovery if rapid file switching
+      somehow loses data. Consider:
+      - LRU cache keyed by file URL
+      - Time-based expiration (e.g., 30 seconds)
+      - Recovery UI if cached content found on file open
+
+# ============================================================================
+# HIGH PRIORITY - Address in Next Sprint
+# ============================================================================
+high:
+  - id: HIGH-001
+    title: Missing WKWebView Process Pool Sharing
+    severity: high
+    category: performance
+    source: Performance Expert, AppKit Expert (both identified)
+    status: NOT_APPLICABLE
+    fixed_date: 2025-12-30
+    files:
+      - path: Victor/Views/Preview/PreviewWebView.swift
+        lines: [8-15]
+    description: |
+      Each WKWebView instance creates its own process pool, wasting 50-100MB memory
+      per instance. Multiple preview panels (split view) compound this issue.
+    impact: |
+      - ~50-100MB additional memory per WKWebView instance
+      - Slower initialization times
+      - Wasted system resources
+    resolution: |
+      NO ACTION NEEDED - WKProcessPool was deprecated in macOS 12.0.
+
+      As of macOS 12.0+, WebKit automatically shares process pools across all
+      WKWebView instances. Manually creating and assigning a shared WKProcessPool
+      has no effect and generates deprecation warnings.
+
+      Since Victor targets macOS 14.0+, this is not an issue. The system handles
+      process pool sharing automatically.
+
+      IMPORTANT FOR FUTURE CODE REVIEWS: Do NOT suggest adding WKProcessPool
+      sharing - it is deprecated and unnecessary on macOS 12.0+.
+
+  - id: HIGH-002
+    title: Synchronous File I/O on Main Thread
+    severity: high
+    category: performance
+    source: Performance Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/Services/FileSystemService.swift
+        lines: [160-208]
+      - path: Victor/Models/HugoSite.swift
+        lines: [20-64]
+      - path: Victor/ViewModels/SiteViewModel.swift
+        lines: [277-285]
+    description: |
+      Methods marked as async perform synchronous file operations, blocking the
+      main thread during site opening and file reading.
+    impact: |
+      - UI freezes during site opening (especially slow file systems)
+      - Misleading async API that doesn't actually provide concurrency
+    fix_implemented: |
+      1. FileSystemService.readContentFile() - wrapped in Task.detached
+      2. FileSystemService.writeFile() - wrapped in Task.detached
+      3. HugoSite - added static async factory method create(rootURL:)
+      4. HugoSite - added async validateAsync() method
+      5. SiteViewModel.loadSite() - updated to use async HugoSite methods
+
+      All file I/O now runs on background threads, keeping UI responsive.
+
+  - id: HIGH-003
+    title: Inconsistent Error Logging Strategy
+    severity: high
+    category: code_quality
+    source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/ViewModels/SiteViewModel.swift
+        lines: [306]
+      - path: Victor/Services/FrontmatterParser.swift
+        lines: [222]
+      - path: Victor/Services/FileSystemService.swift
+        lines: [multiple]
+    description: |
+      Mix of 23+ print() statements for error logging with no structured logging
+      system. Debug messages mixed with production error handling.
+    impact: |
+      - Difficult to debug issues in production
+      - No ability to control log verbosity
+      - Inconsistent error reporting
+    changes:
+      - block: 1
+        action: create_file
+        file: Victor/Services/Logger.swift
+        description: Create centralized logging service
+        code: |
+          import Foundation
+          import os
+
+          enum LogLevel: Int, Comparable {
+              case debug = 0
+              case info = 1
+              case warning = 2
+              case error = 3
+
+              static func < (lhs: LogLevel, rhs: LogLevel) -> Bool {
+                  lhs.rawValue < rhs.rawValue
+              }
+          }
+
+          final class Logger {
+              static let shared = Logger()
+
+              #if DEBUG
+              var minLevel: LogLevel = .debug
+              #else
+              var minLevel: LogLevel = .warning
+              #endif
+
+              private let osLog = OSLog(subsystem: "com.victor.app", category: "general")
+
+              func debug(_ message: String, file: String = #file, line: Int = #line) {
+                  log(level: .debug, message: message, file: file, line: line)
+              }
+
+              func info(_ message: String) {
+                  log(level: .info, message: message)
+              }
+
+              func warning(_ message: String) {
+                  log(level: .warning, message: message)
+              }
+
+              func error(_ message: String, error: Error? = nil) {
+                  let fullMessage = error != nil ? "\(message): \(error!.localizedDescription)" : message
+                  log(level: .error, message: fullMessage)
+              }
+
+              private func log(level: LogLevel, message: String, file: String = #file, line: Int = #line) {
+                  guard level >= minLevel else { return }
+
+                  let fileName = (file as NSString).lastPathComponent
+                  let prefix = "[\(level)] \(fileName):\(line)"
+
+                  #if DEBUG
+                  print("\(prefix) - \(message)")
+                  #endif
+
+                  os_log("%{public}@ - %{public}@", log: osLog, type: level.osLogType, prefix, message)
+              }
+          }
+
+          private extension LogLevel {
+              var osLogType: OSLogType {
+                  switch self {
+                  case .debug: return .debug
+                  case .info: return .info
+                  case .warning: return .default
+                  case .error: return .error
+                  }
+              }
+          }
+      - block: 2
+        action: search_replace
+        description: Replace print() statements with Logger.shared calls
+        note: "Replace all print() error logging with Logger.shared.error() or appropriate level"
+    fix_implemented: |
+      Created Victor/Services/Logger.swift with:
+      - LogLevel enum (debug, info, warning, error)
+      - Logger singleton with os.log integration
+      - DEBUG-only console output, production uses os.log
+      - Automatic file/line tracking
+
+      Replaced 19 print() statements across 5 files:
+      - FrontmatterParser.swift: 3 (errors)
+      - FileSystemService.swift: 1 (error)
+      - MarkdownRenderer.swift: 1 (warning)
+      - PreviewWebView.swift: 2 (errors)
+      - SiteViewModel.swift: 12 (2 info, 1 debug, 9 errors)
+
+      Skipped 5 print() statements in:
+      - #Preview blocks (ShortcodePickerView, ShortcodeFormView)
+      - Sample code strings (EditorTextView, HugoShortcode)
+
+  - id: HIGH-004
+    title: Missing Weak Self Captures in Task Closures
+    severity: high
+    category: memory
+    source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/ViewModels/SiteViewModel.swift
+        lines: [255-257, 395-401, 490-498]
+    description: |
+      Task closures capture self strongly, potentially causing retain cycles
+      if the ViewModel is deallocated while tasks are running.
+    impact: |
+      - Memory leaks from retained ViewModel instances
+      - Potential crashes from accessing deallocated objects
+    fix_implemented: |
+      Added [weak self] captures to 3 Task closures in SiteViewModel:
+      1. init() Task for loadSavedSite() - line 255
+      2. selectNode() Task for loading file content - line 395
+      3. markFileSaved() Task for removing saved indicator - line 490
+      All now use guard let self = self else { return } pattern.
+
+  - id: HIGH-005
+    title: Magic Numbers in UI Code
+    severity: high
+    category: code_quality
+    source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/AppConstants.swift
+      - path: Victor/Views/Editor/EditorTextView.swift
+      - path: Victor/Views/MainWindow/ContentView.swift
+      - path: Victor/Views/MainWindow/EditorPanelView.swift
+      - path: Victor/ViewModels/EditorViewModel.swift
+      - path: Victor/VictorApp.swift
+      - path: Victor/Views/Editor/ShortcodePickerView.swift
+      - path: Victor/Views/Editor/ShortcodeFormView.swift
+    description: |
+      Hardcoded dimensions, timing values, and magic numbers scattered throughout
+      view code instead of centralized in AppConstants.
+    impact: |
+      - Difficult to maintain consistent UI
+      - Hard to adjust values across the app
+      - Poor discoverability of configurable values
+    fix_implemented: |
+      Expanded AppConstants.swift with organized constant groups:
+      - Timing: savedIndicatorDuration, autoSaveIndicatorDuration
+      - Animation: fast (0.15), standard (0.2), slow (0.3)
+      - Editor: fontSize, textContainerInsetWidth/Height
+      - Sidebar: minWidth, idealWidth, maxWidth
+      - Content: minWidth, panelMinWidth
+      - Window: minWidth, minHeight
+      - Dialog: shortcodePickerWidth/Height, shortcodeFormWidth
+
+      Updated 8 files to use these constants instead of magic numbers.
+
+# ============================================================================
+# MEDIUM PRIORITY - Address When Convenient
+# ============================================================================
+medium:
+  - id: MED-001
+    title: State Duplication Between ViewModels
+    severity: medium
+    category: architecture
+    source: SwiftUI Architecture Expert
+    files:
+      - path: Victor/ViewModels/EditorViewModel.swift
+        lines: [16]
+      - path: Victor/ViewModels/SiteViewModel.swift
+        lines: [51]
+    description: |
+      editableContent exists in EditorViewModel while currentEditingContent exists
+      in SiteViewModel, requiring manual synchronization in handleContentChange().
+    impact: |
+      - Risk of state inconsistency
+      - Increased complexity in state management
+      - Potential for subtle bugs
+    changes:
+      - block: 1
+        action: refactor
+        description: Remove editableContent from EditorViewModel and use SiteViewModel binding
+        note: |
+          Consider using computed property that reads/writes to siteViewModel.currentEditingContent
+          or pass a @Binding from parent view instead of duplicating state
+
+  - id: MED-002
+    title: Excessive onChange Observers for Frontmatter
+    severity: medium
+    category: performance
+    source: SwiftUI Architecture Expert
+    files:
+      - path: Victor/Views/MainWindow/EditorPanelView.swift
+        lines: [126-152]
+    description: |
+      Seven separate .onChange observers for frontmatter fields cause multiple
+      view rebuilds and redundant handleContentChange() calls.
+    impact: |
+      - Excessive view rebuilds
+      - Performance degradation with rapid edits
+      - Code duplication
+    changes:
+      - block: 1
+        action: refactor
+        description: Consolidate into single frontmatter observer
+        note: |
+          Use single observer on contentFile.frontmatter?.snapshot() or move
+          frontmatter change detection into EditorViewModel as computed property
+
+  - id: MED-003
+    title: Race Condition in Debounce Task Cancellation
+    severity: medium
+    category: concurrency
+    source: Performance Expert
+    files:
+      - path: Victor/Views/MainWindow/PreviewPanel.swift
+        lines: [36-37, 51]
+    description: |
+      Debounce task is cancelled and reassigned without synchronization, potentially
+      leading to task leaks or double-cancellation in rapid succession.
+    impact: |
+      - Potential memory leaks from orphaned tasks
+      - Unnecessary preview renders
+      - Wasted CPU cycles
+    changes:
+      - block: 1
+        action: modify
+        file: Victor/Views/MainWindow/PreviewPanel.swift
+        lines: [36-51]
+        description: Store task reference before cancelling
+        before: |
+          debounceTask?.cancel()
+          debounceTask = Task {
+        after: |
+          let oldTask = debounceTask
+          debounceTask = Task {
+              oldTask?.cancel()
+
+  - id: MED-004
+    title: FileNode Should Be a Struct
+    severity: medium
+    category: architecture
+    source: SwiftUI Architecture, Performance Expert
+    files:
+      - path: Victor/Models/FileNode.swift
+        lines: [4-89]
+    description: |
+      FileNode is @Observable class but is used as a model, creating unnecessary
+      reference semantics, retain cycles (requiring weak var parent), and memory overhead.
+    impact: |
+      - Requires weak parent reference to avoid cycles
+      - More memory than value type
+      - Harder to reason about mutations
+    changes:
+      - block: 1
+        action: refactor
+        description: Convert FileNode to struct with parent ID reference
+        note: |
+          Major refactor - convert to struct, use parent ID instead of reference,
+          remove weak keyword, update all usages. Consider after other fixes.
+
+  - id: MED-005
+    title: Bidirectional Data Flow in FocusModeView
+    severity: medium
+    category: architecture
+    source: SwiftUI Architecture Expert
+    files:
+      - path: Victor/Views/FocusMode/FocusModeView.swift
+        lines: [55-59]
+    description: |
+      FocusModeView directly mutates contentFile.markdownContent, bypassing the
+      ViewModel layer and violating MVVM separation.
+    impact: |
+      - Violates MVVM pattern
+      - ViewModel unaware of changes until model read
+      - Potential state sync issues
+    changes:
+      - block: 1
+        action: modify
+        file: Victor/Views/FocusMode/FocusModeView.swift
+        description: Route changes through SiteViewModel
+        note: |
+          Pass siteViewModel binding to Focus Mode and update
+          siteViewModel.currentEditingContent instead of direct model mutation
+
+  - id: MED-006
+    title: DispatchQueue Usage Instead of Modern Concurrency
+    severity: medium
+    category: concurrency
+    source: Performance Expert
+    files:
+      - path: Victor/Views/Animations/AnimationModifiers.swift
+        lines: [72, 78, 114, 156]
+    description: |
+      Animation code uses DispatchQueue.main.asyncAfter instead of Task.sleep,
+      creating inconsistent concurrency patterns.
+    impact: |
+      - Inconsistent concurrency model
+      - Cannot be properly cancelled
+      - Harder to test and reason about
+    changes:
+      - block: 1
+        action: modify
+        file: Victor/Views/Animations/AnimationModifiers.swift
+        description: Replace DispatchQueue with Task-based delays
+        before: |
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+              withAnimation(...) { ... }
+          }
+        after: |
+          Task { @MainActor in
+              try? await Task.sleep(for: .milliseconds(100))
+              withAnimation(...) { ... }
+          }
+
+  - id: MED-007
+    title: AutoSaveService Methods Not Truly Async
+    severity: medium
+    category: performance
+    source: Performance Expert
+    files:
+      - path: Victor/Services/AutoSaveService.swift
+        lines: [134, 147]
+    description: |
+      Actor methods getFileModificationDate() and getFileContent() wrap synchronous
+      file I/O in withCheckedThrowingContinuation but I/O still blocks actor executor.
+    impact: |
+      - Blocks actor's executor thread
+      - Slow file systems delay all auto-save operations
+      - No real concurrency benefit
+    changes:
+      - block: 1
+        action: modify
+        file: Victor/Services/AutoSaveService.swift
+        description: Use Task.detached for actual background execution
+        before: |
+          private func getFileModificationDate(url: URL) async throws -> Date {
+              try await withCheckedThrowingContinuation { continuation in
+                  do {
+                      let attributes = try FileManager.default.attributesOfItem(...)
+        after: |
+          private func getFileModificationDate(url: URL) async throws -> Date {
+              try await Task.detached {
+                  let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                  return attributes[.modificationDate] as? Date ?? Date()
+              }.value
+          }
+
+  - id: MED-008
+    title: Force Unwrapping After Nil Check
+    severity: medium
+    category: code_quality
+    source: Code Quality Expert
+    files:
+      - path: Victor/Views/MainWindow/EditorPanelView.swift
+        lines: [82]
+    description: |
+      Using force unwrap (!) after nil check instead of if-let binding, which is
+      less safe and harder to read.
+    impact: |
+      - Potential crashes if logic changes
+      - Less idiomatic Swift code
+    changes:
+      - block: 1
+        action: modify
+        file: Victor/Views/MainWindow/EditorPanelView.swift
+        lines: [80-85]
+        description: Use if-let binding instead of nil check + force unwrap
+        before: |
+          if contentFile.frontmatter != nil {
+              FrontmatterBottomPanel(
+                  frontmatter: contentFile.frontmatter!,
+        after: |
+          if let frontmatter = contentFile.frontmatter {
+              FrontmatterBottomPanel(
+                  frontmatter: frontmatter,
+
+  - id: MED-009
+    title: Inconsistent Boolean Property Naming
+    severity: medium
+    category: code_quality
+    source: Code Quality Expert
+    files:
+      - path: Victor/Models/Frontmatter.swift
+        lines: [38]
+    description: |
+      Boolean properties use inconsistent naming (draft instead of isDraft),
+      violating Swift API Design Guidelines.
+    impact: |
+      - Inconsistent API
+      - Harder to understand intent
+    changes:
+      - block: 1
+        action: rename
+        description: Rename draft to isDraft in Frontmatter model
+        note: "Update all usages of .draft to .isDraft throughout codebase"
+
+  - id: MED-010
+    title: Duplicate File Tree Traversal Logic
+    severity: medium
+    category: code_quality
+    source: Code Quality Expert
+    files:
+      - path: Victor/Models/FileNode.swift
+        lines: [47]
+      - path: Victor/ViewModels/SiteViewModel.swift
+        lines: [558]
+    description: |
+      Multiple implementations of recursive node finding exist across different files.
+    impact: |
+      - Code duplication
+      - Maintenance burden
+      - Inconsistent implementations
+    changes:
+      - block: 1
+        action: refactor
+        description: Create TreeNode protocol with generic find method
+        code: |
+          protocol TreeNode {
+              associatedtype NodeType
+              var children: [NodeType] { get }
+          }
+
+          extension TreeNode where NodeType: TreeNode {
+              func find<T>(by keyPath: KeyPath<NodeType, T>, value: T) -> NodeType? where T: Equatable {
+                  // Generic recursive find
+              }
+          }
+
+# ============================================================================
+# LOW PRIORITY - Technical Debt / Nice to Have
+# ============================================================================
+low:
+  - id: LOW-001
+    title: UserDefaults Keys Not Centralized
+    severity: low
+    category: code_quality
+    source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/ViewModels/SiteViewModel.swift
+        lines: [various]
+      - path: Victor/Services/FileSystemService.swift
+        lines: [various]
+    description: UserDefaults keys are string literals scattered across files.
+    changes:
+      - block: 1
+        action: add_enum
+        file: Victor/AppConstants.swift
+        description: Add UserDefaultsKeys enum
+        code: |
+          enum UserDefaultsKeys {
+              static let hugoSiteBookmark = "hugoSiteBookmark"
+              static let isAutoSaveEnabled = "isAutoSaveEnabled"
+              static let editorLayoutMode = "editorLayoutMode"
+          }
+
+  - id: LOW-002
+    title: Missing Coordinator Cleanup in PreviewWebView
+    severity: low
+    category: memory
+    source: AppKit Integration Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/Views/Preview/PreviewWebView.swift
+        lines: [36-67]
+    description: |
+      PreviewWebView Coordinator doesn't have deinit to clear navigationDelegate.
+    changes:
+      - block: 1
+        action: add_code
+        file: Victor/Views/Preview/PreviewWebView.swift
+        description: Add deinit and weak webView reference to Coordinator
+        code: |
+          weak var webView: WKWebView?
+
+          deinit {
+              webView?.navigationDelegate = nil
+          }
+
+  - id: LOW-003
+    title: Missing Coordinator Cleanup in FocusModeEditor
+    severity: low
+    category: memory
+    source: AppKit Integration Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/Views/FocusMode/FocusModeView.swift
+        lines: [231-243]
+    description: |
+      FocusModeEditor Coordinator lacks deinit to clear delegate reference.
+    changes:
+      - block: 1
+        action: add_code
+        file: Victor/Views/FocusMode/FocusModeView.swift
+        description: Add deinit to Coordinator
+        code: |
+          deinit {
+              textView?.delegate = nil
+          }
+
+  - id: LOW-004
+    title: Missing onDisappear Cleanup in EditorPanelView
+    severity: low
+    category: memory
+    source: SwiftUI Architecture Expert
+    status: ALREADY_FIXED
+    fixed_date: 2025-12-29
+    note: Was already implemented in previous session
+    files:
+      - path: Victor/Views/MainWindow/EditorPanelView.swift
+    description: |
+      No onDisappear handler to cancel pending auto-save tasks when editor dismissed.
+    changes:
+      - block: 1
+        action: add_modifier
+        file: Victor/Views/MainWindow/EditorPanelView.swift
+        description: Add onDisappear handler
+        code: |
+          .onDisappear {
+              viewModel.cleanup()
+          }
+
+  - id: LOW-005
+    title: MarkdownRenderer is @MainActor But Doesn't Need To Be
+    severity: low
+    category: performance
+    source: Performance Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/Services/MarkdownRenderer.swift
+        lines: [5-6]
+    description: |
+      MarkdownRenderer performs CPU-intensive work but is constrained to main thread.
+    changes:
+      - block: 1
+        action: remove_attribute
+        file: Victor/Services/MarkdownRenderer.swift
+        description: Remove @MainActor annotation
+        note: "Remove @MainActor and let callers decide execution context"
+
+  - id: LOW-006
+    title: FrontmatterParser DateFormatter Not Thread-Safe
+    severity: low
+    category: concurrency
+    source: Performance Expert
+    files:
+      - path: Victor/Services/FrontmatterParser.swift
+        lines: [33, 43]
+    description: |
+      DateFormatter is documented as NOT thread-safe but is used from shared
+      singleton across potential concurrent access.
+    changes:
+      - block: 1
+        action: refactor
+        description: Make parser an actor or use thread-local formatters
+        note: "Consider making FrontmatterParser an actor for thread safety"
+
+  - id: LOW-007
+    title: EditorToolbar Exceeds 50-Line Guideline
+    severity: low
+    category: code_quality
+    source: SwiftUI Architecture Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/Views/MainWindow/EditorPanelView.swift
+        lines: [173-309]
+    description: |
+      EditorToolbar is 137 lines, exceeding the 50-line guideline for views.
+    changes:
+      - block: 1
+        action: extract_views
+        description: Extract SaveButton and LivePreviewToggle components
+        note: "Create separate view files for complex toolbar components"
+
+  - id: LOW-008
+    title: Single TODO Comment in Codebase
+    severity: low
+    category: code_quality
+    source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-30
+    files:
+      - path: Victor/Services/MarkdownRenderer.swift
+        lines: [61]
+    description: |
+      TODO comment about loading CSS from Hugo theme should be tracked as issue.
+    changes:
+      - block: 1
+        action: convert_to_issue
+        description: Convert TODO to GitHub issue
+        note: "Create GitHub issue for Hugo theme CSS loading feature request"
+
+  - id: LOW-009
+    title: Frontmatter Could Be a Struct
+    severity: low
+    category: architecture
+    source: SwiftUI Architecture Expert
+    files:
+      - path: Victor/Models/Frontmatter.swift
+        lines: [22]
+    description: |
+      Frontmatter is @Observable class but represents data that could be a struct.
+    changes:
+      - block: 1
+        action: evaluate
+        description: Consider converting to struct with copy-on-write
+        note: "Lower priority refactor - would simplify change detection"
+
+  - id: LOW-010
+    title: No First Responder Management in EditorTextView
+    severity: low
+    category: ux
+    source: AppKit Integration Expert
+    status: FIXED
+    fixed_date: 2025-12-29
+    files:
+      - path: Victor/Views/Editor/EditorTextView.swift
+        lines: [240-315]
+    description: |
+      EditorTextView doesn't request focus when created, requiring click to type.
+    changes:
+      - block: 1
+        action: add_code
+        file: Victor/Views/Editor/EditorTextView.swift
+        description: Add first responder request in makeNSView
+        code: |
+          RunLoop.main.perform {
+              textView.window?.makeFirstResponder(textView)
+          }
+
+# ============================================================================
+# SUMMARY
+# ============================================================================
+summary:
+  total_issues: 24
+  by_priority:
+    critical: 1
+    high: 5
+    medium: 10
+    low: 10
+  by_category:
+    memory: 5
+    performance: 6
+    architecture: 4
+    code_quality: 7
+    concurrency: 3
+    ux: 1
+
+  recommended_order:
+    phase_1_immediate:
+      - CRIT-001  # Memory leak when switching files
+      - HIGH-001  # WKWebView process pool
+      - HIGH-004  # Weak self captures
+    phase_2_next_sprint:
+      - HIGH-002  # Async file I/O
+      - HIGH-003  # Logger service
+      - HIGH-005  # Magic numbers centralization
+      - MED-003   # Debounce race condition
+      - MED-007   # AutoSaveService truly async
+    phase_3_when_convenient:
+      - MED-001   # State duplication
+      - MED-002   # Excessive onChange observers
+      - MED-005   # FocusModeView data flow
+      - MED-006   # DispatchQueue to Task
+      - MED-008   # Force unwrapping
+    phase_4_technical_debt:
+      - MED-004   # FileNode as struct (major refactor)
+      - LOW-*     # All low priority items
+
+  estimated_effort:
+    phase_1: "1-2 hours"
+    phase_2: "4-6 hours"
+    phase_3: "3-4 hours"
+    phase_4: "8+ hours (FileNode refactor alone)"

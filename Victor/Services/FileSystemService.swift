@@ -41,13 +41,13 @@ class FileSystemService {
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
-        UserDefaults.standard.set(bookmarkData, forKey: "hugoSiteBookmark")
+        UserDefaults.standard.set(bookmarkData, forKey: AppConstants.UserDefaultsKeys.hugoSiteBookmark)
         return bookmarkData
     }
 
     /// Load previously saved bookmark
     func loadBookmark() -> URL? {
-        guard let bookmarkData = UserDefaults.standard.data(forKey: "hugoSiteBookmark") else {
+        guard let bookmarkData = UserDefaults.standard.data(forKey: AppConstants.UserDefaultsKeys.hugoSiteBookmark) else {
             return nil
         }
 
@@ -72,7 +72,7 @@ class FileSystemService {
 
             return url
         } catch {
-            print("Error resolving bookmark: \(error)")
+            Logger.shared.error("Error resolving bookmark", error: error)
             return nil
         }
     }
@@ -158,49 +158,54 @@ class FileSystemService {
     // MARK: - File I/O
 
     /// Read content file from disk
+    /// File I/O is performed on a background thread to avoid blocking the main thread
     func readContentFile(at url: URL) async throws -> ContentFile {
-        let content = try String(contentsOf: url, encoding: .utf8)
-        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        let modificationDate = attributes[.modificationDate] as? Date ?? Date()
+        // Perform file I/O on background thread
+        try await Task.detached {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            let modificationDate = attributes[.modificationDate] as? Date ?? Date()
 
-        // Parse frontmatter and markdown
-        let parser = FrontmatterParser.shared
-        let (frontmatter, markdown) = parser.parseContent(content)
+            // Parse frontmatter and markdown
+            let parser = FrontmatterParser.shared
+            let (frontmatter, markdown) = parser.parseContent(content)
 
-        let file = ContentFile(
-            url: url,
-            frontmatter: frontmatter,
-            markdownContent: markdown,
-            lastModified: modificationDate
-        )
+            let file = ContentFile(
+                url: url,
+                frontmatter: frontmatter,
+                markdownContent: markdown,
+                lastModified: modificationDate
+            )
 
-        return file
+            return file
+        }.value
     }
 
     /// Write content to file at URL
+    /// File I/O is performed on a background thread to avoid blocking the main thread
     func writeFile(to url: URL, content: String) async throws {
-        let coordinator = NSFileCoordinator()
-        var coordinatorError: NSError?
+        // Perform file I/O on background thread
+        try await Task.detached {
+            let coordinator = NSFileCoordinator()
+            var coordinatorError: NSError?
+            var writeError: Error?
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            var didResume = false
-
-            coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { url in
+            coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
                 do {
-                    try content.write(to: url, atomically: true, encoding: .utf8)
-                    continuation.resume()
-                    didResume = true
+                    try content.write(to: coordinatedURL, atomically: true, encoding: .utf8)
                 } catch {
-                    continuation.resume(throwing: error)
-                    didResume = true
+                    writeError = error
                 }
             }
 
-            // Only resume if the coordination block was never executed
-            if !didResume, let error = coordinatorError {
-                continuation.resume(throwing: error)
+            // Check for errors
+            if let error = coordinatorError {
+                throw error
             }
-        }
+            if let error = writeError {
+                throw error
+            }
+        }.value
     }
 
     /// Write content file to disk
