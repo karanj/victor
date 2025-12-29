@@ -18,6 +18,13 @@ struct VictorApp: App {
     @State private var siteViewModel = SiteViewModel()
     @FocusedValue(\.editorFormatting) private var editorFormatting
 
+    // Editor preferences (using @AppStorage for sync with Preferences window)
+    @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
+    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = true
+
+    // Accessibility
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some Scene {
         WindowGroup {
             ContentView(siteViewModel: siteViewModel)
@@ -35,7 +42,7 @@ struct VictorApp: App {
             }
 
             CommandGroup(after: .saveItem) {
-                Toggle("Auto-Save", isOn: $siteViewModel.isAutoSaveEnabled)
+                Toggle("Auto-Save", isOn: $isAutoSaveEnabled)
             }
 
             // Format menu - Text formatting
@@ -111,8 +118,12 @@ struct VictorApp: App {
                 Divider()
 
                 Button(siteViewModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    if reduceMotion {
                         siteViewModel.toggleInspector()
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            siteViewModel.toggleInspector()
+                        }
                     }
                 }
                 .keyboardShortcut("i", modifiers: [.option, .command])
@@ -120,8 +131,12 @@ struct VictorApp: App {
                 Divider()
 
                 Button(siteViewModel.isFocusModeActive ? "Exit Focus Mode" : "Enter Focus Mode") {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    if reduceMotion {
                         siteViewModel.toggleFocusMode()
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            siteViewModel.toggleFocusMode()
+                        }
                     }
                 }
                 .keyboardShortcut("f", modifiers: [.control, .command])
@@ -129,8 +144,13 @@ struct VictorApp: App {
 
                 Divider()
 
-                Toggle("Highlight Current Line", isOn: $siteViewModel.highlightCurrentLine)
+                Toggle("Highlight Current Line", isOn: $highlightCurrentLine)
             }
+        }
+
+        // Preferences window (Cmd+,)
+        Settings {
+            PreferencesView()
         }
     }
 }

@@ -74,6 +74,20 @@ class SiteViewModel {
         }
     }
 
+    /// Editor font size (persisted)
+    var editorFontSize: Double {
+        didSet {
+            UserDefaults.standard.set(editorFontSize, forKey: "editorFontSize")
+        }
+    }
+
+    /// Auto-save delay in seconds (persisted)
+    var autoSaveDelay: Double {
+        didSet {
+            UserDefaults.standard.set(autoSaveDelay, forKey: "autoSaveDelay")
+        }
+    }
+
     /// Inspector panel visibility (persisted)
     var isInspectorVisible: Bool {
         didSet {
@@ -84,8 +98,11 @@ class SiteViewModel {
     /// Focus mode active state (not persisted - always starts inactive)
     var isFocusModeActive: Bool = false
 
-    /// Loading state
+    /// Loading state (for site loading)
     var isLoading = false
+
+    /// Loading state for file content (prevents flash during file switch)
+    var isLoadingFile = false
 
     /// Error message
     var errorMessage: String?
@@ -104,6 +121,21 @@ class SiteViewModel {
 
     /// Maximum number of recent files to track
     private let maxRecentFiles = 10
+
+    /// Maximum number of ContentFiles to keep cached in memory
+    /// Files beyond this limit will have their contentFile released
+    private let maxCachedContentFiles = 20
+
+    /// LRU cache tracking: ordered list of node IDs with loaded content (most recent first)
+    private var contentCacheOrder: [UUID] = []
+
+    /// Recently opened sites (paths stored in UserDefaults)
+    var recentSitePaths: [String] {
+        UserDefaults.standard.stringArray(forKey: "recentSitePaths") ?? []
+    }
+
+    /// Maximum number of recent sites to track
+    private let maxRecentSites = 5
 
     // MARK: - File Status Tracking
 
@@ -213,6 +245,12 @@ class SiteViewModel {
         // Load current line highlighting preference (default: true)
         self.highlightCurrentLine = UserDefaults.standard.object(forKey: "highlightCurrentLine") as? Bool ?? true
 
+        // Load editor font size preference (default: 13)
+        self.editorFontSize = UserDefaults.standard.object(forKey: "editorFontSize") as? Double ?? 13.0
+
+        // Load auto-save delay preference (default: 2 seconds)
+        self.autoSaveDelay = UserDefaults.standard.object(forKey: "autoSaveDelay") as? Double ?? 2.0
+
         // Load inspector visibility preference (default: false)
         self.isInspectorVisible = UserDefaults.standard.object(forKey: "isInspectorVisible") as? Bool ?? false
 
@@ -260,6 +298,9 @@ class SiteViewModel {
             self.site = site
             self.fileNodes = nodes
 
+            // Track this site in recent sites
+            addRecentSite(url.path)
+
             print("Loaded Hugo site: \(site.displayName)")
             print("Found \(nodes.count) markdown files")
 
@@ -269,6 +310,46 @@ class SiteViewModel {
         }
 
         isLoading = false
+    }
+
+    /// Add a site to the recent sites list
+    private func addRecentSite(_ path: String) {
+        var paths = recentSitePaths
+
+        // Remove if already exists (to move to front)
+        paths.removeAll { $0 == path }
+
+        // Add to front
+        paths.insert(path, at: 0)
+
+        // Trim to max size
+        if paths.count > maxRecentSites {
+            paths = Array(paths.prefix(maxRecentSites))
+        }
+
+        UserDefaults.standard.set(paths, forKey: "recentSitePaths")
+    }
+
+    /// Open a recent site by path
+    func openRecentSite(_ path: String) async {
+        let url = URL(fileURLWithPath: path)
+
+        // Check if the path still exists
+        guard FileManager.default.fileExists(atPath: path) else {
+            // Remove from recent sites if it no longer exists
+            var paths = recentSitePaths
+            paths.removeAll { $0 == path }
+            UserDefaults.standard.set(paths, forKey: "recentSitePaths")
+            errorMessage = "Site folder no longer exists at: \(path)"
+            return
+        }
+
+        await loadSite(from: url)
+    }
+
+    /// Clear recent sites list
+    func clearRecentSites() {
+        UserDefaults.standard.removeObject(forKey: "recentSitePaths")
     }
 
     /// Load previously saved site
@@ -289,20 +370,63 @@ class SiteViewModel {
         fileNodes = []
         selectedNode = nil
         selectedFileID = nil
+        currentEditingContent = ""
+        recentFiles = []
+        contentCacheOrder = []
+        modifiedFileIDs = []
+        recentlySavedFileIDs = [:]
     }
 
     // MARK: - File Selection
 
     /// Select a file node
     func selectNode(_ node: FileNode?) {
+        // If selecting the same node, do nothing
+        if node?.id == selectedNode?.id {
+            return
+        }
+
+        // If selecting a markdown file, load content FIRST to avoid flash
+        if let node = node, node.isMarkdownFile {
+            // If content is already loaded (recently viewed file), switch immediately
+            if node.contentFile != nil {
+                performFileSwitch(to: node)
+            } else {
+                // Content not loaded - load it first, then switch
+                // Keep the old file visible while loading
+                isLoadingFile = true
+                Task {
+                    await loadFileContent(for: node)
+                    // Now switch to the new file with content ready
+                    performFileSwitch(to: node)
+                    isLoadingFile = false
+                }
+            }
+        } else {
+            // Non-markdown file or nil - switch immediately
+            performFileSwitch(to: node)
+        }
+    }
+
+    /// Internal method to actually perform the file switch after content is ready
+    private func performFileSwitch(to node: FileNode?) {
+        // Clear editing content when switching files to avoid stale data
+        currentEditingContent = ""
+
         selectedNode = node
         selectedFileID = node?.id
 
-        // Load file content if it's a markdown file
+        // Initialize editing content from the new file
+        if let contentFile = node?.contentFile {
+            currentEditingContent = contentFile.markdownContent
+        }
+
+        // Add to recent files and update LRU cache
         if let node = node, node.isMarkdownFile {
-            Task {
-                await loadFileContent(for: node)
-            }
+            addRecentFile(node)
+            // Touch the cache to mark this file as recently used
+            // (also handles eviction if needed)
+            updateContentCache(accessedNodeID: node.id)
         }
     }
 
@@ -400,10 +524,57 @@ class SiteViewModel {
         do {
             let file = try await fileSystemService.readContentFile(at: node.url)
             node.contentFile = file
+
+            // Track in LRU cache and evict old entries
+            updateContentCache(accessedNodeID: node.id)
         } catch {
             errorMessage = "Failed to load file: \(error.localizedDescription)"
             print("Error loading file content: \(error)")
         }
+    }
+
+    /// Update LRU cache when a file is accessed, evicting old entries if over limit
+    private func updateContentCache(accessedNodeID: UUID) {
+        // Move to front of cache order (remove if exists, then insert at front)
+        contentCacheOrder.removeAll { $0 == accessedNodeID }
+        contentCacheOrder.insert(accessedNodeID, at: 0)
+
+        // Evict old entries if over limit
+        while contentCacheOrder.count > maxCachedContentFiles {
+            let oldestID = contentCacheOrder.removeLast()
+
+            // Don't evict the currently selected file
+            guard oldestID != selectedNode?.id else {
+                // Put it back and try the next oldest
+                contentCacheOrder.insert(oldestID, at: contentCacheOrder.count)
+                continue
+            }
+
+            // Don't evict files with unsaved changes
+            guard !modifiedFileIDs.contains(oldestID) else {
+                contentCacheOrder.insert(oldestID, at: contentCacheOrder.count)
+                continue
+            }
+
+            // Find the node and release its content
+            if let node = findNodeByID(oldestID, in: fileNodes) {
+                node.contentFile = nil
+                print("Cache eviction: released content for \(node.name)")
+            }
+        }
+    }
+
+    /// Recursively find a node by ID in the file tree
+    private func findNodeByID(_ id: UUID, in nodes: [FileNode]) -> FileNode? {
+        for node in nodes {
+            if node.id == id {
+                return node
+            }
+            if let found = findNodeByID(id, in: node.children) {
+                return found
+            }
+        }
+        return nil
     }
 
     // MARK: - File Operations

@@ -1,5 +1,5 @@
 import Foundation
-
+// TODO: this was hidden / stubbed out because it didn't really work. The search function in the sidebar works great, so it's not clear why this wouldn't work. I think it might be worth ripping this out to simplify things, but if you're going to try again, have a look at the sidebar search and replicate that functionality. This is useful for large sites or multiple updates, but it's a bit of a niche function.
 /// Result of a fuzzy match operation
 struct FuzzyMatchResult: Identifiable, Comparable {
     let id = UUID()

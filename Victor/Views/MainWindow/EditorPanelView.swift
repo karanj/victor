@@ -13,6 +13,14 @@ struct EditorPanelView: View {
     // View-specific state (UI coordination, not business logic)
     @State private var editorCoordinator: EditorTextView.Coordinator?
     @State private var isFrontmatterExpanded = false
+    @State private var contentOpacity: Double = 0
+
+    // Editor preferences (using @AppStorage for live updates from Preferences window)
+    @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
+    @AppStorage("editorFontSize") private var editorFontSize: Double = 13.0
+
+    // Accessibility
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(contentFile: ContentFile, fileNode: FileNode, siteViewModel: SiteViewModel) {
         self.contentFile = contentFile
@@ -37,6 +45,7 @@ struct EditorPanelView: View {
                 isSaving: viewModel.isSaving,
                 showSavedIndicator: viewModel.showSavedIndicator,
                 hasUnsavedChanges: viewModel.hasUnsavedChanges,
+                reduceMotion: reduceMotion,
                 onSave: { Task { await viewModel.save() } },
                 onFormat: { format in
                     editorCoordinator?.applyFormat(format)
@@ -46,7 +55,8 @@ struct EditorPanelView: View {
             // Markdown Editor (takes priority)
             EditorTextView(
                 text: $viewModel.editableContent,
-                highlightCurrentLine: siteViewModel.highlightCurrentLine,
+                highlightCurrentLine: highlightCurrentLine,
+                fontSize: editorFontSize,
                 onCoordinatorReady: { coordinator in
                     editorCoordinator = coordinator
                 },
@@ -54,6 +64,7 @@ struct EditorPanelView: View {
                     viewModel.updateCursorPosition(line: position.line, column: position.column)
                 }
             )
+            .opacity(contentOpacity)
 
             // Status bar with word count, character count, and cursor position
             EditorStatusBar(
@@ -71,6 +82,16 @@ struct EditorPanelView: View {
                 )
             }
         }
+        .onAppear {
+            // Fade in editor content when view appears
+            if reduceMotion {
+                contentOpacity = 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    contentOpacity = 1
+                }
+            }
+        }
         .navigationTitle(viewModel.navigationTitle)
         .navigationSubtitle(viewModel.navigationSubtitle)
         // Provide formatting function to focused value system for keyboard shortcuts
@@ -80,11 +101,21 @@ struct EditorPanelView: View {
         // When the selected file changes, reset the editor view model so it
         // points at the new file node and content instead of the previous one.
         .onChange(of: contentFile.id) { _, _ in
+            // Reset opacity for fade-in animation on new file
+            contentOpacity = 0
             viewModel = EditorViewModel(
                 fileNode: fileNode,
                 contentFile: contentFile,
                 siteViewModel: siteViewModel
             )
+            // Trigger fade-in after reset
+            if reduceMotion {
+                contentOpacity = 1
+            } else {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    contentOpacity = 1
+                }
+            }
         }
         // Update content when file changes
         .onChange(of: contentFile.markdownContent) { _, newValue in
@@ -133,8 +164,13 @@ struct EditorToolbar: View {
     let isSaving: Bool
     let showSavedIndicator: Bool
     let hasUnsavedChanges: Bool
+    let reduceMotion: Bool
     let onSave: () -> Void
     let onFormat: (MarkdownFormat) -> Void
+
+    // Animation state for save indicator
+    @State private var saveIndicatorScale: CGFloat = 0.5
+    @State private var saveIndicatorOpacity: Double = 0
 
     var body: some View {
         HStack(spacing: 0) {
@@ -215,6 +251,25 @@ struct EditorToolbar: View {
                 Label("Saved", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.callout)
+                    .scaleEffect(saveIndicatorScale)
+                    .opacity(saveIndicatorOpacity)
+                    .onAppear {
+                        if reduceMotion {
+                            saveIndicatorScale = 1.0
+                            saveIndicatorOpacity = 1.0
+                        } else {
+                            // Pop-in animation
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                saveIndicatorScale = 1.0
+                                saveIndicatorOpacity = 1.0
+                            }
+                        }
+                    }
+                    .onDisappear {
+                        // Reset for next appearance
+                        saveIndicatorScale = 0.5
+                        saveIndicatorOpacity = 0
+                    }
             } else if isSaving {
                 ProgressView()
                     .scaleEffect(0.7)

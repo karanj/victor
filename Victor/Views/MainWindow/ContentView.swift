@@ -4,6 +4,9 @@ struct ContentView: View {
     @Bindable var siteViewModel: SiteViewModel
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
+    // Accessibility
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
             mainContent
@@ -22,7 +25,7 @@ struct ContentView: View {
                 .zIndex(100)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: siteViewModel.isFocusModeActive)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: siteViewModel.isFocusModeActive)
     }
 
     // MARK: - Main Content
@@ -45,7 +48,7 @@ struct ContentView: View {
                     if let selectedNode = siteViewModel.selectedNode,
                        let contentFile = selectedNode.contentFile {
                         layoutContent(for: selectedNode, contentFile: contentFile)
-                            .animation(.easeInOut(duration: 0.2), value: siteViewModel.layoutMode)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: siteViewModel.layoutMode)
                     } else {
                         noFileSelectedView
                     }
@@ -62,7 +65,7 @@ struct ContentView: View {
                     .transition(.move(edge: .trailing))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: siteViewModel.isInspectorVisible)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: siteViewModel.isInspectorVisible)
         }
         .navigationTitle(siteViewModel.site?.displayName ?? "Victor")
         .toolbar {
@@ -72,17 +75,22 @@ struct ContentView: View {
                 }
             }
 
-            if siteViewModel.isLoading {
+            if siteViewModel.isLoading || siteViewModel.isLoadingFile {
                 ToolbarItem {
                     ProgressView()
                         .scaleEffect(0.7)
+                        .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
                 }
             }
 
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    if reduceMotion {
                         siteViewModel.toggleInspector()
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            siteViewModel.toggleInspector()
+                        }
                     }
                 } label: {
                     Label(
@@ -154,11 +162,38 @@ struct ContentView: View {
 
     /// View shown when no file is selected
     private var noFileSelectedView: some View {
-        ContentUnavailableView(
-            "No File Selected",
-            systemImage: "doc.text",
-            description: Text("Select a markdown file from the sidebar")
-        )
+        VStack(spacing: 24) {
+            Spacer()
+
+            // Icon
+            Image(systemName: "doc.text")
+                .font(.system(size: 64))
+                .foregroundStyle(.tertiary)
+
+            // Title and description
+            VStack(spacing: 8) {
+                Text("Select a File")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+
+                Text("Choose a markdown file from the sidebar to start editing")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            // Helpful hints
+            VStack(alignment: .leading, spacing: 12) {
+                KeyboardHintRow(keys: "⌘F", description: "Search files")
+                KeyboardHintRow(keys: "⌘1", description: "Editor only")
+                KeyboardHintRow(keys: "⌘2", description: "Preview only")
+                KeyboardHintRow(keys: "⌘3", description: "Split view")
+            }
+            .padding(.top, 8)
+
+            Spacer()
+        }
+        .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -168,6 +203,32 @@ struct ContentView: View {
         columnVisibility = columnVisibility == .all ? .detailOnly : .all
     }
 }
+
+// MARK: - Keyboard Hint Row
+
+struct KeyboardHintRow: View {
+    let keys: String
+    let description: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(keys)
+                .font(.system(.caption, design: .monospaced))
+                .fontWeight(.medium)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(4)
+                .frame(minWidth: 50)
+
+            Text(description)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Preview
 
 #Preview {
     ContentView(siteViewModel: SiteViewModel())

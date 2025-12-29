@@ -3,7 +3,7 @@ import AppKit
 
 // MARK: - Custom Text View with Line Highlighting
 
-/// Custom NSTextView subclass that highlights the current line
+/// Custom NSTextView subclass that highlights the current line and provides custom context menu
 final class HighlightingTextView: NSTextView {
 
     /// Whether to show current line highlighting
@@ -17,6 +17,140 @@ final class HighlightingTextView: NSTextView {
     private var highlightColor: NSColor {
         NSColor.controlAccentColor.withAlphaComponent(0.08)
     }
+
+    // MARK: - Context Menu
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+
+        // Find the index to insert our items (after Cut/Copy/Paste)
+        var insertIndex = 0
+        for (index, item) in menu.items.enumerated() {
+            if item.isSeparatorItem && index > 2 {
+                insertIndex = index
+                break
+            }
+        }
+        if insertIndex == 0 {
+            insertIndex = min(3, menu.items.count)
+        }
+
+        // Insert separator before our items
+        menu.insertItem(NSMenuItem.separator(), at: insertIndex)
+        insertIndex += 1
+
+        // Text formatting submenu
+        let formatMenu = NSMenu(title: "Format")
+
+        let boldItem = NSMenuItem(title: "Bold", action: #selector(formatBold), keyEquivalent: "b")
+        boldItem.keyEquivalentModifierMask = .command
+        boldItem.target = self
+        formatMenu.addItem(boldItem)
+
+        let italicItem = NSMenuItem(title: "Italic", action: #selector(formatItalic), keyEquivalent: "i")
+        italicItem.keyEquivalentModifierMask = .command
+        italicItem.target = self
+        formatMenu.addItem(italicItem)
+
+        formatMenu.addItem(NSMenuItem.separator())
+
+        // Heading submenu
+        let headingMenu = NSMenu(title: "Heading")
+        for level in 1...6 {
+            let headingItem = NSMenuItem(title: "Heading \(level)", action: #selector(formatHeading(_:)), keyEquivalent: "")
+            headingItem.tag = level
+            headingItem.target = self
+            headingMenu.addItem(headingItem)
+        }
+        let headingMenuItem = NSMenuItem(title: "Heading", action: nil, keyEquivalent: "")
+        headingMenuItem.submenu = headingMenu
+        formatMenu.addItem(headingMenuItem)
+
+        let formatMenuItem = NSMenuItem(title: "Format", action: nil, keyEquivalent: "")
+        formatMenuItem.submenu = formatMenu
+        menu.insertItem(formatMenuItem, at: insertIndex)
+        insertIndex += 1
+
+        // Insert submenu
+        let insertMenu = NSMenu(title: "Insert")
+
+        let linkItem = NSMenuItem(title: "Link", action: #selector(insertLink), keyEquivalent: "k")
+        linkItem.keyEquivalentModifierMask = .command
+        linkItem.target = self
+        insertMenu.addItem(linkItem)
+
+        let imageItem = NSMenuItem(title: "Image", action: #selector(insertImage), keyEquivalent: "I")
+        imageItem.keyEquivalentModifierMask = [.command, .shift]
+        imageItem.target = self
+        insertMenu.addItem(imageItem)
+
+        insertMenu.addItem(NSMenuItem.separator())
+
+        let codeItem = NSMenuItem(title: "Code Block", action: #selector(insertCodeBlock), keyEquivalent: "")
+        codeItem.target = self
+        insertMenu.addItem(codeItem)
+
+        let quoteItem = NSMenuItem(title: "Block Quote", action: #selector(insertBlockQuote), keyEquivalent: "'")
+        quoteItem.keyEquivalentModifierMask = .command
+        quoteItem.target = self
+        insertMenu.addItem(quoteItem)
+
+        insertMenu.addItem(NSMenuItem.separator())
+
+        let bulletItem = NSMenuItem(title: "Bullet List", action: #selector(insertBulletList), keyEquivalent: "")
+        bulletItem.target = self
+        insertMenu.addItem(bulletItem)
+
+        let numberItem = NSMenuItem(title: "Numbered List", action: #selector(insertNumberedList), keyEquivalent: "")
+        numberItem.target = self
+        insertMenu.addItem(numberItem)
+
+        let insertMenuItem = NSMenuItem(title: "Insert", action: nil, keyEquivalent: "")
+        insertMenuItem.submenu = insertMenu
+        menu.insertItem(insertMenuItem, at: insertIndex)
+
+        return menu
+    }
+
+    // MARK: - Format Actions
+
+    @objc private func formatBold() {
+        applyMarkdownFormat(.bold)
+    }
+
+    @objc private func formatItalic() {
+        applyMarkdownFormat(.italic)
+    }
+
+    @objc private func formatHeading(_ sender: NSMenuItem) {
+        applyMarkdownFormat(.heading(level: sender.tag))
+    }
+
+    @objc private func insertLink() {
+        applyMarkdownFormat(.link)
+    }
+
+    @objc private func insertImage() {
+        applyMarkdownFormat(.image)
+    }
+
+    @objc private func insertCodeBlock() {
+        applyMarkdownFormat(.code)
+    }
+
+    @objc private func insertBlockQuote() {
+        applyMarkdownFormat(.blockquote)
+    }
+
+    @objc private func insertBulletList() {
+        applyMarkdownFormat(.unorderedList)
+    }
+
+    @objc private func insertNumberedList() {
+        applyMarkdownFormat(.orderedList)
+    }
+
+    // MARK: - Line Highlighting
 
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
@@ -85,17 +219,20 @@ struct CursorPosition: Equatable {
 struct EditorTextView: NSViewRepresentable {
     @Binding var text: String
     var highlightCurrentLine: Bool
+    var fontSize: CGFloat
     var onCoordinatorReady: ((Coordinator) -> Void)?
     var onCursorPositionChange: ((CursorPosition) -> Void)?
 
     init(
         text: Binding<String>,
         highlightCurrentLine: Bool = true,
+        fontSize: CGFloat = 13,
         onCoordinatorReady: ((Coordinator) -> Void)? = nil,
         onCursorPositionChange: ((CursorPosition) -> Void)? = nil
     ) {
         self._text = text
         self.highlightCurrentLine = highlightCurrentLine
+        self.fontSize = fontSize
         self.onCoordinatorReady = onCoordinatorReady
         self.onCursorPositionChange = onCursorPositionChange
     }
@@ -120,7 +257,7 @@ struct EditorTextView: NSViewRepresentable {
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
-        textView.font = .monospacedSystemFont(ofSize: AppConstants.Editor.fontSize, weight: .regular)
+        textView.font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
         textView.textColor = .labelColor
         textView.backgroundColor = .textBackgroundColor
 
@@ -176,6 +313,11 @@ struct EditorTextView: NSViewRepresentable {
         // Update line highlighting preference
         if textView.highlightCurrentLine != highlightCurrentLine {
             textView.highlightCurrentLine = highlightCurrentLine
+        }
+
+        // Update font size if changed
+        if let currentFont = textView.font, currentFont.pointSize != fontSize {
+            textView.font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
         }
 
         // Only update if text has changed (avoid cursor jumping)

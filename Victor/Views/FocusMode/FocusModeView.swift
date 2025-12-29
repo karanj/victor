@@ -84,6 +84,7 @@ struct FocusModeTopBar: View {
     let onExit: () -> Void
 
     @State private var isHovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack {
@@ -110,7 +111,7 @@ struct FocusModeTopBar: View {
         .padding(.vertical, 12)
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.9))
         .opacity(isHovering ? 1 : 0.3)
-        .animation(.easeInOut(duration: 0.2), value: isHovering)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isHovering)
         .onHover { hovering in
             isHovering = hovering
         }

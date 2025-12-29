@@ -2,83 +2,141 @@
 
 A native macOS app built with SwiftUI that provides a sophisticated editing experience for Hugo static sites.
 
-**Last Updated**: December 23, 2025
+**Last Updated**: December 29, 2025
 **Build Status**: Clean build, no errors, no warnings
 **Code Quality**: All critical, high-priority, and medium-priority issues fixed
 **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based auto-save
 
-### Quality Highlights
-- 🏗️ **21 Swift files** (~2,200 lines of well-organized code)
-- 🎯 **Proper MVVM** - Clean separation of concerns, ViewModels handle all business logic
-- ♿ **Added accessibility** - VoiceOver support throughout the app
-- 📐 **Centralized constants** - All magic numbers in AppConstants.swift
-
 ## Features
 
-### ✅ Currently Available
+### Site Content Management
 
-**Site Content Management:**
 - Open and browse Hugo site folders
 - Hierarchical file tree navigation with expand/collapse
 - File search (recursive through folders)
 - Security-scoped bookmarks for persistent folder access
+- Recent sites list for quick access
+- File status indicators (modified, recently saved)
 
-**Markdown Editing:**
-- Markdown editor with NSTextView
-- Formatting toolbar (bold, italic, headings, lists, code blocks)
-- Monospace font, disabled smart quotes for code-friendly editing
+### Layout Modes
+
+- **Editor Mode** (⌘1): Full-width markdown editor
+- **Preview Mode** (⌘2): Full-width rendered preview
+- **Split Mode** (⌘3): Side-by-side editor and preview
+- Tab bar for easy mode switching
+- Layout preference persisted across sessions
+
+### Markdown Editing
+
+- High-performance NSTextView-based editor
+- Current line highlighting
+- Word count, character count, and cursor position in status bar
+- Formatting toolbar with grouped controls:
+  - Text formatting (Bold, Italic)
+  - Headings dropdown (H1-H6)
+  - Lists (Bullet, Numbered)
+  - Block elements (Code, Quote)
+  - Insert elements (Link, Image)
+- Monospace font with configurable size
 - Live HTML preview with GitHub-style rendering
 - Debounced preview updates (300ms) for smooth typing
-- Live preview toggle
 
-**Frontmatter Editing:**
+### Focus Mode (⌃⌘F)
+
+- Distraction-free writing environment
+- Centered text with comfortable max-width
+- Hidden sidebar, toolbar, and chrome
+- Word count and scroll progress indicator
+- Press Escape to exit
+
+### Frontmatter Editing
+
 - Parse and edit YAML, TOML, and JSON frontmatter
+- **Two editing locations:**
+  - Bottom panel (collapsible)
+  - Inspector panel (right sidebar, ⌥⌘I)
 - Structured form editor with fields for:
-  - Title
-  - Date (optional with checkbox toggle)
-  - Draft status
-  - Description
-  - Tags (chip-based input with flow layout)
-  - Categories (chip-based input)
+  - Title, Date, Draft status, Description
+  - Tags and Categories (chip-based input with flow layout)
 - Raw text editor for advanced editing
-- Switch between form and raw views with segmented control
 - Parse validation with error feedback
 - Custom fields preserved
-- Round-trip format preservation (YAML stays YAML, etc.)
-- Collapsible frontmatter bottom panel
+- Round-trip format preservation
 
-**Hugo Page Bundle Support:**
+### Inspector Panel (⌥⌘I)
+
+- Right-side panel following macOS conventions
+- Metadata section with frontmatter fields
+- Statistics section with word/character counts
+- Collapsible sections
+- Persisted visibility state
+
+### Navigation
+
+- Breadcrumb navigation bar showing file path
+- Click breadcrumb segments to navigate
+- Quick Open (⌘P) for fuzzy file search (coming soon)
+
+### Hugo Page Bundle Support
+
 - Visual detection of page bundles (folders with index.md or _index.md)
-- Distinct purple icon with gear badge for page bundles
+- Distinct purple icon with gear badge
 - "bundle" badge label for easy identification
 - Click page bundle to automatically open its index file
-- Works at all levels of the file hierarchy
 
-**File Operations:**
+### File Operations
+
 - Save files (⌘S) with frontmatter + markdown combined
-- Auto-save with 2-second debounce after typing stops
+- Auto-save with configurable delay (default 2 seconds)
 - Conflict detection - alerts if file modified externally
+- Context menus for files and folders:
+  - New Markdown File, New Folder
+  - Duplicate, Move to Trash
+  - Reveal in Finder, Copy Path
 - Undo/redo support in editor
-- Unsaved changes indicator ("• Edited" in subtitle)
+- Unsaved changes indicator
 
-**Keyboard Shortcuts:**
-- ⌘O - Open Hugo Site
-- ⌘S - Save current file
-- ⌘F - Focus search field
-- Esc - Clear search field
-- ⌘B - Bold selected text
-- ⌘I - Italic selected text
-- ⌘K - Insert link
-- ⌘⇧I - Insert image
-- ⌘' - Block quote
+### Preferences (⌘,)
 
-### Future Enhancements
-- File system watching with FSEvents for automatic reload
-- Image drag & drop support
-- Syntax highlighting
-- Git integration
-- Hugo server integration
-- Hugo feature integration
+- **Editor tab:**
+  - Font size (11-24pt)
+  - Highlight current line toggle
+- **Auto-Save tab:**
+  - Enable/disable auto-save
+  - Auto-save delay (1-10 seconds)
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| ⌘O | Open Hugo Site |
+| ⌘S | Save current file |
+| ⌘, | Open Preferences |
+| ⌘1 | Editor only mode |
+| ⌘2 | Preview only mode |
+| ⌘3 | Split view mode |
+| ⌥⌘I | Toggle Inspector |
+| ⌃⌘F | Toggle Focus Mode |
+| ⌘F | Focus search field |
+| ⌘B | Bold selected text |
+| ⌘I | Italic selected text |
+| ⌘K | Insert link |
+| ⌘⇧I | Insert image |
+| ⌘' | Block quote |
+| Esc | Exit Focus Mode / Clear search |
+
+### Performance
+
+- LRU content cache (20 files) for efficient memory usage
+- File preloading for smooth transitions
+- Optimized WKWebView with shared process pool
+- Background file I/O with async/await
+
+### Accessibility
+
+- VoiceOver support throughout
+- Reduce Motion preference respected
+- Keyboard navigation for all features
 
 ## Requirements
 
@@ -92,13 +150,17 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 
 1. Clone the repository
 
-2. Open in Xcode:
+2. Generate Xcode project (if needed):
+   ```bash
+   xcodegen generate
+   ```
+
+3. Open in Xcode:
    ```bash
    open Victor.xcodeproj
    ```
-   This will open the project in Xcode and automatically fetch dependencies.
 
-3. Build and run:
+4. Build and run:
    - Select the "Victor" scheme
    - Select "My Mac" as the destination
    - Press ⌘R to build and run
@@ -108,59 +170,65 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 ```bash
 # Build with xcodebuild
 xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
-
-# Or use Swift Package Manager
-swift build
-swift run Victor
 ```
 
 ## Usage
 
 1. **Launch Victor**
-2. **Open a site**: Click "Open Hugo Site" or use ⌘O
-3. **Select folder**: Choose your Hugo site root directory (containing `content/` and config files)
-4. **Navigate**: Browse the hierarchical file tree, expand/collapse folders
-5. **Search**: Use the search bar to filter files across all folders
-6. **Edit**: Click a file to open it
-   - Edit frontmatter in the structured form (top)
-   - Edit markdown content in the editor (middle)
-   - See live preview in the right panel (toggle with "Live Preview" button)
-7. **Format**: Use toolbar buttons for bold, italic, headings, lists, code blocks
-8. **Save**: Press ⌘S to save changes (frontmatter + markdown combined)
+2. **Open a site**: Click "Open Hugo Site" or use ⌘O (or select from Recent Sites)
+3. **Navigate**: Browse the file tree, use search to filter
+4. **Choose layout**: Use ⌘1/2/3 or the tab bar to switch between Editor/Preview/Split
+5. **Edit**:
+   - Edit markdown in the editor
+   - Edit frontmatter in bottom panel or Inspector (⌥⌘I)
+   - Use toolbar for formatting
+6. **Focus**: Press ⌃⌘F for distraction-free writing
+7. **Save**: Press ⌘S or let auto-save handle it
 
 ## Project Structure
 
 ```
 Victor/
-├── Models/              # Data models (4 files)
+├── Models/              # Data models
 │   ├── HugoSite.swift
 │   ├── ContentFile.swift
 │   ├── FileNode.swift
 │   └── Frontmatter.swift
-├── ViewModels/          # State management (2 files)
+├── ViewModels/          # State management
 │   ├── SiteViewModel.swift
 │   └── EditorViewModel.swift
-├── Views/               # SwiftUI views (10 files)
-│   ├── MainWindow/      # Main app layout (6 files)
-│   │   ├── ContentView.swift          # Main layout (72 lines)
-│   │   ├── SidebarView.swift          # Sidebar with search (168 lines)
-│   │   ├── FileListView.swift         # File tree (203 lines)
-│   │   ├── EditorPanelView.swift      # Editor panel (202 lines)
-│   │   ├── PreviewPanel.swift         # Preview panel (90 lines)
-│   │   └── FrontmatterBottomPanel.swift  # Frontmatter editor (167 lines)
-│   ├── Editor/          # Editor components (2 files)
+├── Views/
+│   ├── MainWindow/      # Main app layout
+│   │   ├── ContentView.swift
+│   │   ├── SidebarView.swift
+│   │   ├── FileListView.swift
+│   │   ├── EditorPanelView.swift
+│   │   ├── PreviewPanel.swift
+│   │   ├── TabBarView.swift
+│   │   ├── BreadcrumbBar.swift
+│   │   └── FrontmatterBottomPanel.swift
+│   ├── Editor/
 │   │   ├── EditorTextView.swift
+│   │   ├── EditorStatusBar.swift
 │   │   └── FrontmatterEditorView.swift
-│   └── Preview/         # Preview components (2 files)
-│       └── PreviewWebView.swift
-├── Services/            # Business logic services (4 files)
+│   ├── Preview/
+│   │   └── PreviewWebView.swift
+│   ├── Inspector/
+│   │   └── InspectorPanel.swift
+│   ├── FocusMode/
+│   │   └── FocusModeView.swift
+│   ├── Preferences/
+│   │   └── PreferencesView.swift
+│   └── Animations/
+│       └── AnimationModifiers.swift
+├── Services/
 │   ├── FileSystemService.swift
 │   ├── FrontmatterParser.swift
 │   ├── MarkdownRenderer.swift
 │   └── AutoSaveService.swift
-├── AppConstants.swift   # Centralized constants
-└── Resources/           # Assets and resources
-    └── preview-styles.css  # GitHub-flavored markdown CSS
+├── AppConstants.swift
+└── Resources/
+    └── preview-styles.css
 ```
 
 ## Dependencies
@@ -175,16 +243,17 @@ Victor/
 - **State Management**: `@MainActor` for thread-safe UI updates
 - **File I/O**: Async/await with `NSFileCoordinator`
 - **Security**: App Sandbox with security-scoped bookmarks
+- **Caching**: LRU cache for content files with automatic eviction
 
-## Development Roadmap
+## Future Enhancements
 
-### 🔮 Future Enhancements
 - File system watching with FSEvents for live reload
 - Image asset management and drag & drop
 - Syntax highlighting for code blocks
 - Git integration for version control
 - Hugo server integration for live preview
-- Hugo feature integration - understand the Hugo site model and leverage it for more specific customisation
+- Hugo feature integration - understand the Hugo site model and leverage it for a more integrated CMS
+- Multi-file tabs
 
 ## Hugo Site Structure
 
@@ -197,52 +266,47 @@ your-hugo-site/
 │   │   ├── post-1.md
 │   │   └── post-2.md
 │   └── about.md
-├── config.toml        # Hugo configuration (or hugo.toml, config.yaml, etc.)
+├── config.toml        # Hugo configuration
 ├── static/            # Static assets
 ├── themes/            # Hugo themes
 └── public/            # Generated site (ignored)
 ```
 
-## Keyboard Shortcuts
-
-- **⌘O**: Open Hugo site folder
-- **⌘S**: Save current file (also triggers auto-save 2s after typing)
-- **⌘F**: Focus search field
-- **Esc**: Clear search field
-- **⌘W**: Close window (standard macOS)
-- **⌘B**: Bold selected text
-- **⌘I**: Italic selected text
-- **⌘K**: Insert link
-- **⌘⇧I**: Insert image
-- **⌘'**: Block quote
-
 ## Security & Privacy
 
 Victor uses macOS App Sandbox for security:
+
 - Only accesses folders you explicitly select
 - Uses security-scoped bookmarks for persistent access
-- No network access except for WebView preview (Phase 2+)
+- Network access only for WebView preview rendering
 
 ## Troubleshooting
 
 ### "Selected folder does not appear to be a Hugo site"
+
 - Ensure the folder has a `content/` directory or a config file
 - Config files: `hugo.toml`, `config.toml`, `hugo.yaml`, `config.yaml`, etc.
 
 ### No files showing
+
 - Check that the `content/` directory contains `.md` files
 - Use the search bar to verify files are loaded
 
 ### Build errors
+
 ```bash
-# Clean build
-swift package clean
-swift build
+# Regenerate project
+xcodegen generate
+
+# Clean and rebuild
+xcodebuild clean
+xcodebuild -project Victor.xcodeproj -scheme Victor build
 ```
 
 ## Contributing
 
 Contributions welcome for:
+
 - Bug fixes and real-world testing
 - UI/UX enhancements
 - Documentation improvements
@@ -257,6 +321,7 @@ Contributions welcome for:
 ## Credits
 
 Built with:
+
 - SwiftUI (Apple)
 - Down by John Nguyen
 - Yams by JP Simard

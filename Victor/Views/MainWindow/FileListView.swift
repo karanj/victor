@@ -212,7 +212,7 @@ struct FileRowView: View {
 // MARK: - File Status
 
 /// Represents the current status of a file
-enum FileStatus {
+enum FileStatus: Equatable {
     case none
     case modified   // Has unsaved changes (orange dot)
     case saved      // Recently saved (green checkmark)
@@ -221,28 +221,32 @@ enum FileStatus {
 /// Visual indicator for file status in the sidebar
 struct FileStatusIndicator: View {
     let status: FileStatus
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        switch status {
-        case .none:
-            EmptyView()
+        Group {
+            switch status {
+            case .none:
+                EmptyView()
 
-        case .modified:
-            Circle()
-                .fill(.orange)
-                .frame(width: 8, height: 8)
-                .help("Unsaved changes")
-                .accessibilityLabel("Unsaved changes")
-                .transition(.scale.combined(with: .opacity))
+            case .modified:
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 8, height: 8)
+                    .help("Unsaved changes")
+                    .accessibilityLabel("Unsaved changes")
+                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
 
-        case .saved:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(.green)
-                .help("Saved")
-                .accessibilityLabel("Recently saved")
-                .transition(.scale.combined(with: .opacity))
+            case .saved:
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.green)
+                    .help("Saved")
+                    .accessibilityLabel("Recently saved")
+                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
+            }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: status)
     }
 }
 
