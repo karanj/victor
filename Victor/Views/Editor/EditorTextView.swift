@@ -295,6 +295,16 @@ struct EditorTextView: NSViewRepresentable {
         // Set as document view
         scrollView.documentView = textView
 
+        // Force initial layout after the view is set up
+        // This ensures text is visible immediately without needing to click
+        DispatchQueue.main.async {
+            if let layoutManager = textView.layoutManager,
+               let textContainer = textView.textContainer {
+                layoutManager.ensureLayout(for: textContainer)
+            }
+            textView.needsDisplay = true
+        }
+
         // Notify coordinator is ready after view is in hierarchy
         // Use RunLoop to ensure we're outside any layout pass
         RunLoop.main.perform {
@@ -324,6 +334,15 @@ struct EditorTextView: NSViewRepresentable {
 
             // Update text
             textView.string = text
+
+            // Force layout and display to ensure text is visible immediately
+            // This fixes the issue where text doesn't appear until clicking
+            if let layoutManager = textView.layoutManager,
+               let textContainer = textView.textContainer {
+                // Ensure glyphs are generated and laid out
+                layoutManager.ensureLayout(for: textContainer)
+            }
+            textView.needsDisplay = true
 
             // Restore cursor position if still valid
             if selectedRange.location <= text.count {
