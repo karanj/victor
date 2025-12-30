@@ -549,24 +549,11 @@ class SiteViewModel {
             }
 
             // Find the node and release its content
-            if let node = findNodeByID(oldestID, in: fileNodes) {
+            if let node = FileNode.findNode(id: oldestID, in: fileNodes) {
                 node.contentFile = nil
                 Logger.shared.debug("Cache eviction: released content for \(node.name)")
             }
         }
-    }
-
-    /// Recursively find a node by ID in the file tree
-    private func findNodeByID(_ id: UUID, in nodes: [FileNode]) -> FileNode? {
-        for node in nodes {
-            if node.id == id {
-                return node
-            }
-            if let found = findNodeByID(id, in: node.children) {
-                return found
-            }
-        }
-        return nil
     }
 
     // MARK: - File Operations

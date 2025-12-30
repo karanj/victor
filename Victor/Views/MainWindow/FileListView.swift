@@ -47,26 +47,12 @@ struct FileListView: View {
         .listStyle(.sidebar)
         .onChange(of: siteViewModel.selectedFileID) { _, newValue in
             if let id = newValue {
-                if let node = findNode(id: id, in: siteViewModel.fileNodes) {
+                if let node = FileNode.findNode(id: id, in: siteViewModel.fileNodes) {
                     siteViewModel.selectNode(node)
                 }
             }
         }
     }
-
-    // Recursively find a node by ID
-    private func findNode(id: UUID, in nodes: [FileNode]) -> FileNode? {
-        for node in nodes {
-            if node.id == id {
-                return node
-            }
-            if let found = findNode(id: id, in: node.children) {
-                return found
-            }
-        }
-        return nil
-    }
-
 }
 
 // MARK: - Recursive File Tree Row

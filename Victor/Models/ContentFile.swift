@@ -11,7 +11,7 @@ class ContentFile: Identifiable, Hashable {
 
     /// Whether this file is marked as a draft
     var isDraft: Bool {
-        frontmatter?.draft ?? false
+        frontmatter?.isDraft ?? false
     }
 
     /// File name

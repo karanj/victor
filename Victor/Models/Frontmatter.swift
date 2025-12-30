@@ -35,7 +35,7 @@ class Frontmatter {
     var date: Date?
 
     /// Mark as draft (won't publish)
-    var draft: Bool?
+    var isDraft: Bool?
 
     /// Meta description for SEO
     var description: String?
@@ -158,7 +158,7 @@ class Frontmatter {
             // Essential
             title: title,
             date: date,
-            draft: draft,
+            isDraft: isDraft,
             description: description,
             tags: tags,
             categories: categories,
@@ -228,7 +228,7 @@ struct FrontmatterSnapshot: Equatable {
     // Essential
     let title: String?
     let date: Date?
-    let draft: Bool?
+    let isDraft: Bool?
     let description: String?
     let tags: [String]?
     let categories: [String]?
@@ -267,7 +267,7 @@ struct FrontmatterSnapshot: Equatable {
     init(
         title: String?,
         date: Date?,
-        draft: Bool?,
+        isDraft: Bool?,
         description: String?,
         tags: [String]?,
         categories: [String]?,
@@ -297,7 +297,7 @@ struct FrontmatterSnapshot: Equatable {
     ) {
         self.title = title
         self.date = date
-        self.draft = draft
+        self.isDraft = isDraft
         self.description = description
         self.tags = tags
         self.categories = categories
@@ -330,7 +330,7 @@ struct FrontmatterSnapshot: Equatable {
         // Essential
         lhs.title == rhs.title &&
         lhs.date == rhs.date &&
-        lhs.draft == rhs.draft &&
+        lhs.isDraft == rhs.isDraft &&
         lhs.description == rhs.description &&
         lhs.tags == rhs.tags &&
         lhs.categories == rhs.categories &&

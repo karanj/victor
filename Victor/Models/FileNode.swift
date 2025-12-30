@@ -58,6 +58,31 @@ class FileNode: Identifiable, Hashable {
         return nil
     }
 
+    /// Recursively find a node by ID
+    func findNode(id: UUID) -> FileNode? {
+        if self.id == id {
+            return self
+        }
+
+        for child in children {
+            if let found = child.findNode(id: id) {
+                return found
+            }
+        }
+
+        return nil
+    }
+
+    /// Recursively find a node by ID in a collection of root nodes
+    static func findNode(id: UUID, in nodes: [FileNode]) -> FileNode? {
+        for node in nodes {
+            if let found = node.findNode(id: id) {
+                return found
+            }
+        }
+        return nil
+    }
+
     /// Add a child node
     func addChild(_ child: FileNode) {
         child.parent = self

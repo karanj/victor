@@ -254,7 +254,7 @@ struct FlowLayout: Layout {
 
     sampleFrontmatter.title = "Sample Blog Post"
     sampleFrontmatter.date = Date()
-    sampleFrontmatter.draft = false
+    sampleFrontmatter.isDraft = false
     sampleFrontmatter.tags = ["swift", "swiftui", "macos"]
     sampleFrontmatter.categories = ["development"]
     sampleFrontmatter.description = "A sample blog post demonstrating frontmatter editing"

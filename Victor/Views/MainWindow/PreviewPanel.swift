@@ -33,8 +33,10 @@ struct PreviewPanel: View {
                 guard siteViewModel.isLivePreviewEnabled else { return }
 
                 // Debounce preview updates (wait after typing stops)
-                debounceTask?.cancel()
+                // Store old task reference before creating new one to avoid race condition
+                let oldTask = debounceTask
                 debounceTask = Task {
+                    oldTask?.cancel()
                     try? await Task.sleep(for: .seconds(AppConstants.Preview.debounceInterval))
                     if !Task.isCancelled {
                         updatePreview(content: newContent)

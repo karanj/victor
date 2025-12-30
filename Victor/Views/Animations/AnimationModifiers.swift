@@ -69,13 +69,15 @@ struct ShakeAnimationModifier: ViewModifier {
                         shakeOffset = -10
                     }
 
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(100))
                         withAnimation(.interpolatingSpring(stiffness: 500, damping: 10)) {
                             shakeOffset = 10
                         }
                     }
 
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(200))
                         withAnimation(.interpolatingSpring(stiffness: 500, damping: 15)) {
                             shakeOffset = 0
                         }
@@ -111,7 +113,8 @@ struct FadeInModifier: ViewModifier {
             .opacity(opacity)
             .onAppear {
                 if delay > 0 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(delay))
                         withAnimation(.easeInOut(duration: duration)) {
                             opacity = 1
                         }
@@ -153,7 +156,8 @@ struct SaveIndicatorAnimationModifier: ViewModifier {
                     }
 
                     // Subtle pulse after appearing
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(300))
                         withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
                             scale = 1.05
                         }

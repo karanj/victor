@@ -51,8 +51,8 @@ struct MetadataSection: View {
             // Draft status
             InspectorFieldView(label: "Status") {
                 Toggle("Draft", isOn: Binding(
-                    get: { frontmatter.draft ?? false },
-                    set: { frontmatter.draft = $0 }
+                    get: { frontmatter.isDraft ?? false },
+                    set: { frontmatter.isDraft = $0 }
                 ))
                 .toggleStyle(.checkbox)
                 .controlSize(.small)

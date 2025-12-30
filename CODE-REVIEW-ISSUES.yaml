@@ -42,12 +42,13 @@ critical:
       - Callbacks use [weak self] so they safely no-op
       - File is saved, UI indicator may not show (acceptable trade-off)
     future_improvement: |
-      TODO: Implement unsaved changes cache to hold content in memory for a
+      Implement unsaved changes cache to hold content in memory for a
       reasonable period. This would allow recovery if rapid file switching
       somehow loses data. Consider:
       - LRU cache keyed by file URL
       - Time-based expiration (e.g., 30 seconds)
       - Recovery UI if cached content found on file open
+    future_improvement_issue: https://github.com/karanj/victor/issues/5
 
 # ============================================================================
 # HIGH PRIORITY - Address in Next Sprint
@@ -294,6 +295,9 @@ medium:
     severity: medium
     category: architecture
     source: SwiftUI Architecture Expert
+    status: DEFERRED
+    fixed_date: null
+    github_issue: https://github.com/karanj/victor/issues/2
     files:
       - path: Victor/ViewModels/EditorViewModel.swift
         lines: [16]
@@ -306,6 +310,15 @@ medium:
       - Risk of state inconsistency
       - Increased complexity in state management
       - Potential for subtle bugs
+    deferral_reason: |
+      This is a pragmatic architectural choice that works correctly. The duplication
+      serves different purposes:
+      - EditorViewModel.editableContent: authoritative source for the editor
+      - SiteViewModel.currentEditingContent: shared state for preview/focus mode
+
+      A proper fix would require significant refactoring of the state management
+      architecture. The current implementation has no bugs and performs well.
+      Consider consolidating in a future major architectural refactor.
     changes:
       - block: 1
         action: refactor
@@ -319,6 +332,8 @@ medium:
     severity: medium
     category: performance
     source: SwiftUI Architecture Expert
+    status: FIXED
+    fixed_date: 2025-12-30
     files:
       - path: Victor/Views/MainWindow/EditorPanelView.swift
         lines: [126-152]
@@ -329,19 +344,18 @@ medium:
       - Excessive view rebuilds
       - Performance degradation with rapid edits
       - Code duplication
-    changes:
-      - block: 1
-        action: refactor
-        description: Consolidate into single frontmatter observer
-        note: |
-          Use single observer on contentFile.frontmatter?.snapshot() or move
-          frontmatter change detection into EditorViewModel as computed property
+    fix_implemented: |
+      Consolidated 6 separate frontmatter onChange observers into a single observer
+      using contentFile.frontmatter?.snapshot(). The FrontmatterSnapshot is Equatable,
+      allowing efficient change detection in a single observer.
 
   - id: MED-003
     title: Race Condition in Debounce Task Cancellation
     severity: medium
     category: concurrency
     source: Performance Expert
+    status: FIXED
+    fixed_date: 2025-12-30
     files:
       - path: Victor/Views/MainWindow/PreviewPanel.swift
         lines: [36-37, 51]
@@ -352,25 +366,18 @@ medium:
       - Potential memory leaks from orphaned tasks
       - Unnecessary preview renders
       - Wasted CPU cycles
-    changes:
-      - block: 1
-        action: modify
-        file: Victor/Views/MainWindow/PreviewPanel.swift
-        lines: [36-51]
-        description: Store task reference before cancelling
-        before: |
-          debounceTask?.cancel()
-          debounceTask = Task {
-        after: |
-          let oldTask = debounceTask
-          debounceTask = Task {
-              oldTask?.cancel()
+    fix_implemented: |
+      Store old task reference before creating new task, then cancel from within
+      the new task. This avoids race conditions in rapid succession scenarios.
 
   - id: MED-004
     title: FileNode Should Be a Struct
     severity: medium
     category: architecture
     source: SwiftUI Architecture, Performance Expert
+    status: DEFERRED
+    fixed_date: null
+    github_issue: https://github.com/karanj/victor/issues/3
     files:
       - path: Victor/Models/FileNode.swift
         lines: [4-89]
@@ -394,6 +401,9 @@ medium:
     severity: medium
     category: architecture
     source: SwiftUI Architecture Expert
+    status: DEFERRED
+    fixed_date: null
+    github_issue: https://github.com/karanj/victor/issues/4
     files:
       - path: Victor/Views/FocusMode/FocusModeView.swift
         lines: [55-59]
@@ -404,6 +414,15 @@ medium:
       - Violates MVVM pattern
       - ViewModel unaware of changes until model read
       - Potential state sync issues
+    deferral_reason: |
+      This is related to MED-001 (state duplication). The current implementation
+      is a pragmatic workaround: FocusModeView already uses siteViewModel.currentEditingContent
+      as its text binding, but also syncs to contentFile.markdownContent so the
+      EditorViewModel picks up changes when focus mode exits.
+
+      A proper fix would require the same architectural refactor as MED-001.
+      The current implementation works correctly and has no bugs.
+      Consider consolidating in a future major architectural refactor.
     changes:
       - block: 1
         action: modify
@@ -418,6 +437,8 @@ medium:
     severity: medium
     category: concurrency
     source: Performance Expert
+    status: FIXED
+    fixed_date: 2025-12-30
     files:
       - path: Victor/Views/Animations/AnimationModifiers.swift
         lines: [72, 78, 114, 156]
@@ -428,26 +449,20 @@ medium:
       - Inconsistent concurrency model
       - Cannot be properly cancelled
       - Harder to test and reason about
-    changes:
-      - block: 1
-        action: modify
-        file: Victor/Views/Animations/AnimationModifiers.swift
-        description: Replace DispatchQueue with Task-based delays
-        before: |
-          DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-              withAnimation(...) { ... }
-          }
-        after: |
-          Task { @MainActor in
-              try? await Task.sleep(for: .milliseconds(100))
-              withAnimation(...) { ... }
-          }
+    fix_implemented: |
+      Replaced all 4 DispatchQueue.main.asyncAfter calls with Task { @MainActor in }
+      pattern using Task.sleep for delays:
+      - ShakeAnimationModifier: 2 replacements (100ms, 200ms delays)
+      - FadeInModifier: 1 replacement (configurable delay)
+      - SaveIndicatorAnimationModifier: 1 replacement (300ms delay)
 
   - id: MED-007
     title: AutoSaveService Methods Not Truly Async
     severity: medium
     category: performance
     source: Performance Expert
+    status: FIXED
+    fixed_date: 2025-12-30
     files:
       - path: Victor/Services/AutoSaveService.swift
         lines: [134, 147]
@@ -458,29 +473,19 @@ medium:
       - Blocks actor's executor thread
       - Slow file systems delay all auto-save operations
       - No real concurrency benefit
-    changes:
-      - block: 1
-        action: modify
-        file: Victor/Services/AutoSaveService.swift
-        description: Use Task.detached for actual background execution
-        before: |
-          private func getFileModificationDate(url: URL) async throws -> Date {
-              try await withCheckedThrowingContinuation { continuation in
-                  do {
-                      let attributes = try FileManager.default.attributesOfItem(...)
-        after: |
-          private func getFileModificationDate(url: URL) async throws -> Date {
-              try await Task.detached {
-                  let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                  return attributes[.modificationDate] as? Date ?? Date()
-              }.value
-          }
+    fix_implemented: |
+      Replaced withCheckedThrowingContinuation with Task.detached for both methods:
+      - getFileModificationDate(): now runs file attribute reads on background thread
+      - getFileContent(): now runs file content reads on background thread
+      This ensures file I/O doesn't block the actor's executor.
 
   - id: MED-008
     title: Force Unwrapping After Nil Check
     severity: medium
     category: code_quality
     source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-30
     files:
       - path: Victor/Views/MainWindow/EditorPanelView.swift
         lines: [82]
@@ -490,26 +495,17 @@ medium:
     impact: |
       - Potential crashes if logic changes
       - Less idiomatic Swift code
-    changes:
-      - block: 1
-        action: modify
-        file: Victor/Views/MainWindow/EditorPanelView.swift
-        lines: [80-85]
-        description: Use if-let binding instead of nil check + force unwrap
-        before: |
-          if contentFile.frontmatter != nil {
-              FrontmatterBottomPanel(
-                  frontmatter: contentFile.frontmatter!,
-        after: |
-          if let frontmatter = contentFile.frontmatter {
-              FrontmatterBottomPanel(
-                  frontmatter: frontmatter,
+    fix_implemented: |
+      Changed from nil check with force unwrap to if-let binding:
+      `if let frontmatter = contentFile.frontmatter { ... }`
 
   - id: MED-009
     title: Inconsistent Boolean Property Naming
     severity: medium
     category: code_quality
     source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-30
     files:
       - path: Victor/Models/Frontmatter.swift
         lines: [38]
@@ -519,17 +515,25 @@ medium:
     impact: |
       - Inconsistent API
       - Harder to understand intent
-    changes:
-      - block: 1
-        action: rename
-        description: Rename draft to isDraft in Frontmatter model
-        note: "Update all usages of .draft to .isDraft throughout codebase"
+    fix_implemented: |
+      Renamed `draft` to `isDraft` across the codebase:
+      - Frontmatter.swift: property and snapshot
+      - FrontmatterSnapshot: property, initializer, and Equatable
+      - FrontmatterParser.swift: reading and serialization (kept "draft" as dict key for Hugo)
+      - ContentFile.swift: computed property
+      - EditorPanelView.swift: onChange observer
+      - FrontmatterBottomPanel.swift: sync assignment
+      - EssentialFieldsTab.swift: toggle binding
+      - MetadataSection.swift: toggle binding
+      - FrontmatterEditorView.swift: preview setup
 
   - id: MED-010
     title: Duplicate File Tree Traversal Logic
     severity: medium
     category: code_quality
     source: Code Quality Expert
+    status: FIXED
+    fixed_date: 2025-12-30
     files:
       - path: Victor/Models/FileNode.swift
         lines: [47]
@@ -541,21 +545,16 @@ medium:
       - Code duplication
       - Maintenance burden
       - Inconsistent implementations
-    changes:
-      - block: 1
-        action: refactor
-        description: Create TreeNode protocol with generic find method
-        code: |
-          protocol TreeNode {
-              associatedtype NodeType
-              var children: [NodeType] { get }
-          }
+    fix_implemented: |
+      Added centralized find methods to FileNode:
+      - findNode(id: UUID): instance method for finding by ID in subtree
+      - static findNode(id:in:): static method for finding in array of root nodes
 
-          extension TreeNode where NodeType: TreeNode {
-              func find<T>(by keyPath: KeyPath<NodeType, T>, value: T) -> NodeType? where T: Equatable {
-                  // Generic recursive find
-              }
-          }
+      Updated callers to use the new centralized methods:
+      - SiteViewModel.findNodeByID: removed, now uses FileNode.findNode(id:in:)
+      - FileListView.findNode: removed, now uses FileNode.findNode(id:in:)
+
+      The existing findNode(url:) method remains for URL-based lookups.
 
 # ============================================================================
 # LOW PRIORITY - Technical Debt / Nice to Have
@@ -678,12 +677,20 @@ low:
     severity: low
     category: concurrency
     source: Performance Expert
+    status: DEFERRED
+    fixed_date: null
     files:
       - path: Victor/Services/FrontmatterParser.swift
         lines: [33, 43]
     description: |
       DateFormatter is documented as NOT thread-safe but is used from shared
       singleton across potential concurrent access.
+    deferral_reason: |
+      This is a theoretical issue. In practice, Victor parses files sequentially
+      from the main thread. The DateFormatter is only called during file load/save
+      operations which don't happen concurrently. If concurrent parsing is added
+      in the future, consider making FrontmatterParser an actor or using
+      thread-local formatters.
     changes:
       - block: 1
         action: refactor
@@ -731,11 +738,18 @@ low:
     severity: low
     category: architecture
     source: SwiftUI Architecture Expert
+    status: DEFERRED
+    fixed_date: null
     files:
       - path: Victor/Models/Frontmatter.swift
         lines: [22]
     description: |
       Frontmatter is @Observable class but represents data that could be a struct.
+    deferral_reason: |
+      Similar to MED-004 (FileNode as struct). The current @Observable class
+      implementation works well with SwiftUI's observation system. Converting to
+      struct would require significant changes to how frontmatter changes are
+      propagated through the view hierarchy. Lower priority than other refactors.
     changes:
       - block: 1
         action: evaluate

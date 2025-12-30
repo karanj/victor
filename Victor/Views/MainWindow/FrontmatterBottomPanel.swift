@@ -196,7 +196,7 @@ struct FrontmatterBottomPanel: View {
         // Essential fields
         frontmatter.title = parsedFrontmatter.title
         frontmatter.date = parsedFrontmatter.date
-        frontmatter.draft = parsedFrontmatter.draft
+        frontmatter.isDraft = parsedFrontmatter.isDraft
         frontmatter.tags = parsedFrontmatter.tags
         frontmatter.categories = parsedFrontmatter.categories
         frontmatter.description = parsedFrontmatter.description

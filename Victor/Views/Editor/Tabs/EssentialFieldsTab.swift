@@ -25,8 +25,8 @@ struct EssentialFieldsTab: View {
             // Draft Status
             FormFieldWithHelp(label: "Draft", help: "Draft pages aren't published to your site") {
                 Toggle("Mark as draft", isOn: Binding(
-                    get: { frontmatter.draft ?? false },
-                    set: { frontmatter.draft = $0 }
+                    get: { frontmatter.isDraft ?? false },
+                    set: { frontmatter.isDraft = $0 }
                 ))
             }
 
@@ -63,7 +63,7 @@ struct EssentialFieldsTab: View {
     let frontmatter = Frontmatter(rawContent: "---\n---", format: .yaml)
     frontmatter.title = "Sample Post"
     frontmatter.date = Date()
-    frontmatter.draft = false
+    frontmatter.isDraft = false
     frontmatter.tags = ["swift", "swiftui"]
     frontmatter.categories = ["development"]
     frontmatter.description = "A sample blog post"

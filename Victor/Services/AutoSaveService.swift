@@ -127,29 +127,19 @@ actor AutoSaveService {
         }
     }
 
-    /// Get the modification date of a file
+    /// Get the modification date of a file (runs on background thread)
     private func getFileModificationDate(url: URL) async throws -> Date {
-        try await withCheckedThrowingContinuation { continuation in
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                let modificationDate = attributes[.modificationDate] as? Date ?? Date()
-                continuation.resume(returning: modificationDate)
-            } catch {
-                continuation.resume(throwing: error)
-            }
-        }
+        try await Task.detached {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            return attributes[.modificationDate] as? Date ?? Date()
+        }.value
     }
 
-    /// Get the current content of a file
+    /// Get the current content of a file (runs on background thread)
     private func getFileContent(url: URL) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            do {
-                let content = try String(contentsOf: url, encoding: .utf8)
-                continuation.resume(returning: content)
-            } catch {
-                continuation.resume(throwing: error)
-            }
-        }
+        try await Task.detached {
+            try String(contentsOf: url, encoding: .utf8)
+        }.value
     }
 }
 

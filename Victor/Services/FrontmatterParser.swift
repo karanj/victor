@@ -380,7 +380,7 @@ class FrontmatterParser {
             frontmatter.date = parseDate(dateString)
         }
 
-        frontmatter.draft = dict["draft"] as? Bool
+        frontmatter.isDraft = dict["draft"] as? Bool
 
         frontmatter.description = dict["description"] as? String
 
@@ -707,8 +707,8 @@ class FrontmatterParser {
         if let date = frontmatter.date {
             dict["date"] = formatDate(date)
         }
-        if let draft = frontmatter.draft {
-            dict["draft"] = draft
+        if let isDraft = frontmatter.isDraft {
+            dict["draft"] = isDraft
         }
         if let description = frontmatter.description {
             dict["description"] = description
