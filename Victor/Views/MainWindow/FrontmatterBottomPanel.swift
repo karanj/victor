@@ -34,20 +34,22 @@ struct FrontmatterBottomPanel: View {
             Button(action: { isExpanded.toggle() }) {
                 HStack {
                     Image(systemName: "doc.text.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.7))
                         .font(.caption)
 
                     Text("Frontmatter")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
 
                     Text(frontmatterFormatBadge)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary.opacity(0.8))
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .background(Color.accentColor.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
 
                     Spacer()
 
@@ -64,15 +66,15 @@ struct FrontmatterBottomPanel: View {
 
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.6))
                         .padding(.leading, 8)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 8)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.3))
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
             .help(isExpanded ? "Collapse frontmatter" : "Expand frontmatter")
 
             // Frontmatter content (when expanded)
@@ -83,7 +85,7 @@ struct FrontmatterBottomPanel: View {
                     // Form view - FrontmatterEditorView has its own ScrollView
                     FrontmatterEditorView(frontmatter: frontmatter)
                         .frame(height: panelHeight)
-                        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                        .background(Color(nsColor: .textBackgroundColor))
                 } else {
                     // Raw view
                     VStack(spacing: 0) {

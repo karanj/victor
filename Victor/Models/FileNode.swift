@@ -13,8 +13,24 @@ class FileNode: Identifiable, Hashable {
     var children: [FileNode] = []
     weak var parent: FileNode?
 
-    /// Associated content file (only for .md files)
+    /// The type of file (computed from extension)
+    var fileType: FileType {
+        isDirectory ? .binary : FileType(url: url)
+    }
+
+    /// The Hugo role of this node (for top-level directories)
+    var hugoRole: HugoRole?
+
+    /// Whether this is a Hugo config file
+    var isConfigFile: Bool {
+        !isDirectory && HugoSiteStructure.isConfigFile(filename: name)
+    }
+
+    /// Associated content file (only for .md files in content directory)
     var contentFile: ContentFile?
+
+    /// Associated text file (for non-markdown editable text files)
+    var textFile: TextFile?
 
     /// Display name
     var name: String {
@@ -23,14 +39,25 @@ class FileNode: Identifiable, Hashable {
 
     /// Whether this is a markdown file
     var isMarkdownFile: Bool {
-        !isDirectory && url.pathExtension.lowercased() == "md"
+        fileType == .markdown
     }
 
-    init(url: URL, isDirectory: Bool, isPageBundle: Bool = false) {
+    /// Whether this file can be edited
+    var isEditable: Bool {
+        !isDirectory && fileType.isEditable
+    }
+
+    /// Whether this file supports preview
+    var isPreviewable: Bool {
+        fileType.isPreviewable
+    }
+
+    init(url: URL, isDirectory: Bool, isPageBundle: Bool = false, hugoRole: HugoRole? = nil) {
         self.id = UUID()
         self.url = url
         self.isDirectory = isDirectory
         self.isPageBundle = isPageBundle
+        self.hugoRole = hugoRole
     }
 
     // MARK: - Hashable & Equatable

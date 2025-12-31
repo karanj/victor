@@ -119,6 +119,12 @@ class SiteViewModel {
     /// Maximum number of recent files to track
     private let maxRecentFiles = 10
 
+    /// Hugo configuration (loaded when a config file is selected)
+    var hugoConfig: HugoConfig?
+
+    /// Whether the Hugo config is currently loading
+    var isLoadingConfig = false
+
     /// Maximum number of ContentFiles to keep cached in memory
     /// Files beyond this limit will have their contentFile released
     private let maxCachedContentFiles = 20
@@ -400,8 +406,21 @@ class SiteViewModel {
                     self.isLoadingFile = false
                 }
             }
+        } else if let node = node, node.isEditable && node.fileType.isTextBased {
+            // Non-markdown editable text file - load text file content
+            if node.textFile != nil {
+                performFileSwitch(to: node)
+            } else {
+                isLoadingFile = true
+                Task { [weak self] in
+                    guard let self = self else { return }
+                    await self.loadTextFileContent(for: node)
+                    self.performFileSwitch(to: node)
+                    self.isLoadingFile = false
+                }
+            }
         } else {
-            // Non-markdown file or nil - switch immediately
+            // Non-editable file or nil - switch immediately
             performFileSwitch(to: node)
         }
     }
@@ -511,7 +530,7 @@ class SiteViewModel {
         return Date().timeIntervalSince(savedDate) < savedIndicatorDuration
     }
 
-    /// Load content for a file node
+    /// Load content for a markdown file node
     private func loadFileContent(for node: FileNode) async {
         do {
             let file = try await fileSystemService.readContentFile(at: node.url)
@@ -522,6 +541,31 @@ class SiteViewModel {
         } catch {
             errorMessage = "Failed to load file: \(error.localizedDescription)"
             Logger.shared.error("Error loading file content", error: error)
+        }
+    }
+
+    /// Load content for a text file node (non-markdown)
+    private func loadTextFileContent(for node: FileNode) async {
+        do {
+            let content = try await Task.detached {
+                try String(contentsOf: node.url, encoding: .utf8)
+            }.value
+
+            let attributes = try FileManager.default.attributesOfItem(atPath: node.url.path)
+            let modificationDate = attributes[.modificationDate] as? Date ?? Date()
+
+            let textFile = TextFile(
+                url: node.url,
+                content: content,
+                lastModified: modificationDate
+            )
+            node.textFile = textFile
+
+            // Track in LRU cache and evict old entries
+            updateContentCache(accessedNodeID: node.id)
+        } catch {
+            errorMessage = "Failed to load file: \(error.localizedDescription)"
+            Logger.shared.error("Error loading text file content", error: error)
         }
     }
 
@@ -551,6 +595,7 @@ class SiteViewModel {
             // Find the node and release its content
             if let node = FileNode.findNode(id: oldestID, in: fileNodes) {
                 node.contentFile = nil
+                node.textFile = nil
                 Logger.shared.debug("Cache eviction: released content for \(node.name)")
             }
         }
@@ -579,6 +624,40 @@ class SiteViewModel {
             errorMessage = "Failed to save file: \(error.localizedDescription)"
             Logger.shared.error("Error saving file", error: error)
             return false
+        }
+    }
+
+    // MARK: - Hugo Config Management
+
+    /// Load Hugo configuration from a config file URL
+    func loadHugoConfig(from url: URL) async {
+        isLoadingConfig = true
+        do {
+            let config = try await HugoConfigParser.shared.parseConfig(at: url)
+            hugoConfig = config
+            Logger.shared.info("Loaded Hugo config: \(url.lastPathComponent)")
+        } catch {
+            errorMessage = "Failed to load config: \(error.localizedDescription)"
+            Logger.shared.error("Error loading Hugo config", error: error)
+        }
+        isLoadingConfig = false
+    }
+
+    /// Save the current Hugo configuration
+    func saveHugoConfig() async {
+        guard let config = hugoConfig, let url = config.sourceURL else {
+            errorMessage = "No configuration to save"
+            return
+        }
+
+        do {
+            let content = try HugoConfigParser.shared.serialize(config)
+            try await fileSystemService.writeFile(to: url, content: content)
+            config.hasUnsavedChanges = false
+            Logger.shared.info("Saved Hugo config: \(url.lastPathComponent)")
+        } catch {
+            errorMessage = "Failed to save config: \(error.localizedDescription)"
+            Logger.shared.error("Error saving Hugo config", error: error)
         }
     }
 

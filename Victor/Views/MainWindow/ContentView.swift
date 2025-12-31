@@ -49,9 +49,8 @@ struct ContentView: View {
                     TabBarView(viewModel: siteViewModel)
 
                     // Content based on selected layout mode
-                    if let selectedNode = siteViewModel.selectedNode,
-                       let contentFile = selectedNode.contentFile {
-                        layoutContent(for: selectedNode, contentFile: contentFile)
+                    if let selectedNode = siteViewModel.selectedNode, !selectedNode.isDirectory {
+                        layoutContent(for: selectedNode)
                             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.layoutMode)
                     } else {
                         noFileSelectedView
@@ -119,34 +118,47 @@ struct ContentView: View {
 
     // MARK: - Layout Content
 
+    /// Determines the effective layout mode based on file type
+    /// Non-markdown files always use editor-only mode (no preview)
+    private var effectiveLayoutMode: EditorLayoutMode {
+        guard let node = siteViewModel.selectedNode else {
+            return siteViewModel.layoutMode
+        }
+        // Only markdown files with content get preview
+        if node.fileType != .markdown || node.contentFile == nil {
+            return .editor
+        }
+        return siteViewModel.layoutMode
+    }
+
     /// Returns the appropriate view based on the current layout mode
     @ViewBuilder
-    private func layoutContent(for node: FileNode, contentFile: ContentFile) -> some View {
-        switch siteViewModel.layoutMode {
+    private func layoutContent(for node: FileNode) -> some View {
+        switch effectiveLayoutMode {
         case .editor:
-            // Full-width editor only
-            EditorPanelView(
-                contentFile: contentFile,
-                fileNode: node,
-                siteViewModel: siteViewModel
-            )
+            // Full-width viewer/editor only
+            FileViewerRouter(node: node, siteViewModel: siteViewModel)
 
         case .preview:
-            // Full-width preview only
-            PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
+            // Full-width preview only (markdown only)
+            if let contentFile = node.contentFile {
+                PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
+            } else {
+                FileViewerRouter(node: node, siteViewModel: siteViewModel)
+            }
 
         case .split:
-            // Side-by-side editor and preview
-            HSplitView {
-                EditorPanelView(
-                    contentFile: contentFile,
-                    fileNode: node,
-                    siteViewModel: siteViewModel
-                )
-                .frame(minWidth: AppConstants.Content.panelMinWidth)
+            // Side-by-side editor and preview (markdown only)
+            if let contentFile = node.contentFile {
+                HSplitView {
+                    FileViewerRouter(node: node, siteViewModel: siteViewModel)
+                        .frame(minWidth: AppConstants.Content.panelMinWidth)
 
-                PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
-                    .frame(minWidth: AppConstants.Content.panelMinWidth)
+                    PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
+                        .frame(minWidth: AppConstants.Content.panelMinWidth)
+                }
+            } else {
+                FileViewerRouter(node: node, siteViewModel: siteViewModel)
             }
         }
     }

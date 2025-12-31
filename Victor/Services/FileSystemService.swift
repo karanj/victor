@@ -84,22 +84,90 @@ class FileSystemService {
 
     // MARK: - Directory Scanning
 
-    /// Scan directory and build hierarchical file tree
+    /// Scan Hugo site directory and build hierarchical file tree
+    /// Now scans all site files, not just content/
     func scanDirectory(at url: URL) throws -> [FileNode] {
-        // Get content directory
-        let contentURL = url.appendingPathComponent("content")
+        // Detect the Hugo site structure
+        let structure = HugoSiteStructure.detect(at: url)
 
-        guard FileManager.default.fileExists(atPath: contentURL.path) else {
-            // If no content directory, scan root for .md files
-            return try buildFileTree(at: url)
-        }
-
-        // Build hierarchical tree from content directory
-        return try buildFileTree(at: contentURL)
+        // Build tree for the entire site
+        return try buildSiteTree(at: url, structure: structure)
     }
 
-    /// Recursively build file tree with folders and markdown files
-    private func buildFileTree(at directory: URL) throws -> [FileNode] {
+    /// Build file tree for the entire Hugo site
+    private func buildSiteTree(at siteRoot: URL, structure: HugoSiteStructure) throws -> [FileNode] {
+        var nodes: [FileNode] = []
+        let fileManager = FileManager.default
+
+        // Get immediate children of the root
+        let contents = try fileManager.contentsOfDirectory(
+            at: siteRoot,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        for itemURL in contents {
+            let itemName = itemURL.lastPathComponent
+
+            // Skip excluded directories
+            if HugoSiteStructure.shouldExclude(directoryName: itemName) {
+                continue
+            }
+
+            let resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
+            let isDirectory = resourceValues.isDirectory ?? false
+
+            if isDirectory {
+                // Determine Hugo role for this directory
+                let hugoRole = HugoRole(directoryName: itemName)
+
+                // Check if this is a Hugo page bundle
+                let indexMD = itemURL.appendingPathComponent("index.md")
+                let underscoreIndexMD = itemURL.appendingPathComponent("_index.md")
+                let isBundle = fileManager.fileExists(atPath: indexMD.path) ||
+                              fileManager.fileExists(atPath: underscoreIndexMD.path)
+
+                // Create directory node with Hugo role
+                let dirNode = FileNode(
+                    url: itemURL,
+                    isDirectory: true,
+                    isPageBundle: isBundle,
+                    hugoRole: hugoRole
+                )
+
+                // Recursively scan subdirectory
+                let children = try buildFileTree(at: itemURL, isContentDirectory: hugoRole == .content)
+
+                // Include directory even if empty (for Hugo structure visibility)
+                dirNode.children = children
+                for child in children {
+                    child.parent = dirNode
+                }
+                dirNode.sortChildren()
+                nodes.append(dirNode)
+            } else {
+                // Include root-level files (config files, go.mod, README, etc.)
+                let fileNode = FileNode(url: itemURL, isDirectory: false, isPageBundle: false)
+                nodes.append(fileNode)
+            }
+        }
+
+        // Sort: directories first, then alphabetically
+        nodes.sort { lhs, rhs in
+            if lhs.isDirectory != rhs.isDirectory {
+                return lhs.isDirectory
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+
+        return nodes
+    }
+
+    /// Recursively build file tree including all file types
+    /// - Parameters:
+    ///   - directory: The directory to scan
+    ///   - isContentDirectory: If true, only include markdown files (Hugo content behavior)
+    private func buildFileTree(at directory: URL, isContentDirectory: Bool = false) throws -> [FileNode] {
         var nodes: [FileNode] = []
         let fileManager = FileManager.default
 
@@ -111,6 +179,13 @@ class FileSystemService {
         )
 
         for itemURL in contents {
+            let itemName = itemURL.lastPathComponent
+
+            // Skip excluded items
+            if HugoSiteStructure.shouldExclude(directoryName: itemName) {
+                continue
+            }
+
             let resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
             let isDirectory = resourceValues.isDirectory ?? false
 
@@ -121,26 +196,43 @@ class FileSystemService {
                 let isBundle = fileManager.fileExists(atPath: indexMD.path) ||
                               fileManager.fileExists(atPath: underscoreIndexMD.path)
 
-                // Create directory node with cached page bundle status
+                // Create directory node
                 let dirNode = FileNode(url: itemURL, isDirectory: true, isPageBundle: isBundle)
 
                 // Recursively scan subdirectory
-                let children = try buildFileTree(at: itemURL)
+                let children = try buildFileTree(at: itemURL, isContentDirectory: isContentDirectory)
 
-                // Only include directory if it has markdown files or subdirectories with markdown files
-                if !children.isEmpty {
+                // For content directories, only include if has children
+                // For other directories, always include for visibility
+                if isContentDirectory {
+                    if !children.isEmpty {
+                        dirNode.children = children
+                        for child in children {
+                            child.parent = dirNode
+                        }
+                        dirNode.sortChildren()
+                        nodes.append(dirNode)
+                    }
+                } else {
                     dirNode.children = children
-                    // Set parent reference for all children
                     for child in children {
                         child.parent = dirNode
                     }
                     dirNode.sortChildren()
                     nodes.append(dirNode)
                 }
-            } else if itemURL.pathExtension.lowercased() == "md" {
-                // Create file node for markdown files
-                let fileNode = FileNode(url: itemURL, isDirectory: false, isPageBundle: false)
-                nodes.append(fileNode)
+            } else {
+                // For content directory, only include markdown files
+                // For other directories, include all files
+                if isContentDirectory {
+                    if itemURL.pathExtension.lowercased() == "md" {
+                        let fileNode = FileNode(url: itemURL, isDirectory: false, isPageBundle: false)
+                        nodes.append(fileNode)
+                    }
+                } else {
+                    let fileNode = FileNode(url: itemURL, isDirectory: false, isPageBundle: false)
+                    nodes.append(fileNode)
+                }
             }
         }
 

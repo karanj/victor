@@ -13,6 +13,9 @@ final class HighlightingTextView: NSTextView {
         }
     }
 
+    /// Callback to show the shortcode picker (called from context menu)
+    var onShowShortcodePicker: (() -> Void)?
+
     /// Color for the current line highlight
     private var highlightColor: NSColor {
         NSColor.controlAccentColor.withAlphaComponent(0.08)
@@ -105,6 +108,13 @@ final class HighlightingTextView: NSTextView {
         numberItem.target = self
         insertMenu.addItem(numberItem)
 
+        insertMenu.addItem(NSMenuItem.separator())
+
+        let shortcodeItem = NSMenuItem(title: "Hugo Shortcode…", action: #selector(insertShortcode), keyEquivalent: "K")
+        shortcodeItem.keyEquivalentModifierMask = [.command, .shift]
+        shortcodeItem.target = self
+        insertMenu.addItem(shortcodeItem)
+
         let insertMenuItem = NSMenuItem(title: "Insert", action: nil, keyEquivalent: "")
         insertMenuItem.submenu = insertMenu
         menu.insertItem(insertMenuItem, at: insertIndex)
@@ -148,6 +158,10 @@ final class HighlightingTextView: NSTextView {
 
     @objc private func insertNumberedList() {
         applyMarkdownFormat(.orderedList)
+    }
+
+    @objc private func insertShortcode() {
+        onShowShortcodePicker?()
     }
 
     // MARK: - Line Highlighting
@@ -220,21 +234,39 @@ struct EditorTextView: NSViewRepresentable {
     @Binding var text: String
     var highlightCurrentLine: Bool
     var fontSize: CGFloat
+    var fontName: String
     var onCoordinatorReady: ((Coordinator) -> Void)?
     var onCursorPositionChange: ((CursorPosition) -> Void)?
+    var onShowShortcodePicker: (() -> Void)?
 
     init(
         text: Binding<String>,
         highlightCurrentLine: Bool = true,
         fontSize: CGFloat = 13,
+        fontName: String = "SF Mono",
         onCoordinatorReady: ((Coordinator) -> Void)? = nil,
-        onCursorPositionChange: ((CursorPosition) -> Void)? = nil
+        onCursorPositionChange: ((CursorPosition) -> Void)? = nil,
+        onShowShortcodePicker: (() -> Void)? = nil
     ) {
         self._text = text
         self.highlightCurrentLine = highlightCurrentLine
         self.fontSize = fontSize
+        self.fontName = fontName
         self.onCoordinatorReady = onCoordinatorReady
         self.onCursorPositionChange = onCursorPositionChange
+        self.onShowShortcodePicker = onShowShortcodePicker
+    }
+
+    /// Get the appropriate NSFont based on font name
+    private func getFont(size: CGFloat) -> NSFont {
+        if fontName == "SF Mono" {
+            return .monospacedSystemFont(ofSize: size, weight: .regular)
+        } else if let font = NSFont(name: fontName, size: size) {
+            return font
+        } else {
+            // Fallback to system monospace
+            return .monospacedSystemFont(ofSize: size, weight: .regular)
+        }
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -248,6 +280,7 @@ struct EditorTextView: NSViewRepresentable {
         // Create text view with proper frame (using custom subclass for line highlighting)
         let textView = HighlightingTextView(frame: scrollView.bounds)
         textView.highlightCurrentLine = highlightCurrentLine
+        textView.onShowShortcodePicker = onShowShortcodePicker
 
         // Store reference in coordinator
         context.coordinator.textView = textView
@@ -257,7 +290,7 @@ struct EditorTextView: NSViewRepresentable {
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
-        textView.font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        textView.font = getFont(size: fontSize)
         textView.textColor = .labelColor
         textView.backgroundColor = .textBackgroundColor
 
@@ -327,9 +360,11 @@ struct EditorTextView: NSViewRepresentable {
             textView.highlightCurrentLine = highlightCurrentLine
         }
 
-        // Update font size if changed
-        if let currentFont = textView.font, currentFont.pointSize != fontSize {
-            textView.font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        // Update font if size or family changed
+        let expectedFont = getFont(size: fontSize)
+        if let currentFont = textView.font,
+           currentFont.pointSize != fontSize || currentFont.fontName != expectedFont.fontName {
+            textView.font = expectedFont
         }
 
         // Only update if text has changed (avoid cursor jumping)

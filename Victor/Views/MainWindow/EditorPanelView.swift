@@ -19,6 +19,7 @@ struct EditorPanelView: View {
     // Editor preferences (using @AppStorage for live updates from Preferences window)
     @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
     @AppStorage("editorFontSize") private var editorFontSize: Double = 13.0
+    @AppStorage("editorFontName") private var editorFontName: String = "SF Mono"
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -59,11 +60,15 @@ struct EditorPanelView: View {
                 text: $viewModel.editableContent,
                 highlightCurrentLine: highlightCurrentLine,
                 fontSize: editorFontSize,
+                fontName: editorFontName,
                 onCoordinatorReady: { coordinator in
                     editorCoordinator = coordinator
                 },
                 onCursorPositionChange: { position in
                     viewModel.updateCursorPosition(line: position.line, column: position.column)
+                },
+                onShowShortcodePicker: {
+                    showShortcodePicker = true
                 }
             )
             .opacity(contentOpacity)

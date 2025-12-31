@@ -56,14 +56,15 @@ struct FrontmatterEditorView: View {
                     .font(.caption)
                 Text(tab.rawValue)
                     .font(.caption)
+                    .fontWeight(selectedTab == tab ? .medium : .regular)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
+            .background(selectedTab == tab ? Color.accentColor.opacity(0.2) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
+        .foregroundStyle(selectedTab == tab ? Color.primary : Color.primary.opacity(0.6))
     }
 
     @ViewBuilder
@@ -93,7 +94,8 @@ struct FormFieldView<Content: View>: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
             content
         }
     }
@@ -163,17 +165,18 @@ struct TagChip: View {
         HStack(spacing: 4) {
             Text(text)
                 .font(.caption)
+                .foregroundStyle(.primary)
 
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.5))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.blue.opacity(0.1))
+        .background(Color.accentColor.opacity(0.15))
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }

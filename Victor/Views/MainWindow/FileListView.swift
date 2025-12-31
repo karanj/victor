@@ -108,7 +108,7 @@ struct FileRowView: View {
 
     /// File status for indicator display
     private var fileStatus: FileStatus {
-        guard let viewModel = siteViewModel, node.isMarkdownFile else {
+        guard let viewModel = siteViewModel, node.isEditable else {
             return .none
         }
 
@@ -143,8 +143,20 @@ struct FileRowView: View {
                             .background(.purple)
                             .cornerRadius(3)
                     }
+
+                    // Config file badge
+                    if node.isConfigFile {
+                        Text("config")
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(.orange)
+                            .cornerRadius(3)
+                    }
                 }
 
+                // Draft badge for content files
                 if let contentFile = node.contentFile, contentFile.isDraft {
                     Text("Draft")
                         .font(.caption2)
@@ -153,6 +165,13 @@ struct FileRowView: View {
                         .padding(.vertical, 1)
                         .background(.orange.opacity(0.2))
                         .cornerRadius(3)
+                }
+
+                // File type indicator for non-markdown files
+                if !node.isDirectory && !node.isMarkdownFile && !node.isConfigFile {
+                    Text(node.fileType.displayName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -168,9 +187,15 @@ struct FileRowView: View {
         if node.isPageBundle {
             return "folder.fill.badge.gearshape"
         } else if node.isDirectory {
+            // Use Hugo role icon if available
+            if let role = node.hugoRole {
+                return role.systemImage
+            }
             return "folder"
+        } else if node.isConfigFile {
+            return "gearshape.fill"
         } else {
-            return "doc.text"
+            return node.fileType.systemImage
         }
     }
 
@@ -178,9 +203,15 @@ struct FileRowView: View {
         if node.isPageBundle {
             return .purple
         } else if node.isDirectory {
+            // Use Hugo role color if available
+            if let role = node.hugoRole {
+                return role.accentColor
+            }
             return .blue
+        } else if node.isConfigFile {
+            return .orange
         } else {
-            return .primary
+            return node.fileType.defaultColor
         }
     }
 
@@ -188,9 +219,14 @@ struct FileRowView: View {
         if node.isPageBundle {
             return "Page bundle"
         } else if node.isDirectory {
+            if let role = node.hugoRole {
+                return "\(role.displayName) folder"
+            }
             return "Folder"
+        } else if node.isConfigFile {
+            return "Hugo config file"
         } else {
-            return "Markdown file"
+            return node.fileType.displayName
         }
     }
 }
@@ -219,7 +255,6 @@ struct FileStatusIndicator: View {
                 Circle()
                     .fill(.orange)
                     .frame(width: 8, height: 8)
-                    .help("Unsaved changes")
                     .accessibilityLabel("Unsaved changes")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
 
@@ -227,7 +262,6 @@ struct FileStatusIndicator: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(.green)
-                    .help("Saved")
                     .accessibilityLabel("Recently saved")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
             }

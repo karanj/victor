@@ -11,28 +11,36 @@ extension Animation {
     }
 
     /// Standard duration for most UI transitions
-    static let standardDuration: Double = 0.2
+    static let standardDuration: Double = AppConstants.Animation.standard
 
     /// Quick duration for subtle transitions
-    static let quickDuration: Double = 0.15
+    static let quickDuration: Double = AppConstants.Animation.fast
 
     /// Slow duration for emphasis transitions
-    static let emphasisDuration: Double = 0.3
+    static let emphasisDuration: Double = AppConstants.Animation.slow
 }
 
 // MARK: - Pulse Animation Modifier
 
 /// Adds a gentle pulse animation to a view
 struct PulseAnimationModifier: ViewModifier {
+    private enum Constants {
+        static let pulseScale: CGFloat = 1.1
+        static let normalScale: CGFloat = 1.0
+        static let dimmedOpacity: Double = 0.8
+        static let fullOpacity: Double = 1.0
+        static let pulseDuration: Double = 0.6
+    }
+
     @State private var isPulsing = false
     let isActive: Bool
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isPulsing && isActive ? 1.1 : 1.0)
-            .opacity(isPulsing && isActive ? 0.8 : 1.0)
+            .scaleEffect(isPulsing && isActive ? Constants.pulseScale : Constants.normalScale)
+            .opacity(isPulsing && isActive ? Constants.dimmedOpacity : Constants.fullOpacity)
             .animation(
-                isActive ? .easeInOut(duration: 0.6).repeatForever(autoreverses: true) : .default,
+                isActive ? .easeInOut(duration: Constants.pulseDuration).repeatForever(autoreverses: true) : .default,
                 value: isPulsing
             )
             .onAppear {
@@ -57,6 +65,15 @@ extension View {
 
 /// Adds a shake animation for error states
 struct ShakeAnimationModifier: ViewModifier {
+    private enum Constants {
+        static let shakeDistance: CGFloat = 10
+        static let springStiffness: Double = 500
+        static let initialDamping: Double = 10
+        static let finalDamping: Double = 15
+        static let firstDelayMs: UInt64 = 100
+        static let secondDelayMs: UInt64 = 200
+    }
+
     @State private var shakeOffset: CGFloat = 0
     @Binding var trigger: Bool
 
@@ -65,20 +82,20 @@ struct ShakeAnimationModifier: ViewModifier {
             .offset(x: shakeOffset)
             .onChange(of: trigger) { _, shouldShake in
                 if shouldShake {
-                    withAnimation(.interpolatingSpring(stiffness: 500, damping: 10)) {
-                        shakeOffset = -10
+                    withAnimation(.interpolatingSpring(stiffness: Constants.springStiffness, damping: Constants.initialDamping)) {
+                        shakeOffset = -Constants.shakeDistance
                     }
 
                     Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(100))
-                        withAnimation(.interpolatingSpring(stiffness: 500, damping: 10)) {
-                            shakeOffset = 10
+                        try? await Task.sleep(for: .milliseconds(Constants.firstDelayMs))
+                        withAnimation(.interpolatingSpring(stiffness: Constants.springStiffness, damping: Constants.initialDamping)) {
+                            shakeOffset = Constants.shakeDistance
                         }
                     }
 
                     Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(200))
-                        withAnimation(.interpolatingSpring(stiffness: 500, damping: 15)) {
+                        try? await Task.sleep(for: .milliseconds(Constants.secondDelayMs))
+                        withAnimation(.interpolatingSpring(stiffness: Constants.springStiffness, damping: Constants.finalDamping)) {
                             shakeOffset = 0
                         }
                         trigger = false
@@ -99,11 +116,18 @@ extension View {
 
 /// Adds a fade-in transition when content appears
 struct FadeInModifier: ViewModifier {
-    @State private var opacity: Double = 0
+    private enum Constants {
+        static let defaultDuration: Double = AppConstants.Animation.fast
+        static let defaultDelay: Double = 0
+        static let hiddenOpacity: Double = 0
+        static let visibleOpacity: Double = 1
+    }
+
+    @State private var opacity: Double = Constants.hiddenOpacity
     let duration: Double
     let delay: Double
 
-    init(duration: Double = 0.15, delay: Double = 0) {
+    init(duration: Double = Constants.defaultDuration, delay: Double = Constants.defaultDelay) {
         self.duration = duration
         self.delay = delay
     }
@@ -116,12 +140,12 @@ struct FadeInModifier: ViewModifier {
                     Task { @MainActor in
                         try? await Task.sleep(for: .seconds(delay))
                         withAnimation(.easeInOut(duration: duration)) {
-                            opacity = 1
+                            opacity = Constants.visibleOpacity
                         }
                     }
                 } else {
                     withAnimation(.easeInOut(duration: duration)) {
-                        opacity = 1
+                        opacity = Constants.visibleOpacity
                     }
                 }
             }
@@ -130,7 +154,7 @@ struct FadeInModifier: ViewModifier {
 
 extension View {
     /// Adds a fade-in animation when the view appears
-    func fadeIn(duration: Double = 0.15, delay: Double = 0) -> some View {
+    func fadeIn(duration: Double = AppConstants.Animation.fast, delay: Double = 0) -> some View {
         modifier(FadeInModifier(duration: duration, delay: delay))
     }
 }
@@ -139,41 +163,54 @@ extension View {
 
 /// Special animation for save indicator with pop-in effect
 struct SaveIndicatorAnimationModifier: ViewModifier {
-    @State private var scale: CGFloat = 0.5
-    @State private var opacity: Double = 0
+    private enum Constants {
+        static let initialScale: CGFloat = 0.5
+        static let fullScale: CGFloat = 1.0
+        static let pulseScale: CGFloat = 1.05
+        static let hiddenOpacity: Double = 0
+        static let visibleOpacity: Double = 1.0
+        static let springResponse: Double = AppConstants.Toolbar.saveSpringResponse
+        static let springDamping: Double = AppConstants.Toolbar.saveSpringDamping
+        static let pulseDelayMs: UInt64 = 300
+        static let pulseDuration: Double = 0.8
+        static let fadeOutDuration: Double = AppConstants.Animation.fast
+    }
+
+    @State private var scale: CGFloat = Constants.initialScale
+    @State private var opacity: Double = Constants.hiddenOpacity
     let isShowing: Bool
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isShowing ? scale : 0.5)
-            .opacity(isShowing ? opacity : 0)
+            .scaleEffect(isShowing ? scale : Constants.initialScale)
+            .opacity(isShowing ? opacity : Constants.hiddenOpacity)
             .onChange(of: isShowing) { _, newValue in
                 if newValue {
                     // Pop-in animation
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        scale = 1.0
-                        opacity = 1.0
+                    withAnimation(.spring(response: Constants.springResponse, dampingFraction: Constants.springDamping)) {
+                        scale = Constants.fullScale
+                        opacity = Constants.visibleOpacity
                     }
 
                     // Subtle pulse after appearing
                     Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(300))
-                        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                            scale = 1.05
+                        try? await Task.sleep(for: .milliseconds(Constants.pulseDelayMs))
+                        withAnimation(.easeInOut(duration: Constants.pulseDuration).repeatForever(autoreverses: true)) {
+                            scale = Constants.pulseScale
                         }
                     }
                 } else {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        scale = 0.5
-                        opacity = 0
+                    withAnimation(.easeOut(duration: Constants.fadeOutDuration)) {
+                        scale = Constants.initialScale
+                        opacity = Constants.hiddenOpacity
                     }
                 }
             }
             .onAppear {
                 if isShowing {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        scale = 1.0
-                        opacity = 1.0
+                    withAnimation(.spring(response: Constants.springResponse, dampingFraction: Constants.springDamping)) {
+                        scale = Constants.fullScale
+                        opacity = Constants.visibleOpacity
                     }
                 }
             }
@@ -191,11 +228,16 @@ extension View {
 
 /// Adds a slide-in transition from specified edge
 struct SlideInModifier: ViewModifier {
+    private enum Constants {
+        static let defaultDistance: CGFloat = 20
+        static let defaultDuration: Double = AppConstants.Animation.standard
+    }
+
     @State private var offset: CGFloat
     let edge: Edge
     let duration: Double
 
-    init(edge: Edge, distance: CGFloat = 20, duration: Double = 0.2) {
+    init(edge: Edge, distance: CGFloat = Constants.defaultDistance, duration: Double = Constants.defaultDuration) {
         self.edge = edge
         self.duration = duration
 
@@ -228,7 +270,7 @@ struct SlideInModifier: ViewModifier {
 
 extension View {
     /// Adds a slide-in animation from the specified edge
-    func slideIn(from edge: Edge, distance: CGFloat = 20, duration: Double = 0.2) -> some View {
+    func slideIn(from edge: Edge, distance: CGFloat = 20, duration: Double = AppConstants.Animation.standard) -> some View {
         modifier(SlideInModifier(edge: edge, distance: distance, duration: duration))
     }
 }
@@ -257,17 +299,23 @@ extension View {
 
 /// Adds a subtle scale effect on hover
 struct HoverScaleModifier: ViewModifier {
+    private enum Constants {
+        static let defaultScale: CGFloat = 1.02
+        static let normalScale: CGFloat = 1.0
+        static let hoverDuration: Double = AppConstants.Animation.fast
+    }
+
     @State private var isHovered = false
     let scale: CGFloat
 
-    init(scale: CGFloat = 1.02) {
+    init(scale: CGFloat = Constants.defaultScale) {
         self.scale = scale
     }
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isHovered ? scale : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isHovered)
+            .scaleEffect(isHovered ? scale : Constants.normalScale)
+            .animation(.easeInOut(duration: Constants.hoverDuration), value: isHovered)
             .onHover { hovering in
                 isHovered = hovering
             }
