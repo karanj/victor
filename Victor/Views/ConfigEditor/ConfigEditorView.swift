@@ -103,7 +103,7 @@ struct ConfigEditorView: View {
                 Text("Raw").tag(true)
             }
             .pickerStyle(.segmented)
-            .frame(width: 120)
+            .frame(width: 180)
 
             Divider()
                 .frame(height: 20)
@@ -162,16 +162,17 @@ struct ConfigEssentialsTab: View {
         Form {
             Section("Site Identity") {
                 LabeledContent("Base URL") {
-                    TextField("https://example.com/", text: $config.baseURL)
+                    TextField("",text: $config.baseURL, prompt: Text("https://example.com/"))
                         .textFieldStyle(.roundedBorder)
+                        .disableAutocorrection(true)
                         .onChange(of: config.baseURL) { _, _ in
                             config.hasUnsavedChanges = true
                         }
                 }
-                .help("The absolute URL of your site (e.g., https://example.com/)")
+                .help("The absolute URL of your site")
 
                 LabeledContent("Title") {
-                    TextField("My Site", text: $config.title)
+                    TextField("", text: $config.title, prompt: Text("My Site"))
                         .textFieldStyle(.roundedBorder)
                         .onChange(of: config.title) { _, _ in
                             config.hasUnsavedChanges = true
@@ -180,9 +181,8 @@ struct ConfigEssentialsTab: View {
                 .help("The title of your site")
 
                 LabeledContent("Language Code") {
-                    TextField("en-us", text: $config.languageCode)
+                    TextField("", text: $config.languageCode,prompt: Text("en-us"))
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
                         .onChange(of: config.languageCode) { _, _ in
                             config.hasUnsavedChanges = true
                         }
@@ -192,10 +192,10 @@ struct ConfigEssentialsTab: View {
 
             Section("Theme") {
                 LabeledContent("Theme") {
-                    TextField("theme-name", text: Binding(
+                    TextField("", text: Binding(
                         get: { config.theme ?? "" },
                         set: { config.theme = $0.isEmpty ? nil : $0 }
-                    ))
+                    ),prompt: Text("theme-name"))
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: config.theme) { _, _ in
                         config.hasUnsavedChanges = true
@@ -206,10 +206,10 @@ struct ConfigEssentialsTab: View {
 
             Section("Copyright") {
                 LabeledContent("Copyright") {
-                    TextField("© 2024 Your Name", text: Binding(
+                    TextField("", text: Binding(
                         get: { config.copyright ?? "" },
                         set: { config.copyright = $0.isEmpty ? nil : $0 }
-                    ))
+                    ), prompt: Text("© 2025 Your Name"))
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: config.copyright) { _, _ in
                         config.hasUnsavedChanges = true
@@ -342,7 +342,7 @@ struct ConfigAdvancedTab: View {
         Form {
             Section("Localization") {
                 LabeledContent("Default Language") {
-                    TextField("en", text: $config.defaultContentLanguage)
+                    TextField("", text: $config.defaultContentLanguage,prompt: Text("en"))
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 100)
                         .onChange(of: config.defaultContentLanguage) { _, _ in
@@ -351,10 +351,10 @@ struct ConfigAdvancedTab: View {
                 }
 
                 LabeledContent("Time Zone") {
-                    TextField("America/New_York", text: Binding(
+                    TextField("", text: Binding(
                         get: { config.timeZone ?? "" },
                         set: { config.timeZone = $0.isEmpty ? nil : $0 }
-                    ))
+                    ),prompt: Text("America/New_York"))
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: config.timeZone) { _, _ in
                         config.hasUnsavedChanges = true
