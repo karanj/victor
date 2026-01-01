@@ -12,10 +12,12 @@
 		1088CADE1E07095438ADF02C /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85515707B9420ED7D9F3724D /* PreferencesView.swift */; };
 		11594468086A0FB770000A8B /* VictorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */; };
 		16F9AF53EE7EA58919CD8D0E /* TextFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20942866D9502CCA93571D19 /* TextFile.swift */; };
+		17D178CDEC82395F7D3F980C /* HugoConfigParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */; };
 		17FB120BE8BC8540D825F864 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F51F8DDFBFAE5CBCAE2AC50 /* EditorViewModel.swift */; };
 		191C191C9DAC62DC001530F3 /* EditorTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7788DB7550B1240381DEFEC /* EditorTextView.swift */; };
 		27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */; };
 		281A23A15B2B0AAC8668F4CC /* MenuEntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B70F82D5687B1A912977787 /* MenuEntryEditor.swift */; };
+		2FCC48CCD498DB32C3C792AE /* FrontmatterParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */; };
 		33E672AB082D3ED5838ED7F4 /* HugoShortcode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF18C11530F31087472421D /* HugoShortcode.swift */; };
 		34D1ABA956DC77225350D4A8 /* HugoSiteStructure.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7C29CB2FE5672D265C73C51 /* HugoSiteStructure.swift */; };
 		35B52DF7CCC9B4AAA2349319 /* HelpTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 062838065437851B5ABB7404 /* HelpTooltip.swift */; };
@@ -50,6 +52,7 @@
 		BA894FADE169193B513F4318 /* SEOTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0BBFA1B7290B46E6F0291C9 /* SEOTab.swift */; };
 		BB171CB452137D7DAE0B6F6B /* FileType.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD4827B74BCFB4B98565639 /* FileType.swift */; };
 		BF92ACDC6215F924D9DAD767 /* FileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7895D7CEE7F9900B99CFA87B /* FileListView.swift */; };
+		C7277992CA172129069BDE11 /* TOMLKit in Frameworks */ = {isa = PBXBuildFile; productRef = C8A8A2B11C204EA0D24AEF5D /* TOMLKit */; };
 		C7C16AAEBEB1B6427E7E004B /* PublishingTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E425A63F6B4F5A81217B8AB /* PublishingTab.swift */; };
 		C92F0586E16024CD0B3929A8 /* HugoConfigParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */; };
 		CBE91381C4646AB5E54827FC /* FileViewerRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815EA918C4B3B850A863AC39 /* FileViewerRouter.swift */; };
@@ -115,6 +118,7 @@
 		8EF6A7DA5111F18A8F66A828 /* Frontmatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Frontmatter.swift; sourceTree = "<group>"; };
 		9102466F776A1B376AC8C5E4 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		9853E3C0E35EC9D2CEBEC4D5 /* FrontmatterBottomPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterBottomPanel.swift; sourceTree = "<group>"; };
+		99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterParserTests.swift; sourceTree = "<group>"; };
 		9E64E6BD3BEFDFEE8C3FEB37 /* ShortcodePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcodePickerView.swift; sourceTree = "<group>"; };
 		A2430A3C7888FF7CC094C6E7 /* AdvancedTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedTab.swift; sourceTree = "<group>"; };
 		A3F46E0A71220B160B3FDD02 /* AutoSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveService.swift; sourceTree = "<group>"; };
@@ -135,6 +139,7 @@
 		D0F71B5CB356171D3521AB28 /* EssentialFieldsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EssentialFieldsTab.swift; sourceTree = "<group>"; };
 		D3B404F98684163BC1F29FB3 /* PreviewWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWebView.swift; sourceTree = "<group>"; };
 		E47231FACC5F28F3FB428392 /* FileSystemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemService.swift; sourceTree = "<group>"; };
+		EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoConfigParserTests.swift; sourceTree = "<group>"; };
 		ECFE88CA8C8E2F13D02BAC38 /* MetadataSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSection.swift; sourceTree = "<group>"; };
 		ED03CD64BCDC16ACEBF130BD /* TextEditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditorViewModel.swift; sourceTree = "<group>"; };
 		F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VictorApp.swift; sourceTree = "<group>"; };
@@ -145,6 +150,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		060588E8BB894FD6AB4BDFB9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C7277992CA172129069BDE11 /* TOMLKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A52E4DB5C3E9B46F6E217B4F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -263,6 +276,8 @@
 		7E7702900FDFE16F97E022D9 /* VictorTests */ = {
 			isa = PBXGroup;
 			children = (
+				99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */,
+				EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */,
 			);
 			path = VictorTests;
 			sourceTree = "<group>";
@@ -423,6 +438,7 @@
 			buildConfigurationList = 5B975B6F68EE7A3E2B8E8992 /* Build configuration list for PBXNativeTarget "VictorTests" */;
 			buildPhases = (
 				E355DC6C1730A6733EF03F1A /* Sources */,
+				060588E8BB894FD6AB4BDFB9 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -431,6 +447,7 @@
 			);
 			name = VictorTests;
 			packageProductDependencies = (
+				C8A8A2B11C204EA0D24AEF5D /* TOMLKit */,
 			);
 			productName = VictorTests;
 			productReference = F0FA85402B1F22ED8C36F632 /* VictorTests.xctest */;
@@ -559,6 +576,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FCC48CCD498DB32C3C792AE /* FrontmatterParserTests.swift in Sources */,
+				17D178CDEC82395F7D3F980C /* HugoConfigParserTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -858,6 +877,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5DFE115DC1BFC9F134C6CFA1 /* XCRemoteSwiftPackageReference "Down" */;
 			productName = Down;
+		};
+		C8A8A2B11C204EA0D24AEF5D /* TOMLKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC1398A0762D3C7987D0CEBC /* XCRemoteSwiftPackageReference "TOMLKit" */;
+			productName = TOMLKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

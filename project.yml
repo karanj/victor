@@ -68,6 +68,7 @@ targets:
           - "**/.DS_Store"
     dependencies:
       - target: Victor
+      - package: TOMLKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.victor.VictorTests

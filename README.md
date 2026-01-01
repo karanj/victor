@@ -2,9 +2,10 @@
 
 A native macOS app built with SwiftUI that provides a sophisticated editing experience for Hugo static sites.
 
-**Last Updated**: December 30, 2025
+**Last Updated**: January 1, 2026
 **Build Status**: Clean build, no errors, no warnings
 **Code Quality**: All critical and high-priority issues fixed; most low-priority issues addressed
+**Test Coverage**: 121 tests covering config and frontmatter parsing
 **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based auto-save
 
 ## Features
@@ -236,12 +237,17 @@ Victor/
 ├── Services/
 │   ├── FileSystemService.swift
 │   ├── FrontmatterParser.swift
+│   ├── HugoConfigParser.swift
 │   ├── MarkdownRenderer.swift
 │   ├── AutoSaveService.swift
 │   └── Logger.swift
 ├── AppConstants.swift
 └── Resources/
     └── preview-styles.css
+
+VictorTests/
+├── HugoConfigParserTests.swift   # Config file parsing tests
+└── FrontmatterParserTests.swift  # Frontmatter parsing tests
 ```
 
 ## Dependencies
@@ -257,6 +263,45 @@ Victor/
 - **File I/O**: Async/await with `NSFileCoordinator`
 - **Security**: App Sandbox with security-scoped bookmarks
 - **Caching**: LRU cache for content files with automatic eviction
+
+## Testing
+
+Victor includes a test suite covering critical parsing functionality:
+
+### Running Tests
+
+```bash
+# Run all tests
+xcodebuild test -project Victor.xcodeproj -scheme Victor
+
+# Run specific test suite
+xcodebuild test -project Victor.xcodeproj -scheme Victor -only-testing:VictorTests/HugoConfigParserTests
+xcodebuild test -project Victor.xcodeproj -scheme Victor -only-testing:VictorTests/FrontmatterParserTests
+```
+
+### Test Coverage
+
+| Test Suite | Tests | Description |
+|------------|-------|-------------|
+| HugoConfigParserTests | 61 | Hugo config parsing and serialization (TOML, YAML, JSON) |
+| FrontmatterParserTests | 60 | Frontmatter parsing for markdown files |
+
+**HugoConfigParserTests** covers:
+- Round-trip serialization for all formats (TOML, YAML, JSON)
+- Error handling for invalid input
+- Edge cases (empty configs, special characters, Unicode)
+- Hugo-specific features (theme arrays, menus, taxonomies, build flags)
+- Type handling (integers, floats, booleans, arrays)
+- Custom field preservation
+- Format detection from filenames
+
+**FrontmatterParserTests** covers:
+- Parsing all frontmatter formats (YAML `---`, TOML `+++`, JSON `{}`)
+- All Hugo frontmatter fields (title, date, draft, tags, categories, etc.)
+- Menu configurations and nested structures
+- SEO fields, publishing dates, and layout options
+- Round-trip serialization
+- Error handling and edge cases
 
 ## Future Enhancements
 
@@ -325,7 +370,7 @@ Contributions welcome for:
 - Documentation improvements
 - Future enhancements (file watching, image drag & drop, Git integration, syntax highlighting)
 - Additional Hugo-specific features
-- Unit and integration tests
+- Expanding test coverage (ViewModels, Services, integration tests)
 
 ## License
 

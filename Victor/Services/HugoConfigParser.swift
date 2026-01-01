@@ -32,7 +32,7 @@ class HugoConfigParser {
 
     // MARK: - Parsing
 
-    /// Parse a Hugo config file
+    /// Parse a Hugo config file from disk
     func parseConfig(at url: URL) async throws -> HugoConfig {
         let content = try await Task.detached {
             try String(contentsOf: url, encoding: .utf8)
@@ -42,6 +42,18 @@ class HugoConfigParser {
         let dictionary = try parse(content: content, format: format)
 
         return HugoConfig(from: dictionary, format: format, url: url, rawContent: content)
+    }
+
+    /// Parse a Hugo config from a string
+    /// - Parameters:
+    ///   - content: The config file content as a string
+    ///   - format: The format of the config (TOML, YAML, or JSON)
+    /// - Returns: A HugoConfig object
+    func parseConfig(content: String, format: ConfigFormat) throws -> HugoConfig {
+        let dictionary = try parse(content: content, format: format)
+        // Use a placeholder URL for string-based parsing (not associated with a file)
+        let placeholderURL = URL(fileURLWithPath: "/dev/null")
+        return HugoConfig(from: dictionary, format: format, url: placeholderURL, rawContent: content)
     }
 
     /// Parse content based on format
@@ -135,13 +147,13 @@ class HugoConfigParser {
             dictionary["taxonomies"] = config.taxonomies
         }
 
-        // Menus
+        // Menus (use "menu" as it's more common in Hugo configs)
         if !config.menus.isEmpty {
-            var menusDict: [String: [[String: Any]]] = [:]
+            var menuDict: [String: [[String: Any]]] = [:]
             for (menuName, items) in config.menus {
-                menusDict[menuName] = items.map { $0.toDictionary() }
+                menuDict[menuName] = items.map { $0.toDictionary() }
             }
-            dictionary["menus"] = menusDict
+            dictionary["menu"] = menuDict
         }
 
         // Params
@@ -170,36 +182,90 @@ class HugoConfigParser {
 
     private func serializeToTOML(_ dictionary: [String: Any]) throws -> String {
         var lines: [String] = []
-        var tables: [(String, [String: Any])] = []
 
-        // First pass: simple values
-        for (key, value) in dictionary.sorted(by: { $0.key < $1.key }) {
-            if let dictValue = value as? [String: Any] {
-                tables.append((key, dictValue))
+        // Serialize recursively, starting at root level
+        serializeTOMLTable(dictionary, path: [], lines: &lines)
+
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// Recursively serialize a TOML table
+    /// - Parameters:
+    ///   - dict: The dictionary to serialize
+    ///   - path: The current path (e.g., ["menu", "main"] for [menu.main])
+    ///   - lines: The output lines array
+    private func serializeTOMLTable(_ dict: [String: Any], path: [String], lines: inout [String]) {
+        // Separate simple values, tables, and arrays of tables
+        var simpleValues: [(String, Any)] = []
+        var nestedTables: [(String, [String: Any])] = []
+        var arrayOfTables: [(String, [[String: Any]])] = []
+
+        for (key, value) in dict.sorted(by: { $0.key < $1.key }) {
+            if let arrayValue = value as? [Any] {
+                // Check if this is an array of dictionaries (array of tables)
+                if let dictArray = arrayValue as? [[String: Any]], !dictArray.isEmpty {
+                    arrayOfTables.append((key, dictArray))
+                } else {
+                    // Simple array (strings, numbers, etc.)
+                    simpleValues.append((key, value))
+                }
+            } else if let dictValue = value as? [String: Any] {
+                nestedTables.append((key, dictValue))
             } else {
-                lines.append(formatTOMLValue(key: key, value: value))
+                simpleValues.append((key, value))
             }
         }
 
-        // Second pass: tables
-        for (tableName, tableDict) in tables {
-            lines.append("")
-            lines.append("[\(tableName)]")
-            for (key, value) in tableDict.sorted(by: { $0.key < $1.key }) {
-                if let nestedDict = value as? [String: Any] {
-                    // Handle nested tables
+        // Write table header if we're not at root and have simple values
+        if !path.isEmpty && !simpleValues.isEmpty {
+            if !lines.isEmpty {
+                lines.append("")
+            }
+            lines.append("[\(path.joined(separator: "."))]")
+        }
+
+        // Write simple values
+        for (key, value) in simpleValues {
+            lines.append(formatTOMLValue(key: key, value: value))
+        }
+
+        // Write nested tables
+        for (key, nestedDict) in nestedTables {
+            let newPath = path + [key]
+            serializeTOMLTable(nestedDict, path: newPath, lines: &lines)
+        }
+
+        // Write arrays of tables using [[table.name]] syntax
+        for (key, dictArray) in arrayOfTables {
+            let tablePath = path + [key]
+            let tablePathStr = tablePath.joined(separator: ".")
+
+            for tableDict in dictArray {
+                if !lines.isEmpty {
                     lines.append("")
-                    lines.append("[\(tableName).\(key)]")
-                    for (nestedKey, nestedValue) in nestedDict.sorted(by: { $0.key < $1.key }) {
-                        lines.append(formatTOMLValue(key: nestedKey, value: nestedValue))
+                }
+                lines.append("[[\(tablePathStr)]]")
+
+                // Write each key-value in the table
+                for (itemKey, itemValue) in tableDict.sorted(by: { $0.key < $1.key }) {
+                    if let nestedDict = itemValue as? [String: Any] {
+                        // Nested table within array of tables
+                        serializeTOMLTable(nestedDict, path: tablePath + [itemKey], lines: &lines)
+                    } else if let nestedArray = itemValue as? [[String: Any]] {
+                        // Nested array of tables within array of tables
+                        for nestedTableDict in nestedArray {
+                            lines.append("")
+                            lines.append("[[\(tablePath.joined(separator: ".")).\(itemKey)]]")
+                            for (nk, nv) in nestedTableDict.sorted(by: { $0.key < $1.key }) {
+                                lines.append(formatTOMLValue(key: nk, value: nv))
+                            }
+                        }
+                    } else {
+                        lines.append(formatTOMLValue(key: itemKey, value: itemValue))
                     }
-                } else {
-                    lines.append(formatTOMLValue(key: key, value: value))
                 }
             }
         }
-
-        return lines.joined(separator: "\n") + "\n"
     }
 
     private func formatTOMLValue(key: String, value: Any) -> String {
@@ -216,6 +282,7 @@ class HugoConfigParser {
         } else if let doubleValue = value as? Double {
             return "\(key) = \(doubleValue)"
         } else if let arrayValue = value as? [Any] {
+            // Only for simple arrays (not arrays of tables)
             let formatted = arrayValue.map { formatTOMLArrayElement($0) }.joined(separator: ", ")
             return "\(key) = [\(formatted)]"
         }

@@ -299,6 +299,44 @@ class FrontmatterParser {
     private func convertTOMLValue(_ value: Any?) -> Any? {
         guard let value = value else { return nil }
 
+        // Handle TOMLValue wrapper type
+        if let tomlValue = value as? TOMLValue {
+            if let str = tomlValue.string {
+                return str
+            }
+            if let bool = tomlValue.bool {
+                return bool
+            }
+            if let int = tomlValue.int {
+                return Int(int)
+            }
+            if let double = tomlValue.double {
+                return double
+            }
+            if let date = tomlValue.date {
+                return "\(date)"
+            }
+            if let time = tomlValue.time {
+                return "\(time)"
+            }
+            if let dateTime = tomlValue.dateTime {
+                return "\(dateTime)"
+            }
+            if let array = tomlValue.array {
+                return array.compactMap { convertTOMLValue($0) }
+            }
+            if let table = tomlValue.table {
+                var dict: [String: Any] = [:]
+                for key in table.keys {
+                    if let converted = convertTOMLValue(table[key]) {
+                        dict[key] = converted
+                    }
+                }
+                return dict
+            }
+        }
+
+        // Handle nested tables
         if let table = value as? TOMLTable {
             var dict: [String: Any] = [:]
             for key in table.keys {
@@ -307,11 +345,15 @@ class FrontmatterParser {
                 }
             }
             return dict
-        } else if let array = value as? [Any] {
-            return array.compactMap { convertTOMLValue($0) }
-        } else {
-            return value
         }
+
+        // Handle arrays
+        if let array = value as? [Any] {
+            return array.compactMap { convertTOMLValue($0) }
+        }
+
+        // Fallback for native Swift types
+        return value
     }
 
     /// Parse JSON frontmatter
@@ -958,7 +1000,9 @@ class FrontmatterParser {
         }
 
         let tomlString = String(describing: tomlTable)
-        return "+++\n\(tomlString)+++"
+        // Ensure there's a newline before the closing delimiter
+        let normalizedToml = tomlString.hasSuffix("\n") ? tomlString : tomlString + "\n"
+        return "+++\n\(normalizedToml)+++"
     }
 
     /// Add a value to TOML table

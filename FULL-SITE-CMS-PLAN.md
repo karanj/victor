@@ -9,6 +9,37 @@ Transform Victor from a content-only markdown editor into a comprehensive Hugo s
 
 ---
 
+## Progress Summary
+
+| Phase | Status | Completed Date |
+|-------|--------|----------------|
+| Phase 1: File Type Infrastructure | ✅ COMPLETE | 2025-12-30 |
+| Phase 2: Multi-File Viewing | ✅ COMPLETE | 2025-12-30 |
+| Phase 3: Text File Editing | ✅ COMPLETE | 2025-12-30 |
+| Phase 4: Hugo Config GUI Editor | ✅ COMPLETE | 2025-12-31 |
+| Phase 5: Data & Archetypes Management | ⏳ NOT STARTED | - |
+| Phase 6: Asset Management | ⏳ NOT STARTED | - |
+| Phase 7: Template Editing | ⏳ NOT STARTED | - |
+| Phase 8: Hugo Server Integration | ⏳ NOT STARTED | - |
+
+### Completed Files Summary
+
+**Phase 1:** FileType.swift, HugoSiteStructure.swift, modified FileNode/FileSystemService/FileListView
+
+**Phase 2:** FileViewerRouter.swift, ImageViewerPanel.swift, TextViewerPanel.swift, UnsupportedFilePanel.swift, modified ContentView
+
+**Phase 3:** TextFile.swift, TextEditorViewModel.swift, TextEditorPanel.swift, modified FileNode/SiteViewModel
+
+**Phase 4:** HugoConfig.swift, HugoConfigParser.swift, ConfigEditorView.swift (with 4 tabs + raw view), modified SiteViewModel/FileViewerRouter
+
+### Key Implementation Notes
+
+**TOML Parsing (Phase 4):** TOMLKit returns `TOMLValue` wrapper types. Must use `tomlValue.string`, `tomlValue.bool`, etc. to extract values. See `HugoConfigParser.convertTOMLValue()`.
+
+**Theme Array Support:** Hugo supports `theme: "name"` (string) or `theme: [name1, name2]` (array). `HugoConfig.themeIsArray` flag preserves original format on save.
+
+---
+
 ## Important Context for Implementers
 
 ### Project Structure
@@ -65,7 +96,7 @@ Phase 1 has been implemented. The following files were created/modified:
 
 ---
 
-## Phase 2: Multi-File Viewing (Read Support)
+## Phase 2: Multi-File Viewing (Read Support) ✅ COMPLETE
 
 ### Goal
 Enable viewing of all file types with appropriate viewers. Hide the preview panel for non-markdown files.
@@ -655,7 +686,7 @@ xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
 
 ---
 
-## Phase 3: Text File Editing (Write Support)
+## Phase 3: Text File Editing (Write Support) ✅ COMPLETE
 
 ### Goal
 Enable editing of all text-based files (YAML, TOML, JSON, HTML, CSS, JS) with auto-save.
@@ -1150,7 +1181,7 @@ case .yaml, .toml, .json, .html, .css, .javascript, .typescript,
 
 ---
 
-## Phase 4: Hugo Config GUI Editor
+## Phase 4: Hugo Config GUI Editor ✅ COMPLETE
 
 ### Goal
 Create a form-based editor for Hugo configuration files (hugo.toml, hugo.yaml, hugo.json).
@@ -2002,7 +2033,7 @@ func saveHugoConfig() async {
 
 ## Phases 5-8: Future Implementation
 
-### Phase 5: Data & Archetypes Management
+### Phase 5: Data & Archetypes Management ⏳ NEXT UP
 - Create `DataFileEditorView` for editing YAML/JSON data files in `data/`
 - Create `ArchetypeManagerView` for managing content templates in `archetypes/`
 - Create `TranslationEditorView` for i18n files
