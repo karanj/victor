@@ -26,9 +26,11 @@ struct FileListView: View {
                             node.isExpanded.toggle()
                         }
                         .onTapGesture {
-                            // If page bundle, open the index file
+                            // Select the folder (or index file for page bundles)
                             if node.isPageBundle, let indexFile = node.indexFile {
                                 siteViewModel.selectNode(indexFile)
+                            } else {
+                                siteViewModel.selectNode(node)
                             }
                         }
                 }
@@ -80,9 +82,11 @@ struct FileTreeRow: View {
                         node.isExpanded.toggle()
                     }
                     .onTapGesture {
-                        // If page bundle, open the index file
+                        // Select the folder (or index file for page bundles)
                         if node.isPageBundle, let indexFile = node.indexFile {
                             siteViewModel.selectNode(indexFile)
+                        } else {
+                            siteViewModel.selectNode(node)
                         }
                     }
             }

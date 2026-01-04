@@ -18,7 +18,7 @@ Transform Victor from a content-only markdown editor into a comprehensive Hugo s
 | Phase 3: Text File Editing | ✅ COMPLETE | 2025-12-30 |
 | Phase 4: Hugo Config GUI Editor | ✅ COMPLETE | 2025-12-31 |
 | Phase 5: Data & Archetypes Management | ⏳ NOT STARTED | - |
-| Phase 6: Asset Management | ⏳ NOT STARTED | - |
+| Phase 6: Asset Management | ✅ COMPLETE | 2026-01-01 |
 | Phase 7: Template Editing | ⏳ NOT STARTED | - |
 | Phase 8: Hugo Server Integration | ⏳ NOT STARTED | - |
 
@@ -31,6 +31,8 @@ Transform Victor from a content-only markdown editor into a comprehensive Hugo s
 **Phase 3:** TextFile.swift, TextEditorViewModel.swift, TextEditorPanel.swift, modified FileNode/SiteViewModel
 
 **Phase 4:** HugoConfig.swift, HugoConfigParser.swift, ConfigEditorView.swift (with 4 tabs + raw view), modified SiteViewModel/FileViewerRouter
+
+**Phase 6:** Asset.swift, AssetService.swift, AssetBrowserView.swift, AssetDetailPanel.swift, modified FileViewerRouter/EditorTextView (drag-drop support)
 
 ### Key Implementation Notes
 
@@ -2031,27 +2033,3219 @@ func saveHugoConfig() async {
 
 ---
 
-## Phases 5-8: Future Implementation
+## Phase 5: Data & Archetypes Management ⏳ NEXT UP
 
-### Phase 5: Data & Archetypes Management ⏳ NEXT UP
-- Create `DataFileEditorView` for editing YAML/JSON data files in `data/`
-- Create `ArchetypeManagerView` for managing content templates in `archetypes/`
-- Create `TranslationEditorView` for i18n files
+### Goal
+Enable structured editing of Hugo data files, content archetypes, and i18n translation files with purpose-built editors.
 
-### Phase 6: Asset Management
-- Create `AssetBrowserView` with grid/list views for `static/` and `assets/`
-- Add thumbnail generation for images
-- Add drag & drop support for inserting images into markdown
+### Prerequisites
+- Phase 3 must be complete (text editing infrastructure)
+- Understand how `FrontmatterEditorView` handles dynamic form generation
 
-### Phase 7: Template Editing
-- Create `TemplateEditorView` for HTML templates in `layouts/`
-- Add Go template syntax awareness
-- Show template inheritance hierarchy
+---
 
-### Phase 8: Hugo Server Integration
-- Create `HugoServerService` to manage the Hugo development server
-- Add live preview using Hugo's built-in server
-- Show build errors in the UI
+### Understanding Hugo's Special Directories
+
+#### `data/` - Structured Data Files
+Hugo data files provide structured data accessible in templates via `.Site.Data`:
+- Navigation menus, team lists, product catalogs
+- Formats: YAML, JSON, TOML
+- Nested structures common (arrays of objects)
+- Accessed as `.Site.Data.filename.key`
+
+#### `archetypes/` - Content Templates
+Templates used when creating content with `hugo new`:
+- Define default frontmatter for new content types
+- Can include body content templates
+- Support Go template syntax (e.g., `{{ .Date }}`)
+- Named by content type: `posts.md`, `projects.md`, `default.md`
+
+#### `i18n/` - Translation Strings
+Internationalization files for multi-language sites:
+- One file per language: `en.yaml`, `fr.yaml`, `de.toml`
+- Key-value pairs for translation strings
+- Support pluralization with `one`, `other` keys
+
+---
+
+### Step 5.1: Create DataFile Model
+
+**Create new file:** `Victor/Models/DataFile.swift`
+
+```swift
+import Foundation
+
+/// Represents a Hugo data file (YAML/JSON/TOML in data/)
+@Observable
+class DataFile: Identifiable, Hashable {
+    let id: UUID
+    let url: URL
+    let format: ConfigFormat  // Reuse from Phase 4
+    var data: Any  // Can be [String: Any] or [[String: Any]]
+    var originalData: Any
+    var lastModified: Date
+
+    /// Whether this is an array at the root (common for lists)
+    var isArrayRoot: Bool {
+        data is [[String: Any]]
+    }
+
+    /// Whether there are unsaved changes
+    var hasUnsavedChanges: Bool = false
+
+    init(url: URL, data: Any, format: ConfigFormat, lastModified: Date) {
+        self.id = UUID()
+        self.url = url
+        self.format = format
+        self.data = data
+        self.originalData = data
+        self.lastModified = lastModified
+    }
+
+    // MARK: - Hashable & Equatable
+    static func == (lhs: DataFile, rhs: DataFile) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
+/// Represents a single item in a data file (for array-based data)
+struct DataItem: Identifiable {
+    let id: UUID
+    var fields: [String: Any]
+
+    init(fields: [String: Any]) {
+        self.id = UUID()
+        self.fields = fields
+    }
+}
+```
+
+---
+
+### Step 5.2: Create DataFileParser Service
+
+**Create new file:** `Victor/Services/DataFileParser.swift`
+
+```swift
+import Foundation
+import Yams
+import TOMLKit
+
+/// Service for parsing and serializing Hugo data files
+class DataFileParser {
+    static let shared = DataFileParser()
+    private init() {}
+
+    /// Parse a data file from disk
+    func parseDataFile(at url: URL) async throws -> DataFile {
+        let content = try await Task.detached {
+            try String(contentsOf: url, encoding: .utf8)
+        }.value
+
+        let format = ConfigFormat(filename: url.lastPathComponent) ?? .yaml
+        let data = try parse(content: content, format: format)
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let modDate = attributes[.modificationDate] as? Date ?? Date()
+
+        return DataFile(url: url, data: data, format: format, lastModified: modDate)
+    }
+
+    /// Parse content based on format (returns Any - dict or array)
+    private func parse(content: String, format: ConfigFormat) throws -> Any {
+        switch format {
+        case .yaml:
+            guard let result = try Yams.load(yaml: content) else {
+                throw DataFileError.emptyFile
+            }
+            return result
+        case .json:
+            guard let data = content.data(using: .utf8) else {
+                throw DataFileError.invalidEncoding
+            }
+            return try JSONSerialization.jsonObject(with: data)
+        case .toml:
+            let table = try TOMLTable(string: content)
+            return convertTOMLToDict(table)
+        }
+    }
+
+    /// Serialize data back to string
+    func serialize(_ dataFile: DataFile) throws -> String {
+        switch dataFile.format {
+        case .yaml:
+            return try Yams.dump(object: dataFile.data)
+        case .json:
+            let data = try JSONSerialization.data(
+                withJSONObject: dataFile.data,
+                options: [.prettyPrinted, .sortedKeys]
+            )
+            return String(data: data, encoding: .utf8) ?? ""
+        case .toml:
+            // TOML serialization (simplified)
+            guard let dict = dataFile.data as? [String: Any] else {
+                throw DataFileError.invalidStructure
+            }
+            return try serializeToTOML(dict)
+        }
+    }
+
+    // MARK: - TOML Helpers (reuse from HugoConfigParser)
+
+    private func convertTOMLToDict(_ table: TOMLTable) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in table {
+            result[key] = convertTOMLValue(value)
+        }
+        return result
+    }
+
+    private func convertTOMLValue(_ value: TOMLValue) -> Any {
+        switch value {
+        case .string(let s): return s
+        case .int(let i): return i
+        case .bool(let b): return b
+        case .double(let d): return d
+        case .table(let t): return convertTOMLToDict(t)
+        case .array(let a): return a.map { convertTOMLValue($0) }
+        default: return String(describing: value)
+        }
+    }
+
+    private func serializeToTOML(_ dict: [String: Any]) throws -> String {
+        // Reuse serialization logic from HugoConfigParser
+        var lines: [String] = []
+        for (key, value) in dict.sorted(by: { $0.key < $1.key }) {
+            lines.append(serializeTOMLValue(key: key, value: value))
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func serializeTOMLValue(key: String, value: Any) -> String {
+        if let s = value as? String { return "\(key) = \"\(s)\"" }
+        if let b = value as? Bool { return "\(key) = \(b)" }
+        if let i = value as? Int { return "\(key) = \(i)" }
+        if let d = value as? Double { return "\(key) = \(d)" }
+        return "# \(key) = <complex value>"
+    }
+}
+
+enum DataFileError: LocalizedError {
+    case emptyFile
+    case invalidEncoding
+    case invalidStructure
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyFile: return "The data file is empty"
+        case .invalidEncoding: return "Could not read file encoding"
+        case .invalidStructure: return "Invalid data structure for format"
+        }
+    }
+}
+```
+
+---
+
+### Step 5.3: Create DataFileEditorView
+
+**Create new directory:** `Victor/Views/DataEditor/`
+
+**Create new file:** `Victor/Views/DataEditor/DataFileEditorView.swift`
+
+```swift
+import SwiftUI
+
+/// Editor for Hugo data files with dynamic form generation
+struct DataFileEditorView: View {
+    @Bindable var dataFile: DataFile
+    let onSave: () async -> Void
+
+    @State private var showRawEditor = false
+    @State private var isSaving = false
+    @State private var expandedSections: Set<String> = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            dataToolbar
+            Divider()
+
+            if showRawEditor {
+                DataRawEditorView(dataFile: dataFile)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let dict = dataFile.data as? [String: Any] {
+                            DynamicDictEditor(
+                                data: Binding(
+                                    get: { dict },
+                                    set: {
+                                        dataFile.data = $0
+                                        dataFile.hasUnsavedChanges = true
+                                    }
+                                ),
+                                path: [],
+                                expandedSections: $expandedSections
+                            )
+                        } else if let array = dataFile.data as? [Any] {
+                            DynamicArrayEditor(
+                                data: Binding(
+                                    get: { array },
+                                    set: {
+                                        dataFile.data = $0
+                                        dataFile.hasUnsavedChanges = true
+                                    }
+                                ),
+                                path: []
+                            )
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+    }
+
+    private var dataToolbar: some View {
+        HStack {
+            Image(systemName: "tablecells")
+                .foregroundStyle(.blue)
+
+            Text(dataFile.url.lastPathComponent)
+                .font(.headline)
+
+            Text(dataFile.format.rawValue.uppercased())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.secondary.opacity(0.2))
+                .cornerRadius(4)
+
+            if dataFile.hasUnsavedChanges {
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 8, height: 8)
+            }
+
+            Spacer()
+
+            Picker("View", selection: $showRawEditor) {
+                Text("Form").tag(false)
+                Text("Raw").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 120)
+
+            Divider().frame(height: 20)
+
+            Button {
+                Task {
+                    isSaving = true
+                    await onSave()
+                    isSaving = false
+                }
+            } label: {
+                if isSaving {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Image(systemName: "square.and.arrow.down")
+                }
+            }
+            .disabled(!dataFile.hasUnsavedChanges || isSaving)
+            .keyboardShortcut("s", modifiers: .command)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+}
+
+/// Dynamically generated editor for dictionary data
+struct DynamicDictEditor: View {
+    @Binding var data: [String: Any]
+    let path: [String]
+    @Binding var expandedSections: Set<String>
+
+    var body: some View {
+        ForEach(Array(data.keys.sorted()), id: \.self) { key in
+            DynamicFieldEditor(
+                key: key,
+                value: Binding(
+                    get: { data[key] ?? "" },
+                    set: { data[key] = $0 }
+                ),
+                path: path + [key],
+                expandedSections: $expandedSections
+            )
+        }
+    }
+}
+
+/// Editor for a single field that adapts to the value type
+struct DynamicFieldEditor: View {
+    let key: String
+    @Binding var value: Any
+    let path: [String]
+    @Binding var expandedSections: Set<String>
+
+    private var pathKey: String { path.joined(separator: ".") }
+
+    var body: some View {
+        Group {
+            if let stringValue = value as? String {
+                LabeledContent(key) {
+                    TextField("", text: Binding(
+                        get: { stringValue },
+                        set: { value = $0 }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                }
+            } else if let boolValue = value as? Bool {
+                Toggle(key, isOn: Binding(
+                    get: { boolValue },
+                    set: { value = $0 }
+                ))
+            } else if let intValue = value as? Int {
+                LabeledContent(key) {
+                    TextField("", value: Binding(
+                        get: { intValue },
+                        set: { value = $0 }
+                    ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                }
+            } else if let dictValue = value as? [String: Any] {
+                DisclosureGroup(
+                    isExpanded: Binding(
+                        get: { expandedSections.contains(pathKey) },
+                        set: { if $0 { expandedSections.insert(pathKey) } else { expandedSections.remove(pathKey) } }
+                    )
+                ) {
+                    DynamicDictEditor(
+                        data: Binding(
+                            get: { dictValue },
+                            set: { value = $0 }
+                        ),
+                        path: path,
+                        expandedSections: $expandedSections
+                    )
+                    .padding(.leading, 16)
+                } label: {
+                    Label(key, systemImage: "folder")
+                }
+            } else if let arrayValue = value as? [Any] {
+                DisclosureGroup(
+                    isExpanded: Binding(
+                        get: { expandedSections.contains(pathKey) },
+                        set: { if $0 { expandedSections.insert(pathKey) } else { expandedSections.remove(pathKey) } }
+                    )
+                ) {
+                    DynamicArrayEditor(
+                        data: Binding(
+                            get: { arrayValue },
+                            set: { value = $0 }
+                        ),
+                        path: path
+                    )
+                    .padding(.leading, 16)
+                } label: {
+                    Label("\(key) (\(arrayValue.count) items)", systemImage: "list.bullet")
+                }
+            } else {
+                LabeledContent(key) {
+                    Text(String(describing: value))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+/// Editor for array data
+struct DynamicArrayEditor: View {
+    @Binding var data: [Any]
+    let path: [String]
+
+    var body: some View {
+        ForEach(Array(data.indices), id: \.self) { index in
+            HStack {
+                Text("[\(index)]")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30)
+
+                if let stringItem = data[index] as? String {
+                    TextField("", text: Binding(
+                        get: { stringItem },
+                        set: { data[index] = $0 }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                } else if let dictItem = data[index] as? [String: Any] {
+                    // Show summary of dict item
+                    Text(dictItem.keys.prefix(3).joined(separator: ", "))
+                        .foregroundStyle(.secondary)
+                }
+
+                Button(role: .destructive) {
+                    data.remove(at: index)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+
+        Button {
+            // Add new item (empty string for simple arrays)
+            data.append("")
+        } label: {
+            Label("Add Item", systemImage: "plus")
+        }
+        .buttonStyle(.bordered)
+    }
+}
+
+/// Raw text editor for data files
+struct DataRawEditorView: View {
+    @Bindable var dataFile: DataFile
+    @State private var rawContent: String = ""
+
+    var body: some View {
+        TextEditor(text: $rawContent)
+            .font(.system(.body, design: .monospaced))
+            .padding()
+            .onAppear { loadRawContent() }
+            .onChange(of: rawContent) { _, _ in
+                dataFile.hasUnsavedChanges = true
+            }
+    }
+
+    private func loadRawContent() {
+        do {
+            rawContent = try DataFileParser.shared.serialize(dataFile)
+        } catch {
+            rawContent = "// Error: \(error.localizedDescription)"
+        }
+    }
+}
+```
+
+---
+
+### Step 5.4: Create Archetype Model and Manager
+
+**Create new file:** `Victor/Models/Archetype.swift`
+
+```swift
+import Foundation
+
+/// Represents a Hugo archetype (content template)
+@Observable
+class Archetype: Identifiable, Hashable {
+    let id: UUID
+    let url: URL
+    var content: String
+    var originalContent: String
+
+    /// The content type this archetype creates (derived from filename)
+    var contentType: String {
+        let name = url.deletingPathExtension().lastPathComponent
+        return name == "default" ? "default" : name
+    }
+
+    /// Whether this is the default archetype
+    var isDefault: Bool {
+        url.deletingPathExtension().lastPathComponent == "default"
+    }
+
+    /// Extract frontmatter preview from the archetype
+    var frontmatterPreview: String {
+        let lines = content.components(separatedBy: .newlines)
+        guard let startIndex = lines.firstIndex(where: { $0.hasPrefix("---") || $0.hasPrefix("+++") }) else {
+            return "(no frontmatter)"
+        }
+
+        let delimiter = lines[startIndex]
+        var endIndex = startIndex + 1
+        while endIndex < lines.count && lines[endIndex] != delimiter {
+            endIndex += 1
+        }
+
+        return lines[startIndex...min(endIndex, lines.count - 1)].joined(separator: "\n")
+    }
+
+    var hasUnsavedChanges: Bool {
+        content != originalContent
+    }
+
+    init(url: URL, content: String) {
+        self.id = UUID()
+        self.url = url
+        self.content = content
+        self.originalContent = content
+    }
+
+    static func == (lhs: Archetype, rhs: Archetype) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+```
+
+**Create new file:** `Victor/Views/Archetypes/ArchetypeManagerView.swift`
+
+```swift
+import SwiftUI
+
+/// Manager view for Hugo archetypes
+struct ArchetypeManagerView: View {
+    let archetypesURL: URL
+    @State private var archetypes: [Archetype] = []
+    @State private var selectedArchetype: Archetype?
+    @State private var isLoading = true
+    @State private var showNewArchetypeSheet = false
+
+    var body: some View {
+        HSplitView {
+            // Archetype list
+            VStack(spacing: 0) {
+                archetypeListHeader
+                Divider()
+
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if archetypes.isEmpty {
+                    emptyState
+                } else {
+                    List(archetypes, selection: $selectedArchetype) { archetype in
+                        ArchetypeRow(archetype: archetype)
+                    }
+                }
+            }
+            .frame(minWidth: 200, maxWidth: 300)
+
+            // Archetype editor
+            if let archetype = selectedArchetype {
+                ArchetypeEditorView(archetype: archetype) {
+                    await saveArchetype(archetype)
+                }
+            } else {
+                Text("Select an archetype to edit")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task { await loadArchetypes() }
+        .sheet(isPresented: $showNewArchetypeSheet) {
+            NewArchetypeSheet(archetypesURL: archetypesURL) { newArchetype in
+                archetypes.append(newArchetype)
+                selectedArchetype = newArchetype
+            }
+        }
+    }
+
+    private var archetypeListHeader: some View {
+        HStack {
+            Text("Archetypes")
+                .font(.headline)
+            Spacer()
+            Button {
+                showNewArchetypeSheet = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .help("Create new archetype")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "doc.badge.plus")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("No archetypes found")
+                .foregroundStyle(.secondary)
+            Button("Create Default Archetype") {
+                showNewArchetypeSheet = true
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func loadArchetypes() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(
+            at: archetypesURL,
+            includingPropertiesForKeys: nil
+        ) else { return }
+
+        var loaded: [Archetype] = []
+        for url in contents where url.pathExtension == "md" {
+            if let content = try? String(contentsOf: url, encoding: .utf8) {
+                loaded.append(Archetype(url: url, content: content))
+            }
+        }
+
+        archetypes = loaded.sorted { $0.contentType < $1.contentType }
+    }
+
+    private func saveArchetype(_ archetype: Archetype) async {
+        do {
+            try archetype.content.write(to: archetype.url, atomically: true, encoding: .utf8)
+            archetype.originalContent = archetype.content
+        } catch {
+            print("Failed to save archetype: \(error)")
+        }
+    }
+}
+
+struct ArchetypeRow: View {
+    let archetype: Archetype
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(archetype.contentType)
+                    .font(.headline)
+                if archetype.isDefault {
+                    Text("DEFAULT")
+                        .font(.caption2)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(.blue.opacity(0.2))
+                        .cornerRadius(4)
+                }
+                if archetype.hasUnsavedChanges {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            Text(archetype.url.lastPathComponent)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct ArchetypeEditorView: View {
+    @Bindable var archetype: Archetype
+    let onSave: () async -> Void
+
+    @State private var isSaving = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Toolbar
+            HStack {
+                Image(systemName: "doc.text")
+                    .foregroundStyle(.purple)
+                Text(archetype.url.lastPathComponent)
+                    .font(.headline)
+
+                if archetype.hasUnsavedChanges {
+                    Circle().fill(.orange).frame(width: 8, height: 8)
+                }
+
+                Spacer()
+
+                Text("Creates: \(archetype.contentType)/")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider().frame(height: 20)
+
+                Button {
+                    Task {
+                        isSaving = true
+                        await onSave()
+                        isSaving = false
+                    }
+                } label: {
+                    if isSaving {
+                        ProgressView().scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                }
+                .disabled(!archetype.hasUnsavedChanges || isSaving)
+                .keyboardShortcut("s", modifiers: .command)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            // Editor
+            TextEditor(text: $archetype.content)
+                .font(.system(.body, design: .monospaced))
+        }
+    }
+}
+
+struct NewArchetypeSheet: View {
+    let archetypesURL: URL
+    let onCreate: (Archetype) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var contentType = ""
+
+    private let defaultContent = """
+---
+title: "{{ replace .Name "-" " " | title }}"
+date: {{ .Date }}
+draft: true
+---
+
+"""
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("New Archetype")
+                .font(.headline)
+
+            TextField("Content type (e.g., posts, projects)", text: $contentType)
+                .textFieldStyle(.roundedBorder)
+
+            Text("This will create \(contentType.isEmpty ? "default" : contentType).md")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+
+                Button("Create") {
+                    createArchetype()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(contentType.isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 400)
+    }
+
+    private func createArchetype() {
+        let filename = "\(contentType).md"
+        let url = archetypesURL.appendingPathComponent(filename)
+
+        do {
+            try defaultContent.write(to: url, atomically: true, encoding: .utf8)
+            onCreate(Archetype(url: url, content: defaultContent))
+        } catch {
+            print("Failed to create archetype: \(error)")
+        }
+    }
+}
+```
+
+---
+
+### Step 5.5: Create Translation Editor
+
+**Create new file:** `Victor/Views/i18n/TranslationEditorView.swift`
+
+```swift
+import SwiftUI
+
+/// Model for a translation file
+@Observable
+class TranslationFile: Identifiable, Hashable {
+    let id: UUID
+    let url: URL
+    let languageCode: String
+    var translations: [String: String]
+    var originalTranslations: [String: String]
+
+    var hasUnsavedChanges: Bool {
+        translations != originalTranslations
+    }
+
+    init(url: URL, translations: [String: String]) {
+        self.id = UUID()
+        self.url = url
+        self.languageCode = url.deletingPathExtension().lastPathComponent
+        self.translations = translations
+        self.originalTranslations = translations
+    }
+
+    static func == (lhs: TranslationFile, rhs: TranslationFile) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// Editor view for i18n translation files with side-by-side comparison
+struct TranslationEditorView: View {
+    let i18nURL: URL
+    @State private var translationFiles: [TranslationFile] = []
+    @State private var selectedLanguages: Set<String> = []
+    @State private var allKeys: [String] = []
+    @State private var searchText = ""
+    @State private var showOnlyMissing = false
+
+    var filteredKeys: [String] {
+        var keys = allKeys
+        if !searchText.isEmpty {
+            keys = keys.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        }
+        if showOnlyMissing {
+            keys = keys.filter { key in
+                translationFiles.contains { $0.translations[key] == nil }
+            }
+        }
+        return keys
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            translationToolbar
+            Divider()
+
+            if translationFiles.isEmpty {
+                emptyState
+            } else {
+                translationTable
+            }
+        }
+        .task { await loadTranslations() }
+    }
+
+    private var translationToolbar: some View {
+        HStack {
+            Image(systemName: "globe")
+                .foregroundStyle(.green)
+            Text("Translations")
+                .font(.headline)
+
+            Spacer()
+
+            // Language toggles
+            ForEach(translationFiles) { file in
+                Toggle(file.languageCode.uppercased(), isOn: Binding(
+                    get: { selectedLanguages.contains(file.languageCode) },
+                    set: { if $0 { selectedLanguages.insert(file.languageCode) }
+                          else { selectedLanguages.remove(file.languageCode) } }
+                ))
+                .toggleStyle(.button)
+            }
+
+            Divider().frame(height: 20)
+
+            Toggle("Missing only", isOn: $showOnlyMissing)
+                .toggleStyle(.button)
+
+            TextField("Search keys...", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 150)
+
+            Divider().frame(height: 20)
+
+            Button {
+                Task { await saveAll() }
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .disabled(!translationFiles.contains { $0.hasUnsavedChanges })
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "globe")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("No translation files found")
+                .foregroundStyle(.secondary)
+            Text("Create files in i18n/ directory")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var translationTable: some View {
+        let visibleFiles = translationFiles.filter { selectedLanguages.contains($0.languageCode) }
+
+        return ScrollView {
+            LazyVStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Key")
+                        .font(.headline)
+                        .frame(width: 200, alignment: .leading)
+
+                    ForEach(visibleFiles) { file in
+                        Text(file.languageCode.uppercased())
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(nsColor: .controlBackgroundColor))
+
+                Divider()
+
+                // Rows
+                ForEach(filteredKeys, id: \.self) { key in
+                    HStack {
+                        Text(key)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(width: 200, alignment: .leading)
+
+                        ForEach(visibleFiles) { file in
+                            TextField("", text: Binding(
+                                get: { file.translations[key] ?? "" },
+                                set: { file.translations[key] = $0.isEmpty ? nil : $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                            .background(file.translations[key] == nil ? Color.red.opacity(0.1) : Color.clear)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+
+                    Divider()
+                }
+            }
+        }
+    }
+
+    private func loadTranslations() async {
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(at: i18nURL, includingPropertiesForKeys: nil) else {
+            return
+        }
+
+        var files: [TranslationFile] = []
+        var keys: Set<String> = []
+
+        for url in contents {
+            let ext = url.pathExtension.lowercased()
+            guard ["yaml", "yml", "toml", "json"].contains(ext) else { continue }
+
+            if let translations = try? await loadTranslationFile(at: url) {
+                files.append(TranslationFile(url: url, translations: translations))
+                keys.formUnion(translations.keys)
+            }
+        }
+
+        translationFiles = files.sorted { $0.languageCode < $1.languageCode }
+        allKeys = Array(keys).sorted()
+        selectedLanguages = Set(files.prefix(2).map { $0.languageCode })
+    }
+
+    private func loadTranslationFile(at url: URL) async throws -> [String: String] {
+        let content = try String(contentsOf: url, encoding: .utf8)
+        // Simplified: assumes flat key-value structure
+        // In production, handle nested structures for pluralization
+
+        if url.pathExtension == "yaml" || url.pathExtension == "yml" {
+            if let dict = try Yams.load(yaml: content) as? [String: Any] {
+                return dict.compactMapValues { $0 as? String }
+            }
+        }
+        // Add JSON/TOML handling...
+        return [:]
+    }
+
+    private func saveAll() async {
+        for file in translationFiles where file.hasUnsavedChanges {
+            do {
+                let content = try Yams.dump(object: file.translations)
+                try content.write(to: file.url, atomically: true, encoding: .utf8)
+                file.originalTranslations = file.translations
+            } catch {
+                print("Failed to save \(file.languageCode): \(error)")
+            }
+        }
+    }
+}
+```
+
+---
+
+### Step 5.6: Update FileViewerRouter for Phase 5 Files
+
+**Modify:** `Victor/Views/Viewers/FileViewerRouter.swift`
+
+Add routing for data files, archetypes, and i18n files based on their Hugo role:
+
+```swift
+// Add at the start of the switch, before checking fileType:
+
+// Route based on Hugo role
+switch node.hugoRole {
+case .data:
+    if let dataFile = node.dataFile {
+        DataFileEditorView(dataFile: dataFile) {
+            await siteViewModel.saveDataFile(dataFile)
+        }
+    } else {
+        ProgressView("Loading data file...")
+            .task { await siteViewModel.loadDataFile(for: node) }
+    }
+
+case .archetype:
+    // Archetypes are markdown but need special handling
+    if let archetype = node.archetype {
+        ArchetypeEditorView(archetype: archetype) {
+            await siteViewModel.saveArchetype(archetype)
+        }
+    } else {
+        ProgressView("Loading archetype...")
+            .task { await siteViewModel.loadArchetype(for: node) }
+    }
+
+case .i18n:
+    if let i18nURL = siteViewModel.currentSite?.url.appendingPathComponent("i18n") {
+        TranslationEditorView(i18nURL: i18nURL)
+    }
+
+default:
+    // Continue with existing file type switch...
+}
+```
+
+---
+
+### Step 5.7: Testing Checklist for Phase 5
+
+- [ ] Data files in `data/` open with DataFileEditorView
+- [ ] Can edit string, boolean, number fields in data files
+- [ ] Can expand/collapse nested sections
+- [ ] Can add/remove array items
+- [ ] Can switch between Form and Raw view
+- [ ] Archetypes listed in ArchetypeManagerView
+- [ ] Can create new archetypes
+- [ ] Can edit archetype content with Go template syntax
+- [ ] Translation files show side-by-side
+- [ ] Missing translations highlighted in red
+- [ ] Can filter to show only missing translations
+- [ ] All changes save correctly with ⌘S
+
+---
+
+## Phase 6: Asset Management
+
+### Goal
+Create a visual browser for static assets with drag-and-drop support for inserting images into markdown content.
+
+### Prerequisites
+- Phase 2 must be complete (image viewing)
+- Understand how drag-and-drop works in SwiftUI/AppKit
+
+---
+
+### Understanding Hugo Asset Directories
+
+#### `static/` - Static Files
+- Files copied as-is to output
+- No processing by Hugo Pipes
+- Common: images, PDFs, fonts, legacy CSS/JS
+- URL: `/filename.ext`
+
+#### `assets/` - Processed Assets
+- Files processed by Hugo Pipes
+- Image resizing, SCSS compilation, JS bundling
+- Fingerprinting for cache busting
+- Accessed via `resources.Get`
+
+---
+
+### Step 6.1: Create Asset Model
+
+**Create new file:** `Victor/Models/Asset.swift`
+
+```swift
+import Foundation
+import AppKit
+
+/// Represents a static asset file
+@Observable
+class Asset: Identifiable, Hashable {
+    let id: UUID
+    let url: URL
+    let fileType: FileType
+    let relativePath: String  // Path relative to static/ or assets/
+    let isInAssets: Bool      // true = assets/, false = static/
+
+    // Lazy-loaded properties
+    var thumbnail: NSImage?
+    var fileSize: Int64?
+    var dimensions: CGSize?   // For images
+    var modificationDate: Date?
+
+    /// Generate markdown image syntax
+    var markdownSyntax: String {
+        let path = isInAssets ? relativePath : "/\(relativePath)"
+        return "![\(url.deletingPathExtension().lastPathComponent)](\(path))"
+    }
+
+    /// Generate Hugo figure shortcode
+    var figureShortcode: String {
+        let path = isInAssets ? relativePath : "/\(relativePath)"
+        return "{{< figure src=\"\(path)\" alt=\"\" caption=\"\" >}}"
+    }
+
+    init(url: URL, relativePath: String, isInAssets: Bool) {
+        self.id = UUID()
+        self.url = url
+        self.fileType = FileType(url: url)
+        self.relativePath = relativePath
+        self.isInAssets = isInAssets
+    }
+
+    static func == (lhs: Asset, rhs: Asset) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// Asset loading result
+enum AssetLoadResult {
+    case loading
+    case loaded(Asset)
+    case error(String)
+}
+```
+
+---
+
+### Step 6.2: Create AssetService
+
+**Create new file:** `Victor/Services/AssetService.swift`
+
+```swift
+import Foundation
+import AppKit
+
+/// Service for managing and loading assets
+actor AssetService {
+    static let shared = AssetService()
+
+    private var thumbnailCache: [URL: NSImage] = [:]
+    private let thumbnailSize = CGSize(width: 120, height: 120)
+
+    /// Scan a directory for assets
+    func scanAssets(in directory: URL, isAssetsDir: Bool) async throws -> [Asset] {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var assets: [Asset] = []
+
+        for case let url as URL in enumerator {
+            let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
+            guard resourceValues?.isDirectory == false else { continue }
+
+            let relativePath = url.path.replacingOccurrences(
+                of: directory.path + "/",
+                with: ""
+            )
+
+            let asset = Asset(url: url, relativePath: relativePath, isInAssets: isAssetsDir)
+            await loadAssetMetadata(asset)
+            assets.append(asset)
+        }
+
+        return assets
+    }
+
+    /// Load metadata for an asset
+    func loadAssetMetadata(_ asset: Asset) async {
+        let fm = FileManager.default
+
+        if let attributes = try? fm.attributesOfItem(atPath: asset.url.path) {
+            asset.fileSize = attributes[.size] as? Int64
+            asset.modificationDate = attributes[.modificationDate] as? Date
+        }
+
+        // Load image dimensions and thumbnail
+        if asset.fileType == .image {
+            if let image = NSImage(contentsOf: asset.url) {
+                asset.dimensions = image.size
+                asset.thumbnail = await generateThumbnail(for: image)
+            }
+        }
+    }
+
+    /// Generate a thumbnail for an image
+    private func generateThumbnail(for image: NSImage) async -> NSImage {
+        let aspectRatio = image.size.width / image.size.height
+        var thumbSize = thumbnailSize
+
+        if aspectRatio > 1 {
+            thumbSize.height = thumbSize.width / aspectRatio
+        } else {
+            thumbSize.width = thumbSize.height * aspectRatio
+        }
+
+        let thumbnail = NSImage(size: thumbSize)
+        thumbnail.lockFocus()
+        image.draw(
+            in: NSRect(origin: .zero, size: thumbSize),
+            from: NSRect(origin: .zero, size: image.size),
+            operation: .copy,
+            fraction: 1.0
+        )
+        thumbnail.unlockFocus()
+
+        return thumbnail
+    }
+
+    /// Get cached thumbnail or generate one
+    func getThumbnail(for asset: Asset) async -> NSImage? {
+        if let cached = thumbnailCache[asset.url] {
+            return cached
+        }
+
+        guard asset.fileType == .image,
+              let image = NSImage(contentsOf: asset.url) else {
+            return nil
+        }
+
+        let thumbnail = await generateThumbnail(for: image)
+        thumbnailCache[asset.url] = thumbnail
+        return thumbnail
+    }
+}
+```
+
+---
+
+### Step 6.3: Create AssetBrowserView
+
+**Create new directory:** `Victor/Views/AssetBrowser/`
+
+**Create new file:** `Victor/Views/AssetBrowser/AssetBrowserView.swift`
+
+```swift
+import SwiftUI
+import UniformTypeIdentifiers
+
+/// Main view for browsing and managing assets
+struct AssetBrowserView: View {
+    let staticURL: URL?
+    let assetsURL: URL?
+    let onInsert: ((String) -> Void)?  // Callback when inserting into markdown
+
+    @State private var assets: [Asset] = []
+    @State private var isLoading = true
+    @State private var selectedAsset: Asset?
+    @State private var viewMode: AssetViewMode = .grid
+    @State private var filterType: AssetFilterType = .all
+    @State private var searchText = ""
+    @State private var sortOrder: AssetSortOrder = .name
+
+    enum AssetViewMode: String, CaseIterable {
+        case grid = "Grid"
+        case list = "List"
+
+        var icon: String {
+            switch self {
+            case .grid: return "square.grid.2x2"
+            case .list: return "list.bullet"
+            }
+        }
+    }
+
+    enum AssetFilterType: String, CaseIterable {
+        case all = "All"
+        case images = "Images"
+        case documents = "Documents"
+        case other = "Other"
+    }
+
+    enum AssetSortOrder: String, CaseIterable {
+        case name = "Name"
+        case date = "Date"
+        case size = "Size"
+        case type = "Type"
+    }
+
+    var filteredAssets: [Asset] {
+        var result = assets
+
+        // Apply search
+        if !searchText.isEmpty {
+            result = result.filter {
+                $0.url.lastPathComponent.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+
+        // Apply filter
+        switch filterType {
+        case .all: break
+        case .images:
+            result = result.filter { $0.fileType == .image }
+        case .documents:
+            result = result.filter { [.pdf, .plainText].contains($0.fileType) }
+        case .other:
+            result = result.filter { $0.fileType != .image && $0.fileType != .pdf }
+        }
+
+        // Apply sort
+        switch sortOrder {
+        case .name:
+            result.sort { $0.url.lastPathComponent < $1.url.lastPathComponent }
+        case .date:
+            result.sort { ($0.modificationDate ?? .distantPast) > ($1.modificationDate ?? .distantPast) }
+        case .size:
+            result.sort { ($0.fileSize ?? 0) > ($1.fileSize ?? 0) }
+        case .type:
+            result.sort { $0.fileType.rawValue < $1.fileType.rawValue }
+        }
+
+        return result
+    }
+
+    var body: some View {
+        HSplitView {
+            // Asset browser
+            VStack(spacing: 0) {
+                assetToolbar
+                Divider()
+
+                if isLoading {
+                    ProgressView("Loading assets...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if assets.isEmpty {
+                    emptyState
+                } else {
+                    assetContent
+                }
+            }
+
+            // Asset detail panel
+            if let asset = selectedAsset {
+                AssetDetailPanel(asset: asset, onInsert: onInsert)
+                    .frame(minWidth: 250, maxWidth: 300)
+            }
+        }
+        .task { await loadAssets() }
+    }
+
+    private var assetToolbar: some View {
+        HStack {
+            Image(systemName: "photo.on.rectangle.angled")
+                .foregroundStyle(.blue)
+            Text("Assets")
+                .font(.headline)
+
+            Text("\(filteredAssets.count) items")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            // Filter
+            Picker("Filter", selection: $filterType) {
+                ForEach(AssetFilterType.allCases, id: \.self) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 280)
+
+            Divider().frame(height: 20)
+
+            // Sort
+            Picker("Sort", selection: $sortOrder) {
+                ForEach(AssetSortOrder.allCases, id: \.self) { order in
+                    Text(order.rawValue).tag(order)
+                }
+            }
+            .frame(width: 80)
+
+            Divider().frame(height: 20)
+
+            // View mode
+            Picker("View", selection: $viewMode) {
+                ForEach(AssetViewMode.allCases, id: \.self) { mode in
+                    Image(systemName: mode.icon).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 80)
+
+            Divider().frame(height: 20)
+
+            // Search
+            TextField("Search...", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 150)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("No assets found")
+                .font(.headline)
+            Text("Add files to static/ or assets/ directory")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var assetContent: some View {
+        switch viewMode {
+        case .grid:
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 16) {
+                    ForEach(filteredAssets) { asset in
+                        AssetGridItem(asset: asset, isSelected: asset == selectedAsset)
+                            .onTapGesture { selectedAsset = asset }
+                            .onDrag {
+                                NSItemProvider(object: asset.markdownSyntax as NSString)
+                            }
+                    }
+                }
+                .padding()
+            }
+
+        case .list:
+            List(filteredAssets, selection: $selectedAsset) { asset in
+                AssetListRow(asset: asset)
+                    .onDrag {
+                        NSItemProvider(object: asset.markdownSyntax as NSString)
+                    }
+            }
+        }
+    }
+
+    private func loadAssets() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        var allAssets: [Asset] = []
+
+        if let staticURL = staticURL {
+            let staticAssets = try? await AssetService.shared.scanAssets(in: staticURL, isAssetsDir: false)
+            allAssets.append(contentsOf: staticAssets ?? [])
+        }
+
+        if let assetsURL = assetsURL {
+            let pipeAssets = try? await AssetService.shared.scanAssets(in: assetsURL, isAssetsDir: true)
+            allAssets.append(contentsOf: pipeAssets ?? [])
+        }
+
+        assets = allAssets
+    }
+}
+
+struct AssetGridItem: View {
+    let asset: Asset
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // Thumbnail or icon
+            Group {
+                if let thumbnail = asset.thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    Image(systemName: asset.fileType.systemImage)
+                        .font(.system(size: 32))
+                        .foregroundStyle(asset.fileType.defaultColor)
+                }
+            }
+            .frame(width: 100, height: 80)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(8)
+
+            // Filename
+            Text(asset.url.lastPathComponent)
+                .font(.caption)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
+        .padding(8)
+        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+        )
+    }
+}
+
+struct AssetListRow: View {
+    let asset: Asset
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Thumbnail or icon
+            Group {
+                if let thumbnail = asset.thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    Image(systemName: asset.fileType.systemImage)
+                        .foregroundStyle(asset.fileType.defaultColor)
+                }
+            }
+            .frame(width: 40, height: 40)
+
+            // Info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(asset.url.lastPathComponent)
+                    .font(.body)
+
+                HStack {
+                    if let size = asset.fileSize {
+                        Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+                    }
+                    if let dims = asset.dimensions {
+                        Text("•")
+                        Text("\(Int(dims.width))×\(Int(dims.height))")
+                    }
+                    Text("•")
+                    Text(asset.isInAssets ? "assets/" : "static/")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct AssetDetailPanel: View {
+    let asset: Asset
+    let onInsert: ((String) -> Void)?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Details")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Preview
+                    if let thumbnail = asset.thumbnail {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 200)
+                            .cornerRadius(8)
+                    }
+
+                    // Filename
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Filename")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(asset.url.lastPathComponent)
+                            .font(.body)
+                            .textSelection(.enabled)
+                    }
+
+                    // Path
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Path")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(asset.relativePath)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+
+                    // Dimensions
+                    if let dims = asset.dimensions {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Dimensions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(Int(dims.width)) × \(Int(dims.height)) pixels")
+                        }
+                    }
+
+                    // Size
+                    if let size = asset.fileSize {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Size")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+                        }
+                    }
+
+                    // Location
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Location")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(asset.isInAssets ? "assets/ (Hugo Pipes)" : "static/ (copied as-is)")
+                    }
+
+                    Divider()
+
+                    // Insert buttons
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Insert into content")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            onInsert?(asset.markdownSyntax)
+                        } label: {
+                            Label("Markdown Image", systemImage: "photo")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(onInsert == nil)
+
+                        Button {
+                            onInsert?(asset.figureShortcode)
+                        } label: {
+                            Label("Figure Shortcode", systemImage: "text.below.photo")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(onInsert == nil)
+
+                        Button {
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            pasteboard.setString(asset.markdownSyntax, forType: .string)
+                        } label: {
+                            Label("Copy Path", systemImage: "doc.on.clipboard")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Divider()
+
+                    // Actions
+                    HStack {
+                        Button {
+                            NSWorkspace.shared.open(asset.url)
+                        } label: {
+                            Label("Open", systemImage: "arrow.up.forward.square")
+                        }
+
+                        Button {
+                            NSWorkspace.shared.activateFileViewerSelecting([asset.url])
+                        } label: {
+                            Label("Reveal", systemImage: "folder")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding()
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+}
+```
+
+---
+
+### Step 6.4: Add Drag-Drop Support to EditorTextView
+
+**Modify:** `Victor/Views/Editor/EditorTextView.swift`
+
+Add drop destination to accept dragged assets:
+
+```swift
+// In the NSTextView configuration, add drop support:
+
+// Add to makeNSView or updateNSView:
+textView.registerForDraggedTypes([.string, .fileURL])
+
+// Add to Coordinator:
+func textView(_ textView: NSTextView, validateDrop info: NSDraggingInfo, proposedCharacterIndex: Int) -> NSDragOperation {
+    return .copy
+}
+
+func textView(_ textView: NSTextView, performDragOperation info: NSDraggingInfo) -> Bool {
+    guard let items = info.draggingPasteboard.pasteboardItems else { return false }
+
+    for item in items {
+        if let string = item.string(forType: .string) {
+            // Insert markdown at drop location
+            let insertionPoint = textView.selectedRange().location
+            textView.insertText(string, replacementRange: NSRange(location: insertionPoint, length: 0))
+            return true
+        }
+    }
+    return false
+}
+```
+
+---
+
+### Step 6.5: Testing Checklist for Phase 6
+
+- [ ] Asset browser shows files from both static/ and assets/
+- [ ] Grid view shows thumbnails for images
+- [ ] List view shows file details
+- [ ] Can filter by type (images, documents, other)
+- [ ] Can sort by name, date, size, type
+- [ ] Can search assets by filename
+- [ ] Detail panel shows file info
+- [ ] Can drag asset from browser to markdown editor
+- [ ] Dropped asset inserts markdown image syntax
+- [ ] "Copy Path" button works
+- [ ] "Insert Markdown" and "Insert Figure" buttons work
+- [ ] Can open asset in default app
+- [ ] Can reveal asset in Finder
+
+---
+
+## Phase 7: Template Editing
+
+### Goal
+Enable viewing and editing of Hugo templates with Go template syntax awareness and inheritance visualization.
+
+### Prerequisites
+- Phase 3 must be complete (text editing)
+- Understanding of Hugo's template lookup order
+
+---
+
+### Understanding Hugo Templates
+
+#### Template Directory Structure
+```
+layouts/
+├── _default/
+│   ├── baseof.html      # Base template (defines blocks)
+│   ├── list.html        # List page template
+│   └── single.html      # Single page template
+├── partials/
+│   ├── header.html
+│   ├── footer.html
+│   └── meta.html
+├── shortcodes/
+│   └── custom.html
+├── 404.html
+└── index.html           # Homepage
+```
+
+#### Template Inheritance
+- `baseof.html` defines `{{ block "main" . }}` placeholders
+- Other templates use `{{ define "main" }}...{{ end }}`
+- Partials included with `{{ partial "name" . }}`
+
+---
+
+### Step 7.1: Create Template Model
+
+**Create new file:** `Victor/Models/HugoTemplate.swift`
+
+```swift
+import Foundation
+
+/// Represents a Hugo template file
+@Observable
+class HugoTemplate: Identifiable, Hashable {
+    let id: UUID
+    let url: URL
+    var content: String
+    var originalContent: String
+
+    /// Template category
+    enum Category: String, CaseIterable {
+        case base = "Base"
+        case list = "List"
+        case single = "Single"
+        case partial = "Partial"
+        case shortcode = "Shortcode"
+        case taxonomy = "Taxonomy"
+        case other = "Other"
+    }
+
+    var category: Category {
+        let path = url.path
+        if path.contains("/partials/") { return .partial }
+        if path.contains("/shortcodes/") { return .shortcode }
+        if url.lastPathComponent == "baseof.html" { return .base }
+        if url.lastPathComponent.contains("list") { return .list }
+        if url.lastPathComponent.contains("single") { return .single }
+        if url.lastPathComponent.contains("taxonomy") || url.lastPathComponent.contains("terms") { return .taxonomy }
+        return .other
+    }
+
+    /// Extract defined blocks from template
+    var definedBlocks: [String] {
+        let pattern = #"\{\{\s*define\s+"([^"]+)""#
+        let regex = try? NSRegularExpression(pattern: pattern)
+        let range = NSRange(content.startIndex..., in: content)
+
+        return regex?.matches(in: content, range: range).compactMap { match in
+            guard let range = Range(match.range(at: 1), in: content) else { return nil }
+            return String(content[range])
+        } ?? []
+    }
+
+    /// Extract partial includes
+    var includedPartials: [String] {
+        let pattern = #"\{\{\s*partial\s+"([^"]+)""#
+        let regex = try? NSRegularExpression(pattern: pattern)
+        let range = NSRange(content.startIndex..., in: content)
+
+        return regex?.matches(in: content, range: range).compactMap { match in
+            guard let range = Range(match.range(at: 1), in: content) else { return nil }
+            return String(content[range])
+        } ?? []
+    }
+
+    /// Check if template extends baseof
+    var extendsBaseof: Bool {
+        content.contains("define \"main\"") || content.contains("define \"title\"")
+    }
+
+    var hasUnsavedChanges: Bool {
+        content != originalContent
+    }
+
+    init(url: URL, content: String) {
+        self.id = UUID()
+        self.url = url
+        self.content = content
+        self.originalContent = content
+    }
+
+    static func == (lhs: HugoTemplate, rhs: HugoTemplate) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+```
+
+---
+
+### Step 7.2: Create TemplateEditorView with Syntax Highlighting
+
+**Create new directory:** `Victor/Views/Templates/`
+
+**Create new file:** `Victor/Views/Templates/TemplateEditorView.swift`
+
+```swift
+import SwiftUI
+import AppKit
+
+/// Editor for Hugo templates with Go template syntax awareness
+struct TemplateEditorView: View {
+    @Bindable var template: HugoTemplate
+    let onSave: () async -> Void
+    let allPartials: [String]  // For autocomplete
+
+    @State private var isSaving = false
+    @State private var showInspector = true
+
+    var body: some View {
+        HSplitView {
+            // Editor
+            VStack(spacing: 0) {
+                templateToolbar
+                Divider()
+
+                GoTemplateTextView(
+                    text: $template.content,
+                    onTextChange: { }
+                )
+            }
+
+            // Inspector
+            if showInspector {
+                TemplateInspector(template: template)
+                    .frame(minWidth: 200, maxWidth: 250)
+            }
+        }
+    }
+
+    private var templateToolbar: some View {
+        HStack {
+            // Template info
+            Image(systemName: categoryIcon)
+                .foregroundStyle(categoryColor)
+
+            Text(template.url.lastPathComponent)
+                .font(.headline)
+
+            Text(template.category.rawValue)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.secondary.opacity(0.2))
+                .cornerRadius(4)
+
+            if template.hasUnsavedChanges {
+                Circle().fill(.orange).frame(width: 8, height: 8)
+            }
+
+            Spacer()
+
+            // Insert menu
+            Menu {
+                Section("Variables") {
+                    Button("Page Title") { insertText("{{ .Title }}") }
+                    Button("Page Content") { insertText("{{ .Content }}") }
+                    Button("Page Date") { insertText("{{ .Date }}") }
+                    Button("Site Title") { insertText("{{ .Site.Title }}") }
+                }
+                Section("Control Flow") {
+                    Button("If") { insertText("{{ if . }}\n\n{{ end }}") }
+                    Button("Range") { insertText("{{ range . }}\n\n{{ end }}") }
+                    Button("With") { insertText("{{ with . }}\n\n{{ end }}") }
+                }
+                Section("Includes") {
+                    Button("Partial") { insertText("{{ partial \"\" . }}") }
+                    Button("Define Block") { insertText("{{ define \"\" }}\n\n{{ end }}") }
+                    Button("Block") { insertText("{{ block \"\" . }}\n\n{{ end }}") }
+                }
+            } label: {
+                Label("Insert", systemImage: "plus.circle")
+            }
+
+            Divider().frame(height: 20)
+
+            Toggle(isOn: $showInspector) {
+                Image(systemName: "sidebar.trailing")
+            }
+            .toggleStyle(.button)
+
+            Divider().frame(height: 20)
+
+            Button {
+                Task {
+                    isSaving = true
+                    await onSave()
+                    isSaving = false
+                }
+            } label: {
+                if isSaving {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Image(systemName: "square.and.arrow.down")
+                }
+            }
+            .disabled(!template.hasUnsavedChanges || isSaving)
+            .keyboardShortcut("s", modifiers: .command)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var categoryIcon: String {
+        switch template.category {
+        case .base: return "rectangle.stack"
+        case .list: return "list.bullet.rectangle"
+        case .single: return "doc.richtext"
+        case .partial: return "square.on.square"
+        case .shortcode: return "chevron.left.forwardslash.chevron.right"
+        case .taxonomy: return "tag"
+        case .other: return "doc"
+        }
+    }
+
+    private var categoryColor: Color {
+        switch template.category {
+        case .base: return .purple
+        case .list: return .blue
+        case .single: return .green
+        case .partial: return .orange
+        case .shortcode: return .pink
+        case .taxonomy: return .teal
+        case .other: return .secondary
+        }
+    }
+
+    private func insertText(_ text: String) {
+        // Insert at cursor position
+        template.content += text
+    }
+}
+
+/// Inspector panel showing template metadata
+struct TemplateInspector: View {
+    let template: HugoTemplate
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Inspector")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Category
+                    inspectorSection("Category") {
+                        Label(template.category.rawValue, systemImage: "folder")
+                    }
+
+                    // Extends baseof
+                    if template.extendsBaseof {
+                        inspectorSection("Inheritance") {
+                            Label("Extends baseof.html", systemImage: "arrow.up.right")
+                        }
+                    }
+
+                    // Defined blocks
+                    if !template.definedBlocks.isEmpty {
+                        inspectorSection("Defined Blocks") {
+                            ForEach(template.definedBlocks, id: \.self) { block in
+                                Label(block, systemImage: "square.dashed")
+                                    .font(.system(.caption, design: .monospaced))
+                            }
+                        }
+                    }
+
+                    // Included partials
+                    if !template.includedPartials.isEmpty {
+                        inspectorSection("Includes") {
+                            ForEach(template.includedPartials, id: \.self) { partial in
+                                Label(partial, systemImage: "square.on.square")
+                                    .font(.system(.caption, design: .monospaced))
+                            }
+                        }
+                    }
+
+                    // Hugo docs link
+                    inspectorSection("Documentation") {
+                        Link(destination: URL(string: "https://gohugo.io/templates/")!) {
+                            Label("Hugo Templates Docs", systemImage: "book")
+                        }
+                    }
+                }
+                .padding()
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func inspectorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            content()
+        }
+    }
+}
+
+/// NSTextView with Go template syntax highlighting
+struct GoTemplateTextView: NSViewRepresentable {
+    @Binding var text: String
+    let onTextChange: () -> Void
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        let textView = GoTemplateSyntaxTextView()
+
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.documentView = textView
+
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.allowsUndo = true
+        textView.isRichText = false
+        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.backgroundColor = NSColor.textBackgroundColor
+        textView.textColor = NSColor.textColor
+        textView.autoresizingMask = [.width]
+        textView.isHorizontallyResizable = true
+        textView.isVerticallyResizable = true
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.containerSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+
+        textView.delegate = context.coordinator
+        textView.string = text
+        textView.highlightSyntax()
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? GoTemplateSyntaxTextView else { return }
+        if textView.string != text {
+            textView.string = text
+            textView.highlightSyntax()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: GoTemplateTextView
+
+        init(_ parent: GoTemplateTextView) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+            parent.onTextChange()
+
+            if let goTextView = textView as? GoTemplateSyntaxTextView {
+                goTextView.highlightSyntax()
+            }
+        }
+    }
+}
+
+/// Custom NSTextView subclass with Go template syntax highlighting
+class GoTemplateSyntaxTextView: NSTextView {
+
+    // Colors for syntax highlighting
+    private let templateActionColor = NSColor.systemPurple
+    private let templateVariableColor = NSColor.systemBlue
+    private let templateCommentColor = NSColor.systemGreen
+    private let stringColor = NSColor.systemRed
+    private let htmlTagColor = NSColor.systemOrange
+
+    func highlightSyntax() {
+        guard let textStorage = textStorage else { return }
+        let fullRange = NSRange(location: 0, length: textStorage.length)
+
+        // Reset to default
+        textStorage.addAttribute(.foregroundColor, value: NSColor.textColor, range: fullRange)
+
+        let content = string
+
+        // Highlight Go template expressions: {{ ... }}
+        highlightPattern(#"\{\{.*?\}\}"#, color: templateActionColor, in: content)
+
+        // Highlight template comments: {{/* ... */}}
+        highlightPattern(#"\{\{/\*.*?\*/\}\}"#, color: templateCommentColor, in: content)
+
+        // Highlight HTML tags
+        highlightPattern(#"</?[a-zA-Z][^>]*>"#, color: htmlTagColor, in: content)
+
+        // Highlight strings within templates
+        highlightPattern(#"\"[^\"]*\""#, color: stringColor, in: content)
+    }
+
+    private func highlightPattern(_ pattern: String, color: NSColor, in content: String) {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]),
+              let textStorage = textStorage else { return }
+
+        let fullRange = NSRange(location: 0, length: content.utf16.count)
+        let matches = regex.matches(in: content, range: fullRange)
+
+        for match in matches {
+            textStorage.addAttribute(.foregroundColor, value: color, range: match.range)
+        }
+    }
+}
+```
+
+---
+
+### Step 7.3: Create Template Browser
+
+**Create new file:** `Victor/Views/Templates/TemplateBrowserView.swift`
+
+```swift
+import SwiftUI
+
+/// Browser for Hugo templates organized by category
+struct TemplateBrowserView: View {
+    let layoutsURL: URL
+    @State private var templates: [HugoTemplate] = []
+    @State private var selectedTemplate: HugoTemplate?
+    @State private var isLoading = true
+    @State private var groupByCategory = true
+
+    var groupedTemplates: [HugoTemplate.Category: [HugoTemplate]] {
+        Dictionary(grouping: templates) { $0.category }
+    }
+
+    var body: some View {
+        HSplitView {
+            // Template list
+            VStack(spacing: 0) {
+                templateListHeader
+                Divider()
+
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    templateList
+                }
+            }
+            .frame(minWidth: 200, maxWidth: 300)
+
+            // Template editor
+            if let template = selectedTemplate {
+                TemplateEditorView(
+                    template: template,
+                    onSave: { await saveTemplate(template) },
+                    allPartials: templates.filter { $0.category == .partial }.map { $0.url.lastPathComponent }
+                )
+            } else {
+                Text("Select a template to edit")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task { await loadTemplates() }
+    }
+
+    private var templateListHeader: some View {
+        HStack {
+            Text("Templates")
+                .font(.headline)
+            Spacer()
+            Toggle(isOn: $groupByCategory) {
+                Image(systemName: "folder")
+            }
+            .toggleStyle(.button)
+            .help("Group by category")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var templateList: some View {
+        List(selection: $selectedTemplate) {
+            if groupByCategory {
+                ForEach(HugoTemplate.Category.allCases, id: \.self) { category in
+                    if let categoryTemplates = groupedTemplates[category], !categoryTemplates.isEmpty {
+                        Section(category.rawValue) {
+                            ForEach(categoryTemplates) { template in
+                                TemplateRow(template: template)
+                            }
+                        }
+                    }
+                }
+            } else {
+                ForEach(templates.sorted { $0.url.lastPathComponent < $1.url.lastPathComponent }) { template in
+                    TemplateRow(template: template)
+                }
+            }
+        }
+    }
+
+    private func loadTemplates() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: layoutsURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        var loaded: [HugoTemplate] = []
+
+        for case let url as URL in enumerator {
+            guard url.pathExtension == "html" else { continue }
+            if let content = try? String(contentsOf: url, encoding: .utf8) {
+                loaded.append(HugoTemplate(url: url, content: content))
+            }
+        }
+
+        templates = loaded
+    }
+
+    private func saveTemplate(_ template: HugoTemplate) async {
+        do {
+            try template.content.write(to: template.url, atomically: true, encoding: .utf8)
+            template.originalContent = template.content
+        } catch {
+            print("Failed to save template: \(error)")
+        }
+    }
+}
+
+struct TemplateRow: View {
+    let template: HugoTemplate
+
+    var body: some View {
+        HStack {
+            Image(systemName: categoryIcon)
+                .foregroundStyle(categoryColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(template.url.lastPathComponent)
+                    if template.hasUnsavedChanges {
+                        Circle().fill(.orange).frame(width: 6, height: 6)
+                    }
+                }
+
+                if !template.includedPartials.isEmpty {
+                    Text("Includes \(template.includedPartials.count) partials")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var categoryIcon: String {
+        switch template.category {
+        case .base: return "rectangle.stack"
+        case .list: return "list.bullet.rectangle"
+        case .single: return "doc.richtext"
+        case .partial: return "square.on.square"
+        case .shortcode: return "chevron.left.forwardslash.chevron.right"
+        case .taxonomy: return "tag"
+        case .other: return "doc"
+        }
+    }
+
+    private var categoryColor: Color {
+        switch template.category {
+        case .base: return .purple
+        case .list: return .blue
+        case .single: return .green
+        case .partial: return .orange
+        case .shortcode: return .pink
+        case .taxonomy: return .teal
+        case .other: return .secondary
+        }
+    }
+}
+```
+
+---
+
+### Step 7.4: Testing Checklist for Phase 7
+
+- [ ] Template browser shows all templates from layouts/
+- [ ] Templates grouped by category (base, list, single, partial, shortcode)
+- [ ] Can toggle grouping on/off
+- [ ] Template editor opens with syntax highlighting
+- [ ] Go template expressions ({{ }}) highlighted in purple
+- [ ] HTML tags highlighted in orange
+- [ ] Strings highlighted in red
+- [ ] Comments highlighted in green
+- [ ] Inspector shows defined blocks
+- [ ] Inspector shows included partials
+- [ ] Insert menu adds common template snippets
+- [ ] Can save templates with ⌘S
+- [ ] Unsaved changes indicator works
+
+---
+
+## Phase 8: Hugo Server Integration
+
+### Goal
+Integrate Hugo's development server for live preview with build error display.
+
+### Prerequisites
+- Hugo must be installed on the system
+- Understanding of Swift `Process` for spawning subprocesses
+
+---
+
+### Understanding Hugo Server
+
+#### Hugo Dev Server Features
+- Hot reload on file changes
+- Draft content preview
+- Fast incremental builds
+- WebSocket for browser refresh
+- Configurable port and bind address
+
+#### Key Commands
+```bash
+hugo server                    # Start dev server
+hugo server -D                 # Include drafts
+hugo server --port 1313        # Custom port
+hugo server --bind 0.0.0.0     # Network accessible
+```
+
+---
+
+### Step 8.1: Create HugoServerService
+
+**Create new file:** `Victor/Services/HugoServerService.swift`
+
+```swift
+import Foundation
+import Combine
+
+/// Service for managing Hugo development server
+@MainActor
+@Observable
+class HugoServerService {
+    // MARK: - State
+
+    enum ServerState: Equatable {
+        case stopped
+        case starting
+        case running(port: Int)
+        case error(String)
+    }
+
+    var state: ServerState = .stopped
+    var buildOutput: [BuildLogEntry] = []
+    var lastError: BuildError?
+
+    // MARK: - Configuration
+
+    var port: Int = 1313
+    var includeDrafts: Bool = true
+    var includeFuture: Bool = false
+
+    // MARK: - Private
+
+    private var process: Process?
+    private var outputPipe: Pipe?
+    private var errorPipe: Pipe?
+    private var siteURL: URL?
+
+    // MARK: - Public Methods
+
+    /// Check if Hugo is installed
+    func checkHugoInstallation() async -> HugoInstallation? {
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["hugo", "version"]
+
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8),
+                   process.terminationStatus == 0 {
+                    // Parse version from output like "hugo v0.121.1+extended darwin/arm64..."
+                    let version = parseHugoVersion(from: output)
+                    continuation.resume(returning: HugoInstallation(
+                        version: version,
+                        isExtended: output.contains("+extended"),
+                        path: "/usr/bin/env hugo"
+                    ))
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            } catch {
+                continuation.resume(returning: nil)
+            }
+        }
+    }
+
+    /// Start the Hugo development server
+    func start(for siteURL: URL) async {
+        guard case .stopped = state else { return }
+
+        self.siteURL = siteURL
+        state = .starting
+        buildOutput = []
+        lastError = nil
+
+        // Find available port
+        port = await findAvailablePort(starting: 1313)
+
+        process = Process()
+        process?.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process?.currentDirectoryURL = siteURL
+
+        var args = ["hugo", "server", "--port", "\(port)"]
+        if includeDrafts { args.append("-D") }
+        if includeFuture { args.append("-F") }
+        process?.arguments = args
+
+        // Set up output handling
+        outputPipe = Pipe()
+        errorPipe = Pipe()
+        process?.standardOutput = outputPipe
+        process?.standardError = errorPipe
+
+        // Handle output
+        outputPipe?.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            if let output = String(data: data, encoding: .utf8), !output.isEmpty {
+                Task { @MainActor in
+                    self?.handleOutput(output)
+                }
+            }
+        }
+
+        errorPipe?.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            if let output = String(data: data, encoding: .utf8), !output.isEmpty {
+                Task { @MainActor in
+                    self?.handleError(output)
+                }
+            }
+        }
+
+        // Handle termination
+        process?.terminationHandler = { [weak self] process in
+            Task { @MainActor in
+                if process.terminationStatus != 0 {
+                    self?.state = .error("Server exited with code \(process.terminationStatus)")
+                } else {
+                    self?.state = .stopped
+                }
+            }
+        }
+
+        do {
+            try process?.run()
+            // Wait briefly for server to start
+            try await Task.sleep(for: .seconds(1))
+            state = .running(port: port)
+        } catch {
+            state = .error("Failed to start server: \(error.localizedDescription)")
+        }
+    }
+
+    /// Stop the Hugo server
+    func stop() {
+        process?.terminate()
+        process = nil
+        outputPipe = nil
+        errorPipe = nil
+        state = .stopped
+    }
+
+    /// Restart the server
+    func restart() async {
+        guard let url = siteURL else { return }
+        stop()
+        try? await Task.sleep(for: .milliseconds(500))
+        await start(for: url)
+    }
+
+    /// Get the server URL
+    var serverURL: URL? {
+        guard case .running(let port) = state else { return nil }
+        return URL(string: "http://localhost:\(port)")
+    }
+
+    // MARK: - Private Methods
+
+    private func handleOutput(_ output: String) {
+        // Parse Hugo's output for status messages
+        let lines = output.components(separatedBy: .newlines)
+        for line in lines where !line.isEmpty {
+            let entry = BuildLogEntry(
+                timestamp: Date(),
+                level: .info,
+                message: line
+            )
+            buildOutput.append(entry)
+
+            // Detect server ready
+            if line.contains("Web Server is available at") {
+                if case .starting = state {
+                    state = .running(port: port)
+                }
+            }
+        }
+
+        // Limit log size
+        if buildOutput.count > 500 {
+            buildOutput.removeFirst(100)
+        }
+    }
+
+    private func handleError(_ output: String) {
+        let lines = output.components(separatedBy: .newlines)
+        for line in lines where !line.isEmpty {
+            let entry = BuildLogEntry(
+                timestamp: Date(),
+                level: .error,
+                message: line
+            )
+            buildOutput.append(entry)
+
+            // Parse build errors
+            if let error = parseBuildError(from: line) {
+                lastError = error
+            }
+        }
+    }
+
+    private func parseBuildError(from line: String) -> BuildError? {
+        // Hugo error format: ERROR 2024/01/01 12:00:00 file.html:10:5: error message
+        let pattern = #"ERROR.*?([^:]+):(\d+)(?::(\d+))?:\s*(.+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) else {
+            return nil
+        }
+
+        guard let fileRange = Range(match.range(at: 1), in: line),
+              let lineRange = Range(match.range(at: 2), in: line),
+              let msgRange = Range(match.range(at: 4), in: line) else {
+            return nil
+        }
+
+        let column = match.range(at: 3).location != NSNotFound
+            ? Range(match.range(at: 3), in: line).flatMap { Int(line[$0]) }
+            : nil
+
+        return BuildError(
+            file: String(line[fileRange]),
+            line: Int(line[lineRange]) ?? 0,
+            column: column,
+            message: String(line[msgRange])
+        )
+    }
+
+    private func parseHugoVersion(from output: String) -> String {
+        // Extract version from "hugo v0.121.1+extended darwin/arm64..."
+        let pattern = #"v(\d+\.\d+\.\d+)"#
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
+           let range = Range(match.range(at: 1), in: output) {
+            return String(output[range])
+        }
+        return "unknown"
+    }
+
+    private func findAvailablePort(starting: Int) async -> Int {
+        // Simple implementation - try ports sequentially
+        for port in starting..<(starting + 100) {
+            if await isPortAvailable(port) {
+                return port
+            }
+        }
+        return starting
+    }
+
+    private func isPortAvailable(_ port: Int) async -> Bool {
+        // Try to bind to port briefly
+        let socket = socket(AF_INET, SOCK_STREAM, 0)
+        guard socket >= 0 else { return false }
+        defer { close(socket) }
+
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(port).bigEndian
+        addr.sin_addr.s_addr = INADDR_ANY
+
+        let result = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(socket, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+
+        return result == 0
+    }
+}
+
+// MARK: - Supporting Types
+
+struct HugoInstallation {
+    let version: String
+    let isExtended: Bool
+    let path: String
+}
+
+struct BuildLogEntry: Identifiable {
+    let id = UUID()
+    let timestamp: Date
+    let level: LogLevel
+    let message: String
+
+    enum LogLevel {
+        case info
+        case warning
+        case error
+    }
+}
+
+struct BuildError: Identifiable {
+    let id = UUID()
+    let file: String
+    let line: Int
+    let column: Int?
+    let message: String
+}
+```
+
+---
+
+### Step 8.2: Create ServerControlView
+
+**Create new file:** `Victor/Views/Server/ServerControlView.swift`
+
+```swift
+import SwiftUI
+
+/// Control panel for Hugo development server
+struct ServerControlView: View {
+    @Bindable var serverService: HugoServerService
+    let siteURL: URL
+
+    @State private var hugoInstallation: HugoInstallation?
+    @State private var showBuildLog = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            serverToolbar
+            Divider()
+
+            if showBuildLog {
+                buildLogView
+            }
+        }
+    }
+
+    private var serverToolbar: some View {
+        HStack {
+            // Server status
+            serverStatusIndicator
+
+            Divider().frame(height: 20)
+
+            // Port display
+            if case .running(let port) = serverService.state {
+                Button {
+                    if let url = serverService.serverURL {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("localhost:\(port)", systemImage: "globe")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Spacer()
+
+            // Options
+            Toggle("Drafts", isOn: $serverService.includeDrafts)
+                .toggleStyle(.button)
+                .disabled(isRunning)
+
+            Toggle("Future", isOn: $serverService.includeFuture)
+                .toggleStyle(.button)
+                .disabled(isRunning)
+
+            Divider().frame(height: 20)
+
+            // Build log toggle
+            Toggle(isOn: $showBuildLog) {
+                HStack {
+                    Image(systemName: "terminal")
+                    if let error = serverService.lastError {
+                        Circle().fill(.red).frame(width: 8, height: 8)
+                    }
+                }
+            }
+            .toggleStyle(.button)
+
+            Divider().frame(height: 20)
+
+            // Control buttons
+            if isRunning {
+                Button {
+                    serverService.stop()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+
+                Button {
+                    Task { await serverService.restart() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+            } else {
+                Button {
+                    Task { await serverService.start(for: siteURL) }
+                } label: {
+                    Label("Start Server", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(hugoInstallation == nil)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .task {
+            hugoInstallation = await serverService.checkHugoInstallation()
+        }
+    }
+
+    private var serverStatusIndicator: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 10, height: 10)
+
+            Text(statusText)
+                .font(.caption)
+        }
+    }
+
+    private var isRunning: Bool {
+        if case .running = serverService.state { return true }
+        return false
+    }
+
+    private var statusColor: Color {
+        switch serverService.state {
+        case .stopped: return .secondary
+        case .starting: return .yellow
+        case .running: return .green
+        case .error: return .red
+        }
+    }
+
+    private var statusText: String {
+        switch serverService.state {
+        case .stopped: return "Stopped"
+        case .starting: return "Starting..."
+        case .running: return "Running"
+        case .error(let msg): return "Error: \(msg)"
+        }
+    }
+
+    private var buildLogView: some View {
+        VStack(spacing: 0) {
+            // Error banner if present
+            if let error = serverService.lastError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text("\(error.file):\(error.line) - \(error.message)")
+                        .font(.caption)
+                    Spacer()
+                    Button("Go to Error") {
+                        // Navigate to error location
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(8)
+                .background(.red.opacity(0.1))
+            }
+
+            // Log entries
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(serverService.buildOutput) { entry in
+                            HStack(alignment: .top, spacing: 8) {
+                                Text(entry.timestamp, style: .time)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 60, alignment: .trailing)
+
+                                Circle()
+                                    .fill(logLevelColor(entry.level))
+                                    .frame(width: 6, height: 6)
+                                    .padding(.top, 5)
+
+                                Text(entry.message)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                            }
+                            .id(entry.id)
+                        }
+                    }
+                    .padding(8)
+                }
+                .onChange(of: serverService.buildOutput.count) { _, _ in
+                    if let last = serverService.buildOutput.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+            }
+            .background(Color(nsColor: .textBackgroundColor))
+            .frame(height: 150)
+        }
+    }
+
+    private func logLevelColor(_ level: BuildLogEntry.LogLevel) -> Color {
+        switch level {
+        case .info: return .blue
+        case .warning: return .orange
+        case .error: return .red
+        }
+    }
+}
+```
+
+---
+
+### Step 8.3: Create LivePreviewPanel
+
+**Create new file:** `Victor/Views/Server/LivePreviewPanel.swift`
+
+```swift
+import SwiftUI
+import WebKit
+
+/// Live preview panel using Hugo dev server
+struct LivePreviewPanel: View {
+    @Bindable var serverService: HugoServerService
+    let currentPath: String?  // Current content file path for navigation
+
+    @State private var webView: WKWebView?
+    @State private var isRefreshing = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            previewToolbar
+            Divider()
+
+            if case .running = serverService.state {
+                LivePreviewWebView(
+                    url: previewURL,
+                    webView: $webView
+                )
+            } else {
+                notRunningPlaceholder
+            }
+        }
+    }
+
+    private var previewURL: URL? {
+        guard let serverURL = serverService.serverURL else { return nil }
+
+        // If we have a current content path, try to navigate to it
+        if let path = currentPath {
+            // Convert content/posts/my-post.md to /posts/my-post/
+            let urlPath = path
+                .replacingOccurrences(of: "content/", with: "/")
+                .replacingOccurrences(of: ".md", with: "/")
+                .replacingOccurrences(of: "_index", with: "")
+                .replacingOccurrences(of: "index", with: "")
+            return serverURL.appendingPathComponent(urlPath)
+        }
+
+        return serverURL
+    }
+
+    private var previewToolbar: some View {
+        HStack {
+            Image(systemName: "globe")
+                .foregroundStyle(.blue)
+
+            Text("Live Preview")
+                .font(.headline)
+
+            if case .running(let port) = serverService.state {
+                Text("localhost:\(port)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            // Navigation
+            Button {
+                webView?.goBack()
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(!(webView?.canGoBack ?? false))
+
+            Button {
+                webView?.goForward()
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(!(webView?.canGoForward ?? false))
+
+            Divider().frame(height: 20)
+
+            // Refresh
+            Button {
+                isRefreshing = true
+                webView?.reload()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isRefreshing = false
+                }
+            } label: {
+                if isRefreshing {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                }
+            }
+            .keyboardShortcut("r", modifiers: .command)
+
+            // Open in browser
+            Button {
+                if let url = previewURL {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                Image(systemName: "safari")
+            }
+            .help("Open in browser")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var notRunningPlaceholder: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "globe")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+
+            Text("Start Hugo Server for Live Preview")
+                .font(.headline)
+
+            Text("Live preview shows your site exactly as it will appear when published")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// WKWebView wrapper for live preview
+struct LivePreviewWebView: NSViewRepresentable {
+    let url: URL?
+    @Binding var webView: WKWebView?
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        let webView = WKWebView(frame: .zero, configuration: config)
+
+        DispatchQueue.main.async {
+            self.webView = webView
+        }
+
+        if let url = url {
+            webView.load(URLRequest(url: url))
+        }
+
+        return webView
+    }
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        // Reload if URL changed significantly
+        if let url = url,
+           webView.url?.host != url.host {
+            webView.load(URLRequest(url: url))
+        }
+    }
+}
+```
+
+---
+
+### Step 8.4: Integrate Server into Main App
+
+Add to SiteViewModel:
+
+```swift
+// Add property:
+var hugoServerService = HugoServerService()
+
+// Add cleanup on site change:
+func openSite(_ url: URL) async {
+    // Stop any running server
+    hugoServerService.stop()
+
+    // ... rest of existing implementation
+}
+```
+
+Add to ContentView or main layout:
+
+```swift
+// Add server control bar at bottom of window
+VStack(spacing: 0) {
+    // ... existing content
+
+    Divider()
+
+    ServerControlView(
+        serverService: siteViewModel.hugoServerService,
+        siteURL: siteViewModel.currentSite?.url ?? URL(fileURLWithPath: "/")
+    )
+}
+```
+
+---
+
+### Step 8.5: Testing Checklist for Phase 8
+
+- [ ] Hugo installation detected on launch
+- [ ] Version and extended status displayed
+- [ ] Can start server with Start button
+- [ ] Server status indicator shows correct state
+- [ ] Port displayed when running
+- [ ] Can open preview in browser
+- [ ] Build log shows Hugo output
+- [ ] Build errors parsed and displayed
+- [ ] Error banner shows file/line/message
+- [ ] Can stop server with Stop button
+- [ ] Can restart server
+- [ ] Drafts toggle works
+- [ ] Future toggle works
+- [ ] Live preview shows site content
+- [ ] Live preview navigation works
+- [ ] Refresh button reloads preview
+- [ ] Server stops when switching sites
+
+---
+
+## Implementation Priority Recommendation
+
+Based on user value and implementation complexity:
+
+| Priority | Phase | Rationale |
+|----------|-------|-----------|
+| 1 | **Phase 6** | Immediate benefit for content creators, visual asset management |
+| 2 | **Phase 5** | Natural extension of existing editors, moderate complexity |
+| 3 | **Phase 8** | High user value but adds cognitive complexity for a CMS |
+| 4 | **Phase 7** | Most complex (syntax highlighting), niche use case |
+
+**Note**: Phase 5 and Phase 6 can be implemented in parallel since they don't share dependencies.
 
 ---
 

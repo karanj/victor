@@ -88,7 +88,67 @@ class HugoConfig {
 
     init() {}
 
-    init(from dictionary: [String: Any], format: ConfigFormat, url: URL, rawContent: String = "") {
+    /// Update structured properties from rawContent
+    /// Call this when switching from Raw to Form view
+    func updateFromRawContent() throws {
+        guard !rawContent.isEmpty else { return }
+
+        // Debug: log what we're trying to parse
+        let preview = String(rawContent.prefix(100)).replacingOccurrences(of: "\n", with: "\\n")
+        print("[HugoConfig] Parsing \(sourceFormat.rawValue.uppercased()) content (\(rawContent.count) chars): \(preview)...")
+
+        do {
+            let parsed = try HugoConfigParser.shared.parseConfig(content: rawContent, format: sourceFormat)
+
+            // Update all structured properties from the parsed config
+            self.baseURL = parsed.baseURL
+            self.title = parsed.title
+            self.languageCode = parsed.languageCode
+            self.theme = parsed.theme
+            self.themeIsArray = parsed.themeIsArray
+            self.copyright = parsed.copyright
+            self.buildDrafts = parsed.buildDrafts
+            self.buildFuture = parsed.buildFuture
+            self.buildExpired = parsed.buildExpired
+            self.enableRobotsTXT = parsed.enableRobotsTXT
+            self.summaryLength = parsed.summaryLength
+            self.defaultContentLanguage = parsed.defaultContentLanguage
+            self.timeZone = parsed.timeZone
+            self.taxonomies = parsed.taxonomies
+            self.menus = parsed.menus
+            self.params = parsed.params
+            self.customFields = parsed.customFields
+
+            print("[HugoConfig] Parse successful")
+        } catch {
+            print("[HugoConfig] Parse failed: \(error)")
+            // Re-throw with more context about what we were trying to parse
+            throw ConfigParseError.failedToParse(
+                format: sourceFormat,
+                contentPreview: preview,
+                underlyingError: error
+            )
+        }
+    }
+}
+
+/// Error type for config parsing with context
+enum ConfigParseError: LocalizedError {
+    case failedToParse(format: ConfigFormat, contentPreview: String, underlyingError: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .failedToParse(let format, let contentPreview, let underlyingError):
+            return "Failed to parse \(format.rawValue.uppercased()). Content starts with: \(contentPreview)\n\nError: \(underlyingError.localizedDescription)"
+        }
+    }
+}
+
+// MARK: - HugoConfig Dictionary Initializer
+
+extension HugoConfig {
+    convenience init(from dictionary: [String: Any], format: ConfigFormat, url: URL, rawContent: String = "") {
+        self.init()
         self.sourceURL = url
         self.sourceFormat = format
         self.rawContent = rawContent

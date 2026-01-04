@@ -16,6 +16,62 @@ final class HighlightingTextView: NSTextView {
     /// Callback to show the shortcode picker (called from context menu)
     var onShowShortcodePicker: (() -> Void)?
 
+    // MARK: - Drag and Drop
+
+    override func awakeFromNib() {
+        super.awakeFromNib()
+        registerForDraggedTypes([.string, .fileURL])
+    }
+
+    /// Register for drag types when becoming first responder
+    override func becomeFirstResponder() -> Bool {
+        registerForDraggedTypes([.string, .fileURL])
+        return super.becomeFirstResponder()
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        // Accept string drops (markdown syntax from asset browser)
+        if sender.draggingPasteboard.canReadObject(forClasses: [NSString.self], options: nil) {
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+
+        // Try to get string first (markdown syntax from asset browser)
+        if let strings = pasteboard.readObjects(forClasses: [NSString.self], options: nil) as? [String],
+           let droppedString = strings.first {
+            // Get drop location
+            let dropPoint = convert(sender.draggingLocation, from: nil)
+
+            // Find character index at drop point
+            guard let layoutManager = layoutManager,
+                  let textContainer = textContainer else {
+                return false
+            }
+
+            let glyphIndex = layoutManager.glyphIndex(for: dropPoint, in: textContainer)
+            let charIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
+
+            // Insert at drop location
+            let insertRange = NSRange(location: min(charIndex, string.count), length: 0)
+
+            if shouldChangeText(in: insertRange, replacementString: droppedString) {
+                textStorage?.replaceCharacters(in: insertRange, with: droppedString)
+                didChangeText()
+
+                // Position cursor after inserted text
+                let newPosition = insertRange.location + droppedString.count
+                setSelectedRange(NSRange(location: newPosition, length: 0))
+                return true
+            }
+        }
+
+        return super.performDragOperation(sender)
+    }
+
     /// Color for the current line highlight
     private var highlightColor: NSColor {
         NSColor.controlAccentColor.withAlphaComponent(0.08)
@@ -303,6 +359,9 @@ struct EditorTextView: NSViewRepresentable {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
+
+        // Enable drag-and-drop for asset insertion
+        textView.registerForDraggedTypes([.string, .fileURL])
 
         // Configure text container for proper wrapping
         // Horizontal padding provides breathing room from scrollbar/resize gutter

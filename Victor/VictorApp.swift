@@ -98,8 +98,14 @@ struct VictorApp: App {
 
             // View menu - Search and Navigation
             CommandGroup(after: .sidebar) {
+                Button("Toggle Sidebar") {
+                    NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.control, .command])
 
-                Button("Search for file") {
+                Divider()
+
+                Button("Search Files") {
                     siteViewModel.shouldFocusSearch = true
                 }
                 .keyboardShortcut("f", modifiers: .command)

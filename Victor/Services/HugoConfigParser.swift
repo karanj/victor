@@ -94,6 +94,13 @@ class HugoConfigParser {
     func serialize(_ config: HugoConfig) throws -> String {
         var dictionary: [String: Any] = [:]
 
+        // Debug: log customFields types
+        print("[HugoConfigParser] Building dictionary for serialization...")
+        print("[HugoConfigParser] customFields keys: \(config.customFields.keys.sorted())")
+        for (key, value) in config.customFields {
+            print("[HugoConfigParser]   \(key): \(type(of: value))")
+        }
+
         // Required fields
         if !config.baseURL.isEmpty {
             dictionary["baseURL"] = config.baseURL
@@ -119,24 +126,17 @@ class HugoConfigParser {
         if let copyright = config.copyright, !copyright.isEmpty {
             dictionary["copyright"] = copyright
         }
-        if config.buildDrafts {
-            dictionary["buildDrafts"] = true
-        }
-        if config.buildFuture {
-            dictionary["buildFuture"] = true
-        }
-        if config.buildExpired {
-            dictionary["buildExpired"] = true
-        }
-        if config.enableRobotsTXT {
-            dictionary["enableRobotsTXT"] = true
-        }
-        if config.summaryLength != 70 {
-            dictionary["summaryLength"] = config.summaryLength
-        }
-        if config.defaultContentLanguage != "en" {
-            dictionary["defaultContentLanguage"] = config.defaultContentLanguage
-        }
+
+        // Always include boolean fields - don't omit false values
+        // Hugo's defaults may differ from ours, so explicit is safer
+        dictionary["buildDrafts"] = config.buildDrafts
+        dictionary["buildFuture"] = config.buildFuture
+        dictionary["buildExpired"] = config.buildExpired
+        dictionary["enableRobotsTXT"] = config.enableRobotsTXT
+
+        // Always include these even if they match "defaults" - the user may have set them explicitly
+        dictionary["summaryLength"] = config.summaryLength
+        dictionary["defaultContentLanguage"] = config.defaultContentLanguage
         if let timeZone = config.timeZone, !timeZone.isEmpty {
             dictionary["timeZone"] = timeZone
         }
@@ -156,17 +156,45 @@ class HugoConfigParser {
             dictionary["menu"] = menuDict
         }
 
-        // Params
+        // Params - normalize for proper serialization
         if !config.params.isEmpty {
-            dictionary["params"] = config.params
+            dictionary["params"] = normalizeForSerialization(config.params)
         }
 
-        // Custom fields
+        // Custom fields - need to normalize types for proper serialization
         for (key, value) in config.customFields {
-            dictionary[key] = value
+            dictionary[key] = normalizeForSerialization(value)
         }
 
         return try serialize(dictionary: dictionary, format: config.sourceFormat)
+    }
+
+    /// Recursively normalize values for serialization
+    /// Converts Dictionary<AnyHashable, Any> to [String: Any] and handles nested structures
+    private func normalizeForSerialization(_ value: Any) -> Any {
+        if let dict = value as? [AnyHashable: Any] {
+            // Convert AnyHashable keys to String keys
+            var normalized: [String: Any] = [:]
+            for (key, val) in dict {
+                if let stringKey = key as? String {
+                    normalized[stringKey] = normalizeForSerialization(val)
+                } else {
+                    normalized[String(describing: key)] = normalizeForSerialization(val)
+                }
+            }
+            return normalized
+        } else if let dict = value as? [String: Any] {
+            // Already String keys, but recurse into values
+            var normalized: [String: Any] = [:]
+            for (key, val) in dict {
+                normalized[key] = normalizeForSerialization(val)
+            }
+            return normalized
+        } else if let array = value as? [Any] {
+            return array.map { normalizeForSerialization($0) }
+        } else {
+            return value
+        }
     }
 
     private func serialize(dictionary: [String: Any], format: ConfigFormat) throws -> String {
@@ -306,7 +334,20 @@ class HugoConfigParser {
     }
 
     private func serializeToYAML(_ dictionary: [String: Any]) throws -> String {
-        return try Yams.dump(object: dictionary)
+        // Use a very large width to prevent line wrapping which can produce invalid YAML
+        let output = try Yams.dump(object: dictionary, width: -1, allowUnicode: true)
+
+        // Verify the output is parseable (round-trip validation)
+        do {
+            _ = try Yams.load(yaml: output)
+        } catch {
+            print("[HugoConfigParser] YAML round-trip FAILED!")
+            print("[HugoConfigParser] Serialized output:\n\(output)")
+            print("[HugoConfigParser] Parse error: \(error)")
+            throw error
+        }
+
+        return output
     }
 
     private func serializeToJSON(_ dictionary: [String: Any]) throws -> String {

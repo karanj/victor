@@ -26,6 +26,11 @@ class FileNode: Identifiable, Hashable {
         !isDirectory && HugoSiteStructure.isConfigFile(filename: name)
     }
 
+    /// Whether this is an asset directory (static/ or assets/)
+    var isAssetDirectory: Bool {
+        isDirectory && (hugoRole == .staticFiles || hugoRole == .assets)
+    }
+
     /// Associated content file (only for .md files in content directory)
     var contentFile: ContentFile?
 

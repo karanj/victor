@@ -646,7 +646,7 @@ final class HugoConfigParserTests: XCTestCase {
         try assertJSONRoundTrip(input)
     }
 
-    /// Test multiline strings in YAML
+    /// Test multiline strings in YAML with literal block scalar (|)
     func testMultilineStringsInYAML() throws {
         let input = """
         baseURL: "https://example.com/"
@@ -660,6 +660,201 @@ final class HugoConfigParserTests: XCTestCase {
         let description = config.customFields["description"] as? String
         XCTAssertNotNil(description)
         XCTAssertTrue(description?.contains("multiline") ?? false)
+    }
+
+    /// Test multiline strings in YAML with folded block scalar (>)
+    func testFoldedBlockScalarYAML() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        params:
+          homeInfoParams:
+            Title: "Welcome"
+            Content: >
+              Hi, this is a space on the web.
+              It updates infrequently.
+              Have a look around.
+        """
+
+        let config = try parser.parseConfig(content: input, format: .yaml)
+
+        // Verify parsing worked
+        let params = config.params
+        let homeInfo = params["homeInfoParams"] as? [AnyHashable: Any]
+        XCTAssertNotNil(homeInfo)
+        XCTAssertEqual(homeInfo?["Title"] as? String, "Welcome")
+
+        // Verify round-trip
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .yaml)
+
+        let rtParams = roundTrip.params
+        let rtHomeInfo = rtParams["homeInfoParams"] as? [AnyHashable: Any]
+        XCTAssertEqual(rtHomeInfo?["Title"] as? String, "Welcome")
+    }
+
+    /// Test flow-style arrays in YAML (JSON-like syntax)
+    func testFlowStyleArraysYAML() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        mainsections: ["posts", "pages"]
+        outputs:
+          home: ["HTML", "RSS", "JSON"]
+        """
+
+        let config = try parser.parseConfig(content: input, format: .yaml)
+
+        // Verify parsing
+        let mainsections = config.customFields["mainsections"] as? [Any]
+        XCTAssertEqual(mainsections?.count, 2)
+
+        // Verify round-trip
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .yaml)
+
+        let rtMainsections = roundTrip.customFields["mainsections"] as? [Any]
+        XCTAssertEqual(rtMainsections?.count, 2)
+    }
+
+    /// Test long strings with special characters that could cause line wrapping issues
+    /// This reproduces a bug where Yams.dump() would wrap long lines incorrectly
+    func testLongStringsWithSpecialCharactersYAML() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        copyright: "© Jane Doe 2015-2026"
+        params:
+          homeInfoParams:
+            Title: "Welcome"
+            Content: >
+              Hi, this is Jane's space on the web. It updates infrequently. There's a lot of archives, many of which I would disagree with today. Have a look around, I'm tinkering.
+          socialIcons:
+            - name: bluesky
+              title: "Jane on Bluesky"
+              url: "https://bsky.app/profile/janedoe.bsky.social"
+            - name: mastodon
+              title: "Jane on Mastodon"
+              url: "https://mastodon.social/@janedoe"
+        """
+
+        // Parse
+        let config = try parser.parseConfig(content: input, format: .yaml)
+
+        // Verify copyright with unicode
+        XCTAssertEqual(config.copyright, "© Jane Doe 2015-2026")
+
+        // Verify nested params with long string containing apostrophes
+        let params = config.params
+        let homeInfo = params["homeInfoParams"] as? [AnyHashable: Any]
+        XCTAssertNotNil(homeInfo)
+        XCTAssertEqual(homeInfo?["Title"] as? String, "Welcome")
+
+        let content = homeInfo?["Content"] as? String
+        XCTAssertNotNil(content)
+        XCTAssertTrue(content?.contains("Jane's") ?? false, "Content should contain apostrophe")
+
+        // Serialize
+        let serialized = try parser.serialize(config)
+
+        // Verify serialized output doesn't have line-wrapping issues
+        // (The bug was that Yams would wrap long lines incorrectly)
+
+        // Parse again (round-trip)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .yaml)
+
+        // Verify round-trip preserved values
+        XCTAssertEqual(roundTrip.copyright, "© Jane Doe 2015-2026")
+
+        let rtParams = roundTrip.params
+        let rtHomeInfo = rtParams["homeInfoParams"] as? [AnyHashable: Any]
+        XCTAssertEqual(rtHomeInfo?["Title"] as? String, "Welcome")
+
+        let rtContent = rtHomeInfo?["Content"] as? String
+        XCTAssertTrue(rtContent?.contains("Jane's") ?? false, "Round-trip should preserve apostrophe")
+    }
+
+    /// Test complex real-world Hugo YAML config (similar to PaperMod theme)
+    func testComplexRealWorldYAMLConfig() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        title: "My Site"
+        theme: [PaperMod]
+        enableInlineShortcodes: true
+        enableRobotsTXT: true
+        buildDrafts: false
+        enableEmoji: true
+        mainsections: ["posts", "pages"]
+
+        minify:
+          disableXML: true
+
+        pagination:
+          pagerSize: 5
+
+        languages:
+          en:
+            languageName: "English"
+            weight: 1
+            menu:
+              main:
+                - name: About
+                  url: pages/about/
+                  weight: 2
+                - name: Archive
+                  url: pages/archives/
+                  weight: 5
+
+        outputs:
+          home:
+            - HTML
+            - RSS
+            - JSON
+
+        params:
+          env: production
+          description: "A test site"
+          ShowReadingTime: true
+          homeInfoParams:
+            Title: "Welcome"
+            Content: >
+              Hi, this is a space on the web.
+              It updates infrequently.
+
+        markup:
+          highlight:
+            noClasses: false
+        """
+
+        // Parse
+        let config = try parser.parseConfig(content: input, format: .yaml)
+
+        // Verify basic fields
+        XCTAssertEqual(config.baseURL, "https://example.com/")
+        XCTAssertEqual(config.title, "My Site")
+        XCTAssertEqual(config.theme, "PaperMod")
+        XCTAssertTrue(config.themeIsArray)
+        XCTAssertTrue(config.enableRobotsTXT)
+
+        // Verify custom fields parsed
+        XCTAssertNotNil(config.customFields["mainsections"])
+        XCTAssertNotNil(config.customFields["languages"])
+        XCTAssertNotNil(config.customFields["outputs"])
+
+        // Serialize
+        let serialized = try parser.serialize(config)
+
+        // Parse again (round-trip)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .yaml)
+
+        // Verify round-trip preserved values
+        XCTAssertEqual(roundTrip.baseURL, "https://example.com/")
+        XCTAssertEqual(roundTrip.title, "My Site")
+        XCTAssertTrue(roundTrip.enableRobotsTXT)
+
+        // Verify nested structures survived
+        let rtMainsections = roundTrip.customFields["mainsections"] as? [Any]
+        XCTAssertEqual(rtMainsections?.count, 2)
+
+        let rtLanguages = roundTrip.customFields["languages"]
+        XCTAssertNotNil(rtLanguages)
     }
 
     // MARK: - Hugo-Specific Features Tests
@@ -797,6 +992,43 @@ final class HugoConfigParserTests: XCTestCase {
         XCTAssertTrue(config.buildFuture)
         XCTAssertTrue(config.buildExpired)
         XCTAssertTrue(config.enableRobotsTXT)
+    }
+
+    /// Test that explicit false boolean values are preserved on round-trip
+    /// This is important because Hugo's defaults may differ from ours
+    func testExplicitFalseValuesPreserved() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        buildDrafts: false
+        buildFuture: false
+        buildExpired: false
+        enableRobotsTXT: false
+        """
+
+        let config = try parser.parseConfig(content: input, format: .yaml)
+
+        // Verify initial parse
+        XCTAssertFalse(config.buildDrafts)
+        XCTAssertFalse(config.buildFuture)
+        XCTAssertFalse(config.buildExpired)
+        XCTAssertFalse(config.enableRobotsTXT)
+
+        // Serialize
+        let serialized = try parser.serialize(config)
+
+        // Verify false values are present in serialized output
+        XCTAssertTrue(serialized.contains("buildDrafts"), "buildDrafts should be in output")
+        XCTAssertTrue(serialized.contains("buildFuture"), "buildFuture should be in output")
+        XCTAssertTrue(serialized.contains("buildExpired"), "buildExpired should be in output")
+        XCTAssertTrue(serialized.contains("enableRobotsTXT"), "enableRobotsTXT should be in output")
+
+        // Round-trip
+        let roundTrip = try parser.parseConfig(content: serialized, format: .yaml)
+
+        XCTAssertFalse(roundTrip.buildDrafts, "buildDrafts should remain false after round-trip")
+        XCTAssertFalse(roundTrip.buildFuture, "buildFuture should remain false after round-trip")
+        XCTAssertFalse(roundTrip.buildExpired, "buildExpired should remain false after round-trip")
+        XCTAssertFalse(roundTrip.enableRobotsTXT, "enableRobotsTXT should remain false after round-trip")
     }
 
     /// Test timezone and language settings

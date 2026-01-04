@@ -45,11 +45,14 @@ struct ContentView: View {
             HSplitView {
                 // Main content area with tab-based layout
                 VStack(spacing: 0) {
-                    // Tab bar for switching between Editor/Preview/Split
-                    TabBarView(viewModel: siteViewModel)
+                    // Tab bar only shown for content files (markdown with frontmatter)
+                    if siteViewModel.selectedNode?.contentFile != nil {
+                        TabBarView(viewModel: siteViewModel)
+                    }
 
                     // Content based on selected layout mode
-                    if let selectedNode = siteViewModel.selectedNode, !selectedNode.isDirectory {
+                    if let selectedNode = siteViewModel.selectedNode,
+                       (!selectedNode.isDirectory || selectedNode.isAssetDirectory) {
                         layoutContent(for: selectedNode)
                             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.layoutMode)
                     } else {
@@ -72,11 +75,8 @@ struct ContentView: View {
         }
         .navigationTitle(siteViewModel.site?.displayName ?? "Victor")
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button(action: toggleSidebar) {
-                    Label("Toggle Sidebar", systemImage: "sidebar.left")
-                }
-            }
+            // Note: NavigationSplitView automatically provides a sidebar toggle button
+            // so we don't need to add our own
 
             if siteViewModel.isLoading || siteViewModel.isLoadingFile {
                 ToolbarItem {
@@ -86,22 +86,26 @@ struct ContentView: View {
                 }
             }
 
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    if reduceMotion {
-                        siteViewModel.toggleInspector()
-                    } else {
-                        withAnimation(.easeInOut(duration: AppConstants.Animation.standard)) {
+            // Only show inspector toggle for markdown content files
+            // (Assets have their own built-in detail panel)
+            if siteViewModel.selectedNode?.contentFile != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        if reduceMotion {
                             siteViewModel.toggleInspector()
+                        } else {
+                            withAnimation(.easeInOut(duration: AppConstants.Animation.standard)) {
+                                siteViewModel.toggleInspector()
+                            }
                         }
+                    } label: {
+                        Label(
+                            siteViewModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
+                            systemImage: "sidebar.right"
+                        )
                     }
-                } label: {
-                    Label(
-                        siteViewModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
-                        systemImage: "sidebar.right"
-                    )
+                    .help("Toggle Inspector (⌥⌘I)")
                 }
-                .help("Toggle Inspector (⌥⌘I)")
             }
         }
         .alert("Error", isPresented: Binding(
@@ -202,11 +206,6 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Actions
-
-    private func toggleSidebar() {
-        columnVisibility = columnVisibility == .all ? .detailOnly : .all
-    }
 }
 
 // MARK: - Keyboard Hint Row

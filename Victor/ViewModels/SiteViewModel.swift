@@ -643,7 +643,7 @@ class SiteViewModel {
         isLoadingConfig = false
     }
 
-    /// Save the current Hugo configuration
+    /// Save the current Hugo configuration (from form fields)
     func saveHugoConfig() async {
         guard let config = hugoConfig, let url = config.sourceURL else {
             errorMessage = "No configuration to save"
@@ -653,8 +653,28 @@ class SiteViewModel {
         do {
             let content = try HugoConfigParser.shared.serialize(config)
             try await fileSystemService.writeFile(to: url, content: content)
+            // Keep rawContent in sync with what we saved
+            config.rawContent = content
             config.hasUnsavedChanges = false
             Logger.shared.info("Saved Hugo config: \(url.lastPathComponent)")
+        } catch {
+            errorMessage = "Failed to save config: \(error.localizedDescription)"
+            Logger.shared.error("Error saving Hugo config", error: error)
+        }
+    }
+
+    /// Save the current Hugo configuration directly from rawContent (for raw editor mode)
+    func saveHugoConfigRaw() async {
+        guard let config = hugoConfig, let url = config.sourceURL else {
+            errorMessage = "No configuration to save"
+            return
+        }
+
+        do {
+            // Save rawContent directly without serialization
+            try await fileSystemService.writeFile(to: url, content: config.rawContent)
+            config.hasUnsavedChanges = false
+            Logger.shared.info("Saved Hugo config (raw): \(url.lastPathComponent)")
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"
             Logger.shared.error("Error saving Hugo config", error: error)

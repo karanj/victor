@@ -4,11 +4,13 @@ import SwiftUI
 struct ConfigEditorView: View {
     @Bindable var config: HugoConfig
     let onSave: () async -> Void
+    let onSaveRaw: () async -> Void
 
     @State private var selectedTab: ConfigTab = .essentials
     @State private var showRawEditor = false
     @State private var isSaving = false
     @State private var showSavedIndicator = false
+    @State private var parseError: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -49,6 +51,36 @@ struct ConfigEditorView: View {
                         .tag(ConfigTab.advanced)
                 }
                 .padding()
+            }
+        }
+        .onChange(of: showRawEditor) { oldValue, newValue in
+            if oldValue == false && newValue == true {
+                // When switching from Form to Raw, serialize form fields to rawContent
+                do {
+                    let serialized = try HugoConfigParser.shared.serialize(config)
+                    config.rawContent = serialized
+                    print("[ConfigEditorView] Form→Raw: serialized \(serialized.count) chars")
+                } catch {
+                    parseError = "Failed to serialize: \(error.localizedDescription)"
+                }
+            } else if oldValue == true && newValue == false {
+                // When switching from Raw to Form, parse the raw content to update form fields
+                do {
+                    try config.updateFromRawContent()
+                    parseError = nil
+                } catch {
+                    parseError = error.localizedDescription
+                }
+            }
+        }
+        .alert("Parse Error", isPresented: Binding(
+            get: { parseError != nil },
+            set: { if !$0 { parseError = nil } }
+        )) {
+            Button("OK") { parseError = nil }
+        } message: {
+            if let error = parseError {
+                Text("Could not parse the raw content: \(error)")
             }
         }
     }
@@ -112,7 +144,13 @@ struct ConfigEditorView: View {
             Button {
                 Task {
                     isSaving = true
-                    await onSave()
+                    if showRawEditor {
+                        // In raw mode, save rawContent directly (bypass serialize)
+                        await onSaveRaw()
+                    } else {
+                        // In form mode, serialize from structured fields
+                        await onSave()
+                    }
                     isSaving = false
                     showSavedIndicatorBriefly()
                 }

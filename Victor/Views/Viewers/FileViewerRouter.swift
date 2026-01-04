@@ -11,8 +11,12 @@ struct FileViewerRouter: View {
     var body: some View {
         Group {
             if node.isDirectory {
-                // Directories shouldn't reach here, but handle gracefully
-                directoryPlaceholder
+                // Check if this is an asset directory (static/ or assets/)
+                if node.hugoRole == .staticFiles || node.hugoRole == .assets {
+                    assetBrowserContent
+                } else {
+                    directoryPlaceholder
+                }
             } else if node.isConfigFile {
                 // Hugo config files get the GUI editor
                 configEditorContent
@@ -71,9 +75,11 @@ struct FileViewerRouter: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let config = siteViewModel.hugoConfig, config.sourceURL == node.url {
-            ConfigEditorView(config: config) {
+            ConfigEditorView(config: config, onSave: {
                 await siteViewModel.saveHugoConfig()
-            }
+            }, onSaveRaw: {
+                await siteViewModel.saveHugoConfigRaw()
+            })
         } else {
             // Config not loaded yet - trigger load
             VStack(spacing: 12) {
@@ -97,5 +103,15 @@ struct FileViewerRouter: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Asset browser content for static/ and assets/ directories
+    @ViewBuilder
+    private var assetBrowserContent: some View {
+        AssetBrowserView(
+            folderURL: node.url,
+            isAssetsDir: node.hugoRole == .assets,
+            onInsert: nil  // Drag-drop is supported; clipboard copy is in detail panel
+        )
     }
 }
