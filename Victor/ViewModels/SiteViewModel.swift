@@ -148,6 +148,9 @@ class SiteViewModel {
     /// Files that were recently saved (node ID -> save timestamp)
     var recentlySavedFileIDs: [UUID: Date] = [:]
 
+    /// Set of folder IDs that have had their children's status metadata loaded
+    private var loadedStatusFolderIDs: Set<UUID> = []
+
     /// Duration to show "saved" indicator before fading
     private let savedIndicatorDuration: TimeInterval = 3.0
 
@@ -378,6 +381,7 @@ class SiteViewModel {
         contentCacheOrder = []
         modifiedFileIDs = []
         recentlySavedFileIDs = [:]
+        loadedStatusFolderIDs = []
     }
 
     // MARK: - File Selection
@@ -530,11 +534,50 @@ class SiteViewModel {
         return Date().timeIntervalSince(savedDate) < savedIndicatorDuration
     }
 
+    // MARK: - Status Metadata Loading (Lazy)
+
+    /// Load status metadata for markdown files in a folder when it's expanded
+    /// This enables showing Draft/Scheduled/Expired badges before files are opened
+    func onFolderExpanded(_ folder: FileNode) {
+        // Skip if already loaded
+        guard !loadedStatusFolderIDs.contains(folder.id) else { return }
+
+        // Collect markdown file URLs that don't have status yet
+        let markdownChildren = folder.children.filter {
+            $0.isMarkdownFile && $0.statusMetadata == nil && $0.contentFile == nil
+        }
+
+        guard !markdownChildren.isEmpty else {
+            loadedStatusFolderIDs.insert(folder.id)
+            return
+        }
+
+        let urls = markdownChildren.map { $0.url }
+
+        Task { [weak self] in
+            guard let self = self else { return }
+
+            let metadataMap = await FileSystemService.shared.loadStatusMetadata(for: urls)
+
+            // Update nodes with loaded metadata
+            for child in markdownChildren {
+                if let metadata = metadataMap[child.url] {
+                    child.statusMetadata = metadata
+                }
+            }
+
+            self.loadedStatusFolderIDs.insert(folder.id)
+        }
+    }
+
     /// Load content for a markdown file node
     private func loadFileContent(for node: FileNode) async {
         do {
             let file = try await fileSystemService.readContentFile(at: node.url)
             node.contentFile = file
+
+            // Sync status metadata from full content (more accurate than lightweight parse)
+            node.statusMetadata = FileStatusMetadata(from: file.frontmatter)
 
             // Track in LRU cache and evict old entries
             updateContentCache(accessedNodeID: node.id)
@@ -704,6 +747,8 @@ class SiteViewModel {
     /// Reload current site
     func reloadSite() async {
         guard let site = site else { return }
+        // Clear status metadata cache so it reloads fresh
+        loadedStatusFolderIDs.removeAll()
         await loadSite(from: site.rootURL)
     }
 

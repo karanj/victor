@@ -13,7 +13,8 @@
       "WebSearch",
       "WebFetch(domain:gohugo.io)",
       "Bash(xcodegen generate:*)",
-      "Bash(gh issue create:*)"
+      "Bash(gh issue create:*)",
+      "Bash(wc:*)"
     ]
   }
 }

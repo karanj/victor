@@ -37,6 +37,21 @@ class FileNode: Identifiable, Hashable {
     /// Associated text file (for non-markdown editable text files)
     var textFile: TextFile?
 
+    /// Lightweight status metadata (loaded when folder is expanded)
+    /// This is separate from contentFile to allow status display without full file loading
+    var statusMetadata: FileStatusMetadata?
+
+    /// Computed status for display in sidebar
+    /// Prefers full contentFile data if loaded, otherwise uses lightweight statusMetadata
+    var contentStatus: ContentStatus? {
+        // If full contentFile is loaded, derive from it (more accurate)
+        if let contentFile = contentFile {
+            return FileStatusMetadata(from: contentFile.frontmatter).status
+        }
+        // Otherwise use lightweight metadata
+        return statusMetadata?.status
+    }
+
     /// Display name
     var name: String {
         url.lastPathComponent

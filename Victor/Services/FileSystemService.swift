@@ -467,6 +467,51 @@ class FileSystemService {
         try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: false)
         return folderURL
     }
+
+    // MARK: - Status Metadata Loading
+
+    /// Read only the frontmatter portion of a markdown file (first ~4KB)
+    /// This is much faster than reading the entire file for large content
+    func readFrontmatterOnly(at url: URL) async -> FileStatusMetadata? {
+        await Task.detached {
+            do {
+                // Read first 4KB - more than enough for any reasonable frontmatter
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { try? handle.close() }
+
+                let data = handle.readData(ofLength: 4096)
+                guard let content = String(data: data, encoding: .utf8) else {
+                    return nil
+                }
+
+                return FrontmatterParser.shared.parseStatusMetadata(from: content)
+            } catch {
+                Logger.shared.debug("Failed to read frontmatter from \(url.lastPathComponent): \(error.localizedDescription)")
+                return nil
+            }
+        }.value
+    }
+
+    /// Batch load status metadata for multiple files
+    /// Optimized for loading many files when a folder is expanded
+    func loadStatusMetadata(for urls: [URL]) async -> [URL: FileStatusMetadata] {
+        await withTaskGroup(of: (URL, FileStatusMetadata?).self) { group in
+            for url in urls {
+                group.addTask {
+                    let metadata = await self.readFrontmatterOnly(at: url)
+                    return (url, metadata)
+                }
+            }
+
+            var results: [URL: FileStatusMetadata] = [:]
+            for await (url, metadata) in group {
+                if let metadata = metadata {
+                    results[url] = metadata
+                }
+            }
+            return results
+        }
+    }
 }
 
 // MARK: - File Errors

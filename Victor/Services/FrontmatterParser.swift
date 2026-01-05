@@ -704,6 +704,95 @@ class FrontmatterParser {
         return nil
     }
 
+    // MARK: - Lightweight Status Parsing
+
+    /// Parse only the fields needed for status indicators (draft, date, publishDate, expiryDate)
+    /// This is much faster than full parsing as it doesn't need to extract all fields
+    /// - Parameter content: The raw file content (can be partial - just first ~4KB)
+    /// - Returns: FileStatusMetadata if frontmatter was found, nil otherwise
+    func parseStatusMetadata(from content: String) -> FileStatusMetadata? {
+        // Extract frontmatter
+        guard let (rawFrontmatter, _, format) = extractFrontmatter(from: content) else {
+            return nil
+        }
+
+        // Strip delimiters
+        let contentToParse = stripDelimiters(from: rawFrontmatter, format: format)
+
+        // Parse based on format - only extract status fields
+        do {
+            switch format {
+            case .yaml:
+                return try parseYAMLStatusOnly(contentToParse)
+            case .toml:
+                return try parseTOMLStatusOnly(contentToParse)
+            case .json:
+                return try parseJSONStatusOnly(rawFrontmatter)
+            }
+        } catch {
+            Logger.shared.debug("Failed to parse status metadata: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func parseYAMLStatusOnly(_ content: String) throws -> FileStatusMetadata {
+        guard let yaml = try Yams.load(yaml: content) as? [String: Any] else {
+            throw FrontmatterError.yamlParsingFailed("Could not parse as dictionary")
+        }
+        return extractStatusFields(from: yaml)
+    }
+
+    private func parseTOMLStatusOnly(_ content: String) throws -> FileStatusMetadata {
+        let table = try TOMLTable(string: content)
+        var dict: [String: Any] = [:]
+        for key in ["draft", "date", "publishDate", "expiryDate"] {
+            if let value = table[key] {
+                dict[key] = convertTOMLValue(value)
+            }
+        }
+        return extractStatusFields(from: dict)
+    }
+
+    private func parseJSONStatusOnly(_ content: String) throws -> FileStatusMetadata {
+        guard let data = content.data(using: .utf8),
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw FrontmatterError.jsonParsingFailed("Could not parse as dictionary")
+        }
+        return extractStatusFields(from: json)
+    }
+
+    private func extractStatusFields(from dict: [String: Any]) -> FileStatusMetadata {
+        let isDraft = dict["draft"] as? Bool ?? false
+
+        var date: Date?
+        if let d = dict["date"] as? Date {
+            date = d
+        } else if let dateString = dict["date"] as? String {
+            date = parseDate(dateString)
+        }
+
+        var publishDate: Date?
+        if let d = dict["publishDate"] as? Date {
+            publishDate = d
+        } else if let dateString = dict["publishDate"] as? String {
+            publishDate = parseDate(dateString)
+        }
+
+        var expiryDate: Date?
+        if let d = dict["expiryDate"] as? Date {
+            expiryDate = d
+        } else if let dateString = dict["expiryDate"] as? String {
+            expiryDate = parseDate(dateString)
+        }
+
+        return FileStatusMetadata(
+            isDraft: isDraft,
+            date: date,
+            publishDate: publishDate,
+            expiryDate: expiryDate
+        )
+    }
+
     // MARK: - Serialization
 
     /// Serialize frontmatter back to original format

@@ -11,7 +11,13 @@ struct FileListView: View {
                 // Use DisclosureGroup for folders with children
                 DisclosureGroup(isExpanded: Binding(
                     get: { node.isExpanded },
-                    set: { node.isExpanded = $0 }
+                    set: { newValue in
+                        node.isExpanded = newValue
+                        // Load status metadata for children when folder is expanded
+                        if newValue {
+                            siteViewModel.onFolderExpanded(node)
+                        }
+                    }
                 )) {
                     ForEach(node.children) { child in
                         FileTreeRow(node: child, siteViewModel: siteViewModel)
@@ -67,7 +73,13 @@ struct FileTreeRow: View {
         if node.isDirectory {
             DisclosureGroup(isExpanded: Binding(
                 get: { node.isExpanded },
-                set: { node.isExpanded = $0 }
+                set: { newValue in
+                    node.isExpanded = newValue
+                    // Load status metadata for children when folder is expanded
+                    if newValue {
+                        siteViewModel.onFolderExpanded(node)
+                    }
+                }
             )) {
                 ForEach(node.children) { child in
                     FileTreeRow(node: child, siteViewModel: siteViewModel)
@@ -160,15 +172,9 @@ struct FileRowView: View {
                     }
                 }
 
-                // Draft badge for content files
-                if let contentFile = node.contentFile, contentFile.isDraft {
-                    Text("Draft")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(.orange.opacity(0.2))
-                        .cornerRadius(3)
+                // Content status badge (Draft/Scheduled/Expired)
+                if let status = node.contentStatus, status != .published {
+                    ContentStatusBadge(status: status)
                 }
 
                 // File type indicator for non-markdown files
@@ -271,6 +277,33 @@ struct FileStatusIndicator: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: status)
+    }
+}
+
+// MARK: - Content Status Badge
+
+/// Badge displaying content publication status (Draft/Scheduled/Expired)
+struct ContentStatusBadge: View {
+    let status: ContentStatus
+
+    var body: some View {
+        Text(status.displayName)
+            .font(.caption2)
+            .fontWeight(.medium)
+            .foregroundStyle(foregroundColor)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(status.badgeColor)
+            .cornerRadius(3)
+    }
+
+    private var foregroundColor: Color {
+        switch status {
+        case .draft, .scheduled, .expired:
+            return .white
+        case .published:
+            return .clear
+        }
     }
 }
 
