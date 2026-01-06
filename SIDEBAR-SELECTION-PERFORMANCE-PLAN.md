@@ -6,86 +6,115 @@ The sidebar selection lag is caused by multiple performance bottlenecks in the f
 
 **Problem**: When clicking a file/folder in the sidebar, there's a 1-2 second delay before the selection highlight appears.
 
+**🎯 KEY INSIGHT**: This is a **macOS app**, not iOS. We should rely on native `List` selection behavior instead of manual `.onTapGesture` handlers. The current implementation fights against macOS conventions, causing triple-handling of every click.
+
 **Root Causes**:
-1. Redundant selection handling (double calls)
+1. **TRIPLE selection handling** - Using `.onTapGesture` on macOS (unnecessary!)
 2. Blocking file I/O before UI updates
 3. Heavy row view computations on every render
-4. Inefficient List binding with manual tap gestures
+4. Inefficient List binding fighting with manual tap gestures
 5. Expensive computed properties recalculated frequently
 6. @Observable class causing cascade updates
 7. Recursive tree filtering without memoization
 
 ---
 
-## Performance Issue #1: Double Selection Handling ⚠️ CRITICAL
+## Performance Issue #1: Triple Selection Handling on macOS ⚠️ CRITICAL
 
 **Location**: `Victor/Views/MainWindow/FileListView.swift`
 
-**Problem**: Selection is handled TWICE on every click:
+**Problem**: Selection is handled **THREE TIMES** on every click because the code uses iOS patterns on a macOS app:
+
 ```swift
-// Line 9: List binding
+// Path 1: Native macOS List selection (Line 9)
 List(siteViewModel.filteredNodes, selection: $siteViewModel.selectedFileID)
 
-// Lines 34-41, 96-102: Manual tap gesture
+// Path 2: Manual tap gesture override (Lines 34-41, 96-102) - UNNECESSARY ON MACOS!
 .onTapGesture {
-    siteViewModel.selectNode(node)  // First call
+    siteViewModel.selectNode(node)  // First manual call
 }
 
-// Lines 56-62: onChange observer
+// Path 3: onChange observer (Lines 56-62)
 .onChange(of: siteViewModel.selectedFileID) { _, newValue in
     if let id = newValue {
         if let node = FileNode.findNode(id: id, in: siteViewModel.fileNodes) {
-            siteViewModel.selectNode(node)  // Second call (redundant!)
+            siteViewModel.selectNode(node)  // Second manual call (redundant!)
         }
     }
 }
 ```
 
-**Why This Causes Lag**:
-- Click triggers `onTapGesture` → calls `selectNode()`
-- `selectNode()` updates `selectedFileID`
-- `onChange` sees the change → calls `selectNode()` AGAIN
-- This doubles the work and can cause UI stuttering
+**Why This Causes Massive Lag**:
+1. User clicks → Native macOS `List` updates `selectedFileID` binding
+2. `.onTapGesture` also fires → calls `selectNode()` → updates `selectedFileID` again
+3. `.onChange` sees the change → calls `selectNode()` a THIRD time
+4. Each call may trigger file I/O, view updates, and cache operations
+5. The gestures fight with native macOS selection behavior, causing stuttering
 
-**Solution**:
-Remove the `onChange` handler entirely and rely ONLY on manual tap gestures OR use List's native selection exclusively.
+**Root Cause**: `.onTapGesture` is an **iOS pattern**. On macOS, `List(selection:)` already handles:
+- ✅ Single-click selection
+- ✅ Keyboard navigation (arrow keys)
+- ✅ Native selection highlighting
+- ✅ Cmd+click for multiple selection
+- ✅ Proper accessibility support
 
-**Option A - Use Native List Selection (Recommended)**:
+**Solution - Use Native macOS List Selection**:
+
+**Step 1**: Remove ALL `.onTapGesture` handlers from FileListView.swift:
 ```swift
 List(siteViewModel.filteredNodes, selection: $siteViewModel.selectedFileID) { node in
-    // Remove all .onTapGesture handlers
-    // Let List handle selection via binding
+    if node.isDirectory {
+        DisclosureGroup(...) {
+            ForEach(node.children) { child in
+                FileTreeRow(node: child, siteViewModel: siteViewModel)
+            }
+        } label: {
+            FileRowView(node: node, siteViewModel: siteViewModel)
+                .contextMenu { ... }
+            // ❌ REMOVE: .onTapGesture { ... }
+            // ❌ REMOVE: .onTapGesture(count: 2) { ... }
+        }
+    } else {
+        FileRowView(node: node, siteViewModel: siteViewModel)
+            .tag(node.id)
+            .contextMenu { ... }
+        // ❌ REMOVE: .onTapGesture { ... }
+    }
 }
-// Remove the .onChange handler
+// ❌ REMOVE the entire .onChange handler (lines 56-62)
 ```
 
-Then in `SiteViewModel`, add an observer:
+**Step 2**: Handle selection in `SiteViewModel` with a `didSet` observer:
 ```swift
-// Add a didSet to selectedFileID instead
 var selectedFileID: FileNode.ID? {
     didSet {
         guard selectedFileID != oldValue else { return }
-        if let id = selectedFileID {
-            if let node = FileNode.findNode(id: id, in: fileNodes) {
-                performFileSwitch(to: node)
-            }
+
+        if let id = selectedFileID,
+           let node = FileNode.findNode(id: id, in: fileNodes) {
+            selectNode(node)
         }
     }
 }
 ```
 
-**Option B - Use Manual Gestures Only**:
+**Special Handling for Folders/Page Bundles**:
+Since folders shouldn't load content, update `selectNode()` to handle this:
 ```swift
-// Remove selection binding from List
-List(siteViewModel.filteredNodes) { node in
-    .onTapGesture {
-        siteViewModel.selectNode(node)
+func selectNode(_ node: FileNode?) {
+    // Handle page bundle folders (select index file instead)
+    let actualNode: FileNode?
+    if let node = node, node.isPageBundle, let indexFile = node.indexFile {
+        actualNode = indexFile
+    } else {
+        actualNode = node
     }
+
+    // Rest of selectNode logic with actualNode...
 }
-// Remove .onChange handler
 ```
 
-**Expected Impact**: 30-40% reduction in selection time
+**Expected Impact**: 40-60% reduction in selection time (eliminates triple-handling)
 
 ---
 
@@ -590,9 +619,21 @@ var body: some View {
 
 ## Implementation Priority
 
-**Phase 1 - Critical Fixes (Highest Impact)**:
-1. Issue #2: Optimistic UI updates (50-70% improvement)
-2. Issue #1: Remove double selection handling (30-40% improvement)
+**Phase 1 - Critical Fixes (Highest Impact) ⚡**:
+1. **Issue #1: Remove `.onTapGesture` handlers** (40-60% improvement)
+   - Simplest fix: Just delete code!
+   - Use native macOS List selection
+   - Add `didSet` to `selectedFileID` in SiteViewModel
+   - **Estimated time**: 15-30 minutes
+
+2. **Issue #2: Optimistic UI updates** (50-70% improvement)
+   - Update selection immediately, load content in background
+   - Prevents UI blocking on file I/O
+   - **Estimated time**: 30-45 minutes
+
+**Combined Phase 1 Impact**: 70-85% reduction in lag (from 1-2s to 200-300ms)
+
+---
 
 **Phase 2 - High Impact Optimizations**:
 3. Issue #3: FileRowView caching (20-30% improvement)
@@ -610,14 +651,21 @@ var body: some View {
 
 ## Expected Results
 
-After implementing Phase 1 + 2:
+**After implementing Phase 1 (Critical Fixes)**:
 - **Before**: 1-2 second selection lag
-- **After**: 100-200ms selection response time
-- **Total Improvement**: ~70-80% reduction in lag
+- **After**: 100-300ms selection response time
+- **Total Improvement**: ~70-85% reduction in lag
+- **Implementation time**: < 1 hour
+- **Risk level**: Very low (simplifying existing code)
 
-After implementing all phases:
-- **Target**: <50ms selection response time (instant feel)
+**After implementing Phase 1 + 2**:
+- **Target**: 50-100ms response time
 - **Total Improvement**: ~90-95% reduction in lag
+- **User experience**: Feels instant
+
+**After implementing all phases**:
+- **Target**: <50ms selection response time (imperceptible lag)
+- **Total Improvement**: ~95-98% reduction in lag
 
 ---
 
@@ -643,16 +691,28 @@ After implementing all phases:
 ## Conclusion
 
 The sidebar selection lag is primarily caused by:
-1. **Synchronous I/O blocking UI updates** (Issue #2) - Biggest impact
-2. **Redundant selection handling** (Issue #1) - Second biggest impact
+1. **Using iOS patterns on macOS** (Issue #1) - CRITICAL
+   - `.onTapGesture` is unnecessary on macOS
+   - Native `List(selection:)` already handles clicks perfectly
+   - Current code creates triple-handling of every selection
+   - **Fix**: Simply delete the gesture handlers!
+
+2. **Synchronous I/O blocking UI updates** (Issue #2) - CRITICAL
+   - Selection waits for file content to load before highlighting
+   - **Fix**: Update UI immediately, load content in background
+
 3. **Inefficient row rendering** (Issue #3) - Consistent overhead
+   - Recomputing icon names, colors, status on every render
 
-Implementing Phase 1-2 will provide the most noticeable improvement with minimal refactoring. Phase 3-4 optimizations will further polish the experience for very large sites.
+**Key Insight**: This is a macOS app, not iOS. Embrace native AppKit/macOS patterns through SwiftUI's List selection binding instead of fighting against them with manual gestures.
 
-The codebase is well-structured, making these optimizations straightforward to implement without major architectural changes.
+**Recommended Action**: Start with Phase 1 fixes only (< 1 hour work). These two changes alone will give you 70-85% improvement and make the app feel responsive. Evaluate whether additional optimizations in Phase 2-4 are even necessary after that.
+
+The codebase is well-structured, making these optimizations straightforward to implement without major architectural changes. Phase 1 is actually a *simplification* (removing code), not added complexity.
 
 ---
 
-**Document Version**: 1.0
+**Document Version**: 2.0
 **Date**: 2026-01-06
+**Updated**: Emphasized macOS-specific patterns vs iOS
 **Author**: Performance Analysis - SwiftUI Expert Review
