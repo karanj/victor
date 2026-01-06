@@ -30,6 +30,9 @@ struct FileListView: View {
                         .onTapGesture(count: 2) {
                             // Double-click to expand/collapse folder
                             node.isExpanded.toggle()
+                            if node.isExpanded {
+                                siteViewModel.onFolderExpanded(node)
+                            }
                         }
                         .onTapGesture {
                             // Select the folder (or index file for page bundles)
@@ -92,6 +95,9 @@ struct FileTreeRow: View {
                     .onTapGesture(count: 2) {
                         // Double-click to expand/collapse folder
                         node.isExpanded.toggle()
+                        if node.isExpanded {
+                            siteViewModel.onFolderExpanded(node)
+                        }
                     }
                     .onTapGesture {
                         // Select the folder (or index file for page bundles)
