@@ -171,6 +171,40 @@ class SiteViewModel {
         return filterNodesRecursively(fileNodes, query: searchQuery)
     }
 
+    /// Content file paths for autocomplete (relative to content/ directory)
+    var contentPaths: [ContentPathSuggestion] {
+        guard let contentURL = site?.contentDirectory else { return [] }
+        var paths: [ContentPathSuggestion] = []
+        // Find the content directory node and collect paths from it
+        for node in fileNodes {
+            if node.isDirectory && node.hugoRole == .content {
+                collectContentPaths(from: node.children, contentURL: contentURL, into: &paths)
+                break
+            }
+        }
+        return paths.sorted { $0.path < $1.path }
+    }
+
+    /// Recursively collect markdown content file paths from within the content directory
+    private func collectContentPaths(from nodes: [FileNode], contentURL: URL, into paths: inout [ContentPathSuggestion]) {
+        for node in nodes {
+            if node.isDirectory {
+                collectContentPaths(from: node.children, contentURL: contentURL, into: &paths)
+            } else if node.fileType == .markdown {
+                // Calculate relative path from content directory
+                let fullPath = node.url.path
+                let contentPath = contentURL.path
+                if fullPath.hasPrefix(contentPath) {
+                    var relativePath = String(fullPath.dropFirst(contentPath.count))
+                    if relativePath.hasPrefix("/") {
+                        relativePath = String(relativePath.dropFirst())
+                    }
+                    paths.append(ContentPathSuggestion(path: relativePath, displayName: node.name))
+                }
+            }
+        }
+    }
+
     /// Total count of markdown files (leaf nodes) in the site
     var totalFileCount: Int {
         countFilesRecursively(fileNodes)

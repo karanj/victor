@@ -157,7 +157,7 @@ struct EditorPanelView: View {
             Text("This file was modified by another application. Auto-save has been cancelled. You can reload the file to see external changes, or keep editing to manually save your version.")
         }
         .sheet(isPresented: $showShortcodePicker) {
-            ShortcodePickerView { shortcodeText in
+            ShortcodePickerView(contentPaths: siteViewModel.contentPaths) { shortcodeText in
                 editorCoordinator?.insertText(shortcodeText)
             }
         }

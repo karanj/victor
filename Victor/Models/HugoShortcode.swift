@@ -8,6 +8,7 @@ enum ShortcodeParameterType {
     case int
     case bool
     case enumeration([String])
+    case contentPath  // Triggers content path autocomplete
 }
 
 /// A single parameter for a shortcode
@@ -324,7 +325,7 @@ extension HugoShortcode {
             description: "Insert absolute link to another page",
             detailedHelp: "Creates an absolute permalink to another page in your Hugo site. Hugo will error if the page doesn't exist.",
             parameters: [
-                ShortcodeParameter(name: "path", type: .string, isRequired: true, placeholder: "/blog/my-post", helpText: "Path to target page"),
+                ShortcodeParameter(name: "path", type: .contentPath, isRequired: true, placeholder: "/blog/my-post", helpText: "Path to target page"),
                 ShortcodeParameter(name: "lang", type: .string, placeholder: "en", helpText: "Target language"),
                 ShortcodeParameter(name: "outputFormat", type: .string, placeholder: "html", helpText: "Output format"),
             ],
@@ -340,7 +341,7 @@ extension HugoShortcode {
             description: "Insert relative link to another page",
             detailedHelp: "Creates a relative permalink to another page. Useful for sites that may be hosted in subdirectories.",
             parameters: [
-                ShortcodeParameter(name: "path", type: .string, isRequired: true, placeholder: "related-post.md", helpText: "Path to target page"),
+                ShortcodeParameter(name: "path", type: .contentPath, isRequired: true, placeholder: "related-post.md", helpText: "Path to target page"),
                 ShortcodeParameter(name: "lang", type: .string, placeholder: "en", helpText: "Target language"),
                 ShortcodeParameter(name: "outputFormat", type: .string, placeholder: "html", helpText: "Output format"),
             ],

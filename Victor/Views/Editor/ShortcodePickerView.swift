@@ -4,6 +4,7 @@ import SwiftUI
 
 /// Main view for selecting and configuring Hugo shortcodes
 struct ShortcodePickerView: View {
+    let contentPaths: [ContentPathSuggestion]
     let onInsert: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -60,6 +61,7 @@ struct ShortcodePickerView: View {
             if let shortcode = selectedShortcode {
                 ShortcodeFormView(
                     shortcode: shortcode,
+                    contentPaths: contentPaths,
                     onInsert: { text in
                         onInsert(text)
                         dismiss()
@@ -101,7 +103,12 @@ struct ShortcodePickerView: View {
 // MARK: - Preview
 
 #Preview {
-    ShortcodePickerView { shortcodeText in
+    ShortcodePickerView(
+        contentPaths: [
+            ContentPathSuggestion(path: "posts/hello-world.md", displayName: "hello-world.md"),
+            ContentPathSuggestion(path: "about.md", displayName: "about.md"),
+        ]
+    ) { shortcodeText in
         print("Insert: \(shortcodeText)")
     }
 }

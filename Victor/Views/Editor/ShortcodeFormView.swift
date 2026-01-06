@@ -5,6 +5,7 @@ import SwiftUI
 /// Form view for configuring shortcode parameters and inserting
 struct ShortcodeFormView: View {
     let shortcode: HugoShortcode
+    let contentPaths: [ContentPathSuggestion]
     let onInsert: (String) -> Void
     let onCancel: () -> Void
 
@@ -27,7 +28,8 @@ struct ShortcodeFormView: View {
                         ParameterSection(
                             title: "Required",
                             parameters: shortcode.requiredParameters,
-                            values: $parameterValues
+                            values: $parameterValues,
+                            contentPaths: contentPaths
                         )
                     }
 
@@ -41,7 +43,8 @@ struct ShortcodeFormView: View {
                         OptionalParametersSection(
                             parameters: shortcode.optionalParameters,
                             values: $parameterValues,
-                            isExpanded: $showOptionalParams
+                            isExpanded: $showOptionalParams,
+                            contentPaths: contentPaths
                         )
                     }
 
@@ -152,6 +155,7 @@ private struct ParameterSection: View {
     let title: String
     let parameters: [ShortcodeParameter]
     @Binding var values: [String: String]
+    let contentPaths: [ContentPathSuggestion]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -160,7 +164,7 @@ private struct ParameterSection: View {
                 .foregroundStyle(.secondary)
 
             ForEach(parameters) { param in
-                ParameterField(parameter: param, value: binding(for: param.name))
+                ParameterField(parameter: param, value: binding(for: param.name), contentPaths: contentPaths)
             }
         }
     }
@@ -178,6 +182,7 @@ private struct ParameterSection: View {
 private struct ParameterField: View {
     let parameter: ShortcodeParameter
     @Binding var value: String
+    let contentPaths: [ContentPathSuggestion]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -194,6 +199,13 @@ private struct ParameterField: View {
 
             Group {
                 switch parameter.type {
+                case .contentPath:
+                    ContentPathAutocompleteField(
+                        parameter: parameter,
+                        value: $value,
+                        suggestions: contentPaths
+                    )
+
                 case .string, .int:
                     TextField(parameter.placeholder, text: $value)
                         .textFieldStyle(.roundedBorder)
@@ -268,12 +280,13 @@ private struct OptionalParametersSection: View {
     let parameters: [ShortcodeParameter]
     @Binding var values: [String: String]
     @Binding var isExpanded: Bool
+    let contentPaths: [ContentPathSuggestion]
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(parameters) { param in
-                    ParameterField(parameter: param, value: binding(for: param.name))
+                    ParameterField(parameter: param, value: binding(for: param.name), contentPaths: contentPaths)
                 }
             }
             .padding(.top, 8)
@@ -352,6 +365,10 @@ private struct ShortcodeFormFooter: View {
 #Preview {
     ShortcodeFormView(
         shortcode: HugoShortcode.allShortcodes[0],
+        contentPaths: [
+            ContentPathSuggestion(path: "posts/hello-world.md", displayName: "hello-world.md"),
+            ContentPathSuggestion(path: "about.md", displayName: "about.md"),
+        ],
         onInsert: { print($0) },
         onCancel: {}
     )
