@@ -14,7 +14,17 @@
       "WebFetch(domain:gohugo.io)",
       "Bash(xcodegen generate:*)",
       "Bash(gh issue create:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Skill(beads:stats)",
+      "Bash(cat:*)",
+      "Skill(beads:create)",
+      "Bash(bd create:*)",
+      "Bash(bd dep add:*)",
+      "Bash(bd list:*)",
+      "Bash(bd update:*)",
+      "Skill(beads:ready)",
+      "Bash(bd ready:*)",
+      "Bash(bd stats:*)"
     ]
   }
 }

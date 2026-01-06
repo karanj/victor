@@ -41,11 +41,25 @@ class SiteViewModel {
     /// File nodes (flat list in Phase 1, tree in Phase 4)
     var fileNodes: [FileNode] = []
 
+    /// Fast lookup table for nodes by ID (O(1) instead of O(n) tree traversal)
+    private var nodeByID: [UUID: FileNode] = [:]
+
     /// Currently selected file node
     var selectedNode: FileNode?
 
     /// Selected file ID for binding
-    var selectedFileID: FileNode.ID?
+    var selectedFileID: FileNode.ID? {
+        didSet {
+            // Avoid redundant processing if selecting the same ID
+            guard selectedFileID != oldValue else { return }
+
+            // Find and select the node when selectedFileID changes
+            if let id = selectedFileID,
+               let node = findNode(id: id) {
+                selectNode(node)
+            }
+        }
+    }
 
     /// Current editing content (for preview sync across layout modes)
     var currentEditingContent: String = ""
@@ -338,6 +352,9 @@ class SiteViewModel {
             self.site = site
             self.fileNodes = nodes
 
+            // Build lookup table for fast node access
+            buildNodeLookupTable()
+
             // Track this site in recent sites
             addRecentSite(url.path)
 
@@ -418,71 +435,97 @@ class SiteViewModel {
         loadedStatusFolderIDs = []
     }
 
+    // MARK: - Node Lookup
+
+    /// Build flat lookup table for O(1) node access by ID
+    private func buildNodeLookupTable() {
+        nodeByID.removeAll()
+        indexNodesRecursively(fileNodes)
+    }
+
+    /// Recursively index all nodes into the lookup table
+    private func indexNodesRecursively(_ nodes: [FileNode]) {
+        for node in nodes {
+            nodeByID[node.id] = node
+            if node.isDirectory {
+                indexNodesRecursively(node.children)
+            }
+        }
+    }
+
+    /// Find a node by ID using O(1) lookup instead of O(n) tree traversal
+    func findNode(id: UUID) -> FileNode? {
+        return nodeByID[id]
+    }
+
+    // MARK: - File Row View Models
+
+    /// Generate a cached view model for a file row
+    func rowViewModel(for node: FileNode) -> FileRowViewModel {
+        return FileRowViewModel(node: node, siteViewModel: self)
+    }
+
     // MARK: - File Selection
 
     /// Select a file node
     func selectNode(_ node: FileNode?) {
+        // Handle page bundle folders: select the index file instead
+        let actualNode: FileNode?
+        if let node = node, node.isPageBundle, let indexFile = node.indexFile {
+            actualNode = indexFile
+        } else {
+            actualNode = node
+        }
+
         // If selecting the same node, do nothing
-        if node?.id == selectedNode?.id {
+        if actualNode?.id == selectedNode?.id {
             return
         }
 
-        // If selecting a markdown file, load content FIRST to avoid flash
-        if let node = node, node.isMarkdownFile {
-            // If content is already loaded (recently viewed file), switch immediately
-            if node.contentFile != nil {
-                performFileSwitch(to: node)
+        // OPTIMISTIC UPDATE: Update UI immediately, before any loading
+        selectedNode = actualNode
+        // Only set selectedFileID if it's different to avoid triggering didSet again
+        if selectedFileID != actualNode?.id {
+            selectedFileID = actualNode?.id
+        }
+
+        // Clear editing content to prevent stale data flash
+        currentEditingContent = ""
+
+        // Load content in background if needed
+        if let node = actualNode, node.isMarkdownFile {
+            if let contentFile = node.contentFile {
+                // Content already loaded - initialize immediately
+                currentEditingContent = contentFile.markdownContent
+                addRecentFile(node)
+                updateContentCache(accessedNodeID: node.id)
             } else {
-                // Content not loaded - load it first, then switch
-                // Keep the old file visible while loading
+                // Content not loaded - load in background
                 isLoadingFile = true
                 Task { [weak self] in
                     guard let self = self else { return }
                     await self.loadFileContent(for: node)
-                    // Now switch to the new file with content ready
-                    self.performFileSwitch(to: node)
+                    // Only update content if this node is still selected
+                    if node.id == self.selectedNode?.id {
+                        self.currentEditingContent = node.contentFile?.markdownContent ?? ""
+                        self.addRecentFile(node)
+                        self.updateContentCache(accessedNodeID: node.id)
+                    }
                     self.isLoadingFile = false
                 }
             }
-        } else if let node = node, node.isEditable && node.fileType.isTextBased {
-            // Non-markdown editable text file - load text file content
-            if node.textFile != nil {
-                performFileSwitch(to: node)
-            } else {
+        } else if let node = actualNode, node.isEditable && node.fileType.isTextBased {
+            // Non-markdown editable text file
+            if node.textFile == nil {
                 isLoadingFile = true
                 Task { [weak self] in
                     guard let self = self else { return }
                     await self.loadTextFileContent(for: node)
-                    self.performFileSwitch(to: node)
                     self.isLoadingFile = false
                 }
             }
-        } else {
-            // Non-editable file or nil - switch immediately
-            performFileSwitch(to: node)
         }
-    }
-
-    /// Internal method to actually perform the file switch after content is ready
-    private func performFileSwitch(to node: FileNode?) {
-        // Clear editing content when switching files to avoid stale data
-        currentEditingContent = ""
-
-        selectedNode = node
-        selectedFileID = node?.id
-
-        // Initialize editing content from the new file
-        if let contentFile = node?.contentFile {
-            currentEditingContent = contentFile.markdownContent
-        }
-
-        // Add to recent files and update LRU cache
-        if let node = node, node.isMarkdownFile {
-            addRecentFile(node)
-            // Touch the cache to mark this file as recently used
-            // (also handles eviction if needed)
-            updateContentCache(accessedNodeID: node.id)
-        }
+        // For non-editable files and folders, no content loading needed
     }
 
     /// Add a file to the recent files list

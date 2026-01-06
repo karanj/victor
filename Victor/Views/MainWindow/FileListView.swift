@@ -23,7 +23,8 @@ struct FileListView: View {
                         FileTreeRow(node: child, siteViewModel: siteViewModel)
                     }
                 } label: {
-                    FileRowView(node: node, siteViewModel: siteViewModel)
+                    FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
+                        .tag(node.id)
                         .contextMenu {
                             FolderContextMenu(node: node, siteViewModel: siteViewModel)
                         }
@@ -35,34 +36,20 @@ struct FileListView: View {
                             }
                         }
                         .onTapGesture {
-                            // Select the folder (or index file for page bundles)
-                            if node.isPageBundle, let indexFile = node.indexFile {
-                                siteViewModel.selectNode(indexFile)
-                            } else {
-                                siteViewModel.selectNode(node)
-                            }
+                            // Single-click to select folder (DisclosureGroup doesn't work with List selection)
+                            siteViewModel.selectedFileID = node.id
                         }
                 }
             } else {
                 // Regular file row
-                FileRowView(node: node, siteViewModel: siteViewModel)
+                FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
                     .tag(node.id)
                     .contextMenu {
                         FileContextMenu(node: node, siteViewModel: siteViewModel)
                     }
-                    .onTapGesture {
-                        siteViewModel.selectNode(node)
-                    }
             }
         }
         .listStyle(.sidebar)
-        .onChange(of: siteViewModel.selectedFileID) { _, newValue in
-            if let id = newValue {
-                if let node = FileNode.findNode(id: id, in: siteViewModel.fileNodes) {
-                    siteViewModel.selectNode(node)
-                }
-            }
-        }
     }
 }
 
@@ -88,7 +75,8 @@ struct FileTreeRow: View {
                     FileTreeRow(node: child, siteViewModel: siteViewModel)
                 }
             } label: {
-                FileRowView(node: node, siteViewModel: siteViewModel)
+                FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
+                    .tag(node.id)
                     .contextMenu {
                         FolderContextMenu(node: node, siteViewModel: siteViewModel)
                     }
@@ -100,63 +88,109 @@ struct FileTreeRow: View {
                         }
                     }
                     .onTapGesture {
-                        // Select the folder (or index file for page bundles)
-                        if node.isPageBundle, let indexFile = node.indexFile {
-                            siteViewModel.selectNode(indexFile)
-                        } else {
-                            siteViewModel.selectNode(node)
-                        }
+                        // Single-click to select folder (DisclosureGroup doesn't work with List selection)
+                        siteViewModel.selectedFileID = node.id
                     }
             }
         } else {
-            FileRowView(node: node, siteViewModel: siteViewModel)
+            FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
                 .tag(node.id)
                 .contextMenu {
                     FileContextMenu(node: node, siteViewModel: siteViewModel)
-                }
-                .onTapGesture {
-                    siteViewModel.selectNode(node)
                 }
         }
     }
 
 }
 
+// MARK: - File Row View Model
+
+/// Cached view model for file row to avoid repeated computations
+struct FileRowViewModel: Equatable {
+    let id: UUID
+    let name: String
+    let iconName: String
+    let iconColor: Color
+    let accessibilityLabel: String
+    let fileStatus: FileStatus
+    let contentStatus: ContentStatus?
+    let isPageBundle: Bool
+    let isConfigFile: Bool
+    let isDirectory: Bool
+    let fileTypeDisplayName: String?
+
+    @MainActor
+    init(node: FileNode, siteViewModel: SiteViewModel?) {
+        self.id = node.id
+        self.name = node.name
+        self.isPageBundle = node.isPageBundle
+        self.isConfigFile = node.isConfigFile
+        self.isDirectory = node.isDirectory
+
+        // Compute icon (once)
+        if node.isPageBundle {
+            self.iconName = "folder.fill.badge.gearshape"
+            self.iconColor = .purple
+            self.accessibilityLabel = "Page bundle"
+        } else if node.isDirectory {
+            if let role = node.hugoRole {
+                self.iconName = role.systemImage
+                self.iconColor = role.accentColor
+                self.accessibilityLabel = "\(role.displayName) folder"
+            } else {
+                self.iconName = "folder"
+                self.iconColor = .blue
+                self.accessibilityLabel = "Folder"
+            }
+        } else if node.isConfigFile {
+            self.iconName = "gearshape.fill"
+            self.iconColor = .orange
+            self.accessibilityLabel = "Hugo config file"
+        } else {
+            self.iconName = node.fileType.systemImage
+            self.iconColor = node.fileType.defaultColor
+            self.accessibilityLabel = node.fileType.displayName
+        }
+
+        // Compute file status (once)
+        if let viewModel = siteViewModel, node.isEditable {
+            if viewModel.isFileModified(node.id) {
+                self.fileStatus = .modified
+            } else if viewModel.isFileRecentlySaved(node.id) {
+                self.fileStatus = .saved
+            } else {
+                self.fileStatus = .none
+            }
+        } else {
+            self.fileStatus = .none
+        }
+
+        self.contentStatus = node.contentStatus
+        self.fileTypeDisplayName = (!node.isDirectory && !node.isMarkdownFile && !node.isConfigFile)
+            ? node.fileType.displayName : nil
+    }
+}
+
 // MARK: - File Row
 
 struct FileRowView: View {
-    let node: FileNode
-    var siteViewModel: SiteViewModel? = nil
-
-    /// File status for indicator display
-    private var fileStatus: FileStatus {
-        guard let viewModel = siteViewModel, node.isEditable else {
-            return .none
-        }
-
-        if viewModel.isFileModified(node.id) {
-            return .modified
-        } else if viewModel.isFileRecentlySaved(node.id) {
-            return .saved
-        }
-        return .none
-    }
+    let viewModel: FileRowViewModel
 
     var body: some View {
         HStack(spacing: 8) {
             // Icon: different for page bundles, folders, and files
-            Image(systemName: iconName)
-                .foregroundStyle(iconColor)
+            Image(systemName: viewModel.iconName)
+                .foregroundStyle(viewModel.iconColor)
                 .imageScale(.medium)
-                .accessibilityLabel(accessibilityIconLabel)
+                .accessibilityLabel(viewModel.accessibilityLabel)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(node.name)
+                    Text(viewModel.name)
                         .lineLimit(1)
 
                     // Page bundle badge
-                    if node.isPageBundle {
+                    if viewModel.isPageBundle {
                         Text("bundle")
                             .font(.caption2)
                             .foregroundStyle(.white)
@@ -167,7 +201,7 @@ struct FileRowView: View {
                     }
 
                     // Config file badge
-                    if node.isConfigFile {
+                    if viewModel.isConfigFile {
                         Text("config")
                             .font(.caption2)
                             .foregroundStyle(.white)
@@ -179,13 +213,13 @@ struct FileRowView: View {
                 }
 
                 // Content status badge (Draft/Scheduled/Expired)
-                if let status = node.contentStatus, status != .published {
+                if let status = viewModel.contentStatus, status != .published {
                     ContentStatusBadge(status: status)
                 }
 
                 // File type indicator for non-markdown files
-                if !node.isDirectory && !node.isMarkdownFile && !node.isConfigFile {
-                    Text(node.fileType.displayName)
+                if let displayName = viewModel.fileTypeDisplayName {
+                    Text(displayName)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -194,56 +228,9 @@ struct FileRowView: View {
             Spacer()
 
             // File status indicator
-            FileStatusIndicator(status: fileStatus)
+            FileStatusIndicator(status: viewModel.fileStatus)
         }
         .contentShape(Rectangle())
-    }
-
-    private var iconName: String {
-        if node.isPageBundle {
-            return "folder.fill.badge.gearshape"
-        } else if node.isDirectory {
-            // Use Hugo role icon if available
-            if let role = node.hugoRole {
-                return role.systemImage
-            }
-            return "folder"
-        } else if node.isConfigFile {
-            return "gearshape.fill"
-        } else {
-            return node.fileType.systemImage
-        }
-    }
-
-    private var iconColor: Color {
-        if node.isPageBundle {
-            return .purple
-        } else if node.isDirectory {
-            // Use Hugo role color if available
-            if let role = node.hugoRole {
-                return role.accentColor
-            }
-            return .blue
-        } else if node.isConfigFile {
-            return .orange
-        } else {
-            return node.fileType.defaultColor
-        }
-    }
-
-    private var accessibilityIconLabel: String {
-        if node.isPageBundle {
-            return "Page bundle"
-        } else if node.isDirectory {
-            if let role = node.hugoRole {
-                return "\(role.displayName) folder"
-            }
-            return "Folder"
-        } else if node.isConfigFile {
-            return "Hugo config file"
-        } else {
-            return node.fileType.displayName
-        }
     }
 }
 
