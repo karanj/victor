@@ -1,0 +1,823 @@
+# Victor macOS Best Practices Code Review
+# Generated: 2026-01-06
+# Review Focus: iOS-specific patterns and macOS HIG compliance
+
+metadata:
+  total_issues: 68
+  critical: 12
+  high: 18
+  medium: 24
+  low: 14
+  files_affected: 28
+  review_date: "2026-01-06"
+  reviewers: "Expert Code Review Panel"
+
+executive_summary: |
+  The Victor codebase demonstrates strong macOS-first design overall with excellent
+  security-scoped bookmark implementation, proper command system, and good lifecycle
+  management. However, several iOS-specific patterns were identified:
+
+  KEY FINDINGS:
+  - 11+ files using .textFieldStyle(.roundedBorder) (iOS-style)
+  - 6 instances of .onTapGesture conflicting with List selection
+  - Missing .toggleStyle(.checkbox) on 8+ Toggle controls
+  - No context menus in Asset Browser (significant UX gap)
+  - Missing window state restoration with @SceneStorage
+  - .navigationSubtitle() used but has no effect on macOS
+
+  OVERALL ASSESSMENT: 75/100
+  - Strong foundation with macOS-specific patterns (NavigationSplitView, HSplitView)
+  - No iOS-only imports or APIs detected
+  - Main issues are styling choices rather than architectural problems
+  - Recommended fixes are straightforward and low-risk
+
+# ============================================================================
+# CRITICAL PRIORITY ISSUES
+# ============================================================================
+
+critical_issues:
+
+  - id: CRIT-001
+    title: ".textFieldStyle(.roundedBorder) - iOS Visual Style"
+    severity: critical
+    category: styling
+    impact: "Visual inconsistency with macOS native apps"
+    description: |
+      11+ files use .textFieldStyle(.roundedBorder) which is iOS-style.
+      macOS should use default system style (.automatic) for native appearance.
+    files_affected:
+      - path: "Victor/Views/ConfigEditor/ConfigEditorView.swift"
+        lines: [204, 214, 223, 237, 251, 344, 350, 384, 396]
+        instances: 9
+      - path: "Victor/Views/Editor/Components/CustomFieldEditor.swift"
+        lines: [120, 132]
+        instances: 2
+      - path: "Victor/Views/Editor/Components/MenuEntryEditor.swift"
+        lines: [37, 48, 62, 73, 89, 100, 112]
+        instances: 7
+      - path: "Victor/Views/Editor/Tabs/MenusTab.swift"
+        lines: [88]
+        instances: 1
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+        lines: [127]
+        instances: 1
+      - path: "Victor/Views/Editor/FrontmatterEditorView.swift"
+        lines: [129]
+        instances: 1
+      - path: "Victor/Views/Editor/Tabs/EssentialFieldsTab.swift"
+        lines: [15]
+        instances: 1
+      - path: "Victor/Views/Inspector/MetadataSection.swift"
+        lines: [16, 159]
+        instances: 2
+      - path: "Victor/Views/Editor/ShortcodeFormView.swift"
+        lines: [199]
+        instances: 1
+      - path: "Victor/Views/Editor/Components/HelpTooltip.swift"
+        lines: [125, 177, 289]
+        instances: 3
+    fix:
+      code_change: "Remove .textFieldStyle(.roundedBorder) modifier"
+      before: |
+        TextField("Base URL", text: $config.baseURL)
+            .textFieldStyle(.roundedBorder)
+      after: |
+        TextField("Base URL", text: $config.baseURL)
+            // System default style is native on macOS
+    estimated_effort: "30 minutes"
+
+  - id: CRIT-002
+    title: ".onTapGesture Conflicts with List Selection"
+    severity: critical
+    category: interaction
+    impact: "Duplicate and conflicting selection handlers"
+    description: |
+      FileListView uses .onTapGesture for selection AND List(selection:) binding,
+      creating conflicting input patterns. List should handle selection natively.
+    files_affected:
+      - path: "Victor/Views/MainWindow/FileListView.swift"
+        lines: [30, 34, 50, 92, 96, 111]
+        instances: 6
+    fix:
+      code_change: "Remove .onTapGesture modifiers, rely on List's selection binding"
+      before: |
+        FileRowView(node: node)
+            .onTapGesture(count: 2) { node.isExpanded.toggle() }
+            .onTapGesture { siteViewModel.selectNode(node) }
+      after: |
+        FileRowView(node: node)
+            // List(selection:) binding handles clicks natively
+            // DisclosureGroup handles expand/collapse
+    estimated_effort: "1 hour"
+    testing_required: true
+
+  - id: CRIT-003
+    title: "Missing .toggleStyle(.checkbox) on macOS Forms"
+    severity: critical
+    category: styling
+    impact: "iOS-style toggle switches instead of Mac checkboxes"
+    description: |
+      Toggle controls in forms use default style (iOS-like switch) instead of
+      macOS-native checkbox style. Makes app feel like iOS port.
+    files_affected:
+      - path: "Victor/Views/ConfigEditor/ConfigEditorView.swift"
+        lines: [271, 277, 283, 291]
+        toggles: ["Build Drafts", "Build Future", "Build Expired", "Enable robots.txt"]
+      - path: "Victor/Views/Editor/Tabs/EssentialFieldsTab.swift"
+        lines: [27]
+        toggles: ["Mark as draft"]
+      - path: "Victor/Views/Editor/Tabs/SEOTab.swift"
+        lines: [108]
+        toggles: ["Exclude from sitemap"]
+      - path: "Victor/Views/Preferences/PreferencesView.swift"
+        lines: [83, 115]
+        toggles: ["Highlight current line", "Enable auto-save"]
+    good_examples:
+      - path: "Victor/Views/Inspector/MetadataSection.swift"
+        lines: [29, 57]
+        note: "Correctly uses .toggleStyle(.checkbox)"
+    fix:
+      code_change: "Add .toggleStyle(.checkbox) to all form toggles"
+      before: |
+        Toggle("Build Drafts", isOn: $config.buildDrafts)
+      after: |
+        Toggle("Build Drafts", isOn: $config.buildDrafts)
+            .toggleStyle(.checkbox)
+    estimated_effort: "20 minutes"
+
+# ============================================================================
+# HIGH PRIORITY ISSUES
+# ============================================================================
+
+high_priority_issues:
+
+  - id: HIGH-001
+    title: ".toggleStyle(.switch) in ShortcodeFormView"
+    severity: high
+    category: styling
+    impact: "Explicitly using iOS toggle style"
+    files_affected:
+      - path: "Victor/Views/Editor/ShortcodeFormView.swift"
+        lines: [207]
+    fix:
+      code_change: "Change to .toggleStyle(.checkbox)"
+    estimated_effort: "5 minutes"
+
+  - id: HIGH-002
+    title: "Asset Browser Missing Context Menus"
+    severity: high
+    category: interaction
+    impact: "Reduced discoverability and Mac-like feel"
+    description: |
+      Asset grid and list items have no right-click context menu, which is
+      expected on macOS. Users cannot right-click to copy path, reveal in Finder,
+      or insert asset markdown.
+    files_affected:
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+        lines: [205, 224]
+    fix:
+      code_change: "Add .contextMenu to AssetGridItem and AssetListRow"
+      example: |
+        .contextMenu {
+            Button("Insert Markdown") { /* ... */ }
+            Button("Copy Path") { /* ... */ }
+            Divider()
+            Button("Reveal in Finder") { /* ... */ }
+            Button("Open in Default App") { /* ... */ }
+        }
+    estimated_effort: "1 hour"
+
+  - id: HIGH-003
+    title: "Asset Browser Tap Gesture Conflicts"
+    severity: high
+    category: interaction
+    impact: "Duplicate selection handlers"
+    files_affected:
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+        lines: [205, 208, 226]
+    fix:
+      code_change: |
+        Remove .onTapGesture from list rows (List handles selection).
+        Keep for grid items since LazyVGrid isn't a List.
+    estimated_effort: "15 minutes"
+
+  - id: HIGH-004
+    title: "Missing Hover Effects on Asset Browser"
+    severity: high
+    category: interaction
+    impact: "Reduced visual feedback and discoverability"
+    description: |
+      Asset grid and list items provide no hover feedback to indicate they're
+      interactive. macOS users expect hover states.
+    files_affected:
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+        lines: [280, 300]
+    fix:
+      code_change: "Add .onHover modifier with background highlight"
+      example: |
+        @State private var isHovered = false
+
+        AssetGridItem(...)
+            .onHover { hovering in isHovered = hovering }
+            .background(isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
+    estimated_effort: "30 minutes"
+
+  - id: HIGH-005
+    title: "Corner Radius Values Too Large (iOS-sized)"
+    severity: high
+    category: styling
+    impact: "Visual inconsistency with macOS design language"
+    description: |
+      Multiple files use 8pt corner radius which is iOS-style.
+      macOS typically uses 4-6pt for UI elements.
+    files_affected:
+      - path: "Victor/Views/AssetBrowser/AssetDetailPanel.swift"
+        lines: [94, 109]
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+        lines: [280, 300]
+    good_examples:
+      - path: "Victor/Views/MainWindow/FileListView.swift"
+        lines: [160, 171, 297]
+        note: "Uses 3pt (better for Mac)"
+      - path: "Victor/Views/Editor/TextEditorPanel.swift"
+        lines: [52]
+        note: "Uses 4pt (appropriate)"
+    fix:
+      code_change: "Reduce from 8pt to 4-6pt"
+    estimated_effort: "10 minutes"
+
+  - id: HIGH-006
+    title: "Small Padding Values (iOS-sized)"
+    severity: high
+    category: styling
+    impact: "Cramped UI compared to macOS standards"
+    description: |
+      Multiple files use 6pt/2pt padding which is too small for macOS.
+      macOS prefers 8-12pt vertical, 12-16pt horizontal for form elements.
+    files_affected:
+      - path: "Victor/Views/ConfigEditor/ConfigEditorView.swift"
+        lines: [107, 108]
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+        lines: [293, 294]
+      - path: "Victor/Views/MainWindow/FrontmatterBottomPanel.swift"
+        lines: [49, 50]
+    fix:
+      code_change: "Increase to 8-12pt vertical, 12pt horizontal minimum"
+    estimated_effort: "20 minutes"
+
+  - id: HIGH-007
+    title: ".navigationSubtitle() Has No Effect on macOS"
+    severity: high
+    category: api_usage
+    impact: "Dead code, iOS-specific modifier"
+    description: |
+      NavigationSplitView on macOS doesn't display .navigationSubtitle().
+      This modifier is iOS/iPadOS-only.
+    files_affected:
+      - path: "Victor/Views/MainWindow/EditorPanelView.swift"
+        lines: [106, 107]
+      - path: "Victor/Views/MainWindow/PreviewPanel.swift"
+        lines: [24, 25]
+    fix:
+      code_change: "Remove .navigationSubtitle() or use window title API"
+      alternative: |
+        // If subtitle is important, set window title directly:
+        .onAppear {
+            if let window = NSApplication.shared.windows.first {
+                window.title = "Preview - \(contentFile.fileName)"
+            }
+        }
+    estimated_effort: "15 minutes"
+
+  - id: HIGH-008
+    title: "Missing Context Menu on Recent Sites"
+    severity: high
+    category: interaction
+    impact: "Can't remove from recent list or reveal in Finder"
+    files_affected:
+      - path: "Victor/Views/MainWindow/SidebarView.swift"
+        lines: [119, 183]
+    fix:
+      code_change: "Add .contextMenu with Remove/Reveal actions"
+    estimated_effort: "30 minutes"
+
+  - id: HIGH-009
+    title: "Missing Context Menu on Breadcrumb Segments"
+    severity: high
+    category: interaction
+    impact: "Can't copy path or navigate from breadcrumb"
+    files_affected:
+      - path: "Victor/Views/MainWindow/BreadcrumbBar.swift"
+        lines: [35]
+    fix:
+      code_change: "Add .contextMenu with Copy Path, Reveal, New File actions"
+    estimated_effort: "30 minutes"
+
+  - id: HIGH-010
+    title: "Missing Tooltips on Status Badges"
+    severity: high
+    category: accessibility
+    impact: "Users don't know what Draft/Scheduled/Expired badges mean"
+    files_affected:
+      - path: "Victor/Views/MainWindow/FileListView.swift"
+        lines: [164, 177, 286, 308]
+    fix:
+      code_change: "Add .help() modifiers to explain badge meanings"
+      example: |
+        .help("Draft: Not published in production build")
+    estimated_effort: "15 minutes"
+
+# ============================================================================
+# MEDIUM PRIORITY ISSUES
+# ============================================================================
+
+medium_priority_issues:
+
+  - id: MED-001
+    title: ".sheet() for Shortcode Picker (Should Be Popover)"
+    severity: medium
+    category: interaction
+    impact: "iOS-style modal instead of Mac-style popover"
+    description: |
+      Shortcode picker uses .sheet() which is iOS-style modal presentation.
+      macOS would typically use .popover() for this type of auxiliary UI.
+    files_affected:
+      - path: "Victor/Views/MainWindow/EditorPanelView.swift"
+        lines: [159, 163]
+    fix:
+      code_change: "Change .sheet() to .popover()"
+      before: |
+        .sheet(isPresented: $showShortcodePicker) {
+            ShortcodePickerView { ... }
+        }
+      after: |
+        .popover(isPresented: $showShortcodePicker, arrowEdge: .leading) {
+            ShortcodePickerView { ... }
+                .frame(minWidth: 400, minHeight: 500)
+        }
+    estimated_effort: "20 minutes"
+
+  - id: MED-002
+    title: "TabView in Preferences (Should Use Segmented Picker)"
+    severity: medium
+    category: interaction
+    impact: "Less Mac-native than segmented control for preferences"
+    files_affected:
+      - path: "Victor/Views/Preferences/PreferencesView.swift"
+        lines: [14, 31]
+    fix:
+      code_change: "Replace TabView with Picker + .pickerStyle(.segmented)"
+      note: "Current implementation works, but segmented picker is more Mac-like"
+    estimated_effort: "45 minutes"
+
+  - id: MED-003
+    title: "Hard-coded Badge Colors (Should Be Semantic)"
+    severity: medium
+    category: styling
+    impact: "Colors don't adapt to themes"
+    files_affected:
+      - path: "Victor/Views/MainWindow/FileListView.swift"
+        lines: [159, 170]
+        colors: [".purple", ".orange"]
+      - path: "Victor/Views/Editor/ShortcodeCardView.swift"
+        lines: [30, 41]
+        colors: [".orange", ".blue"]
+    fix:
+      code_change: "Create semantic color constants or use SF Symbol tints"
+      example: |
+        // Define in AppConstants or theme file:
+        static let pageBundleColor = Color(nsColor: .systemPurple)
+        static let configColor = Color(nsColor: .systemOrange)
+    estimated_effort: "30 minutes"
+
+  - id: MED-004
+    title: "Border Stroke Width 2pt (Should Be 1pt)"
+    severity: medium
+    category: styling
+    impact: "Heavy borders compared to macOS standards"
+    files_affected:
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+        lines: [301, 304]
+    fix:
+      code_change: "Change lineWidth from 2 to 1"
+    estimated_effort: "5 minutes"
+
+  - id: MED-005
+    title: "Fixed Font Sizes (Should Use Semantic Sizes)"
+    severity: medium
+    category: accessibility
+    impact: "Doesn't adapt to accessibility text sizes"
+    files_affected:
+      - path: "Victor/Views/AssetBrowser/AssetDetailPanel.swift"
+        lines: [100]
+        size: 48
+      - path: "Victor/Views/Editor/TextEditorPanel.swift"
+        lines: [66]
+        size: 12
+    fix:
+      code_change: "Use .title, .headline, .body, .caption instead"
+      exception: "Keep fixed sizes for monospaced code displays"
+    estimated_effort: "20 minutes"
+
+  - id: MED-006
+    title: "Missing Hover Feedback on Inspector Section Headers"
+    severity: medium
+    category: interaction
+    impact: "Not obvious that section headers are clickable"
+    files_affected:
+      - path: "Victor/Views/Inspector/InspectorPanel.swift"
+    fix:
+      code_change: "Add .onHover with subtle background highlight"
+    estimated_effort: "20 minutes"
+
+  - id: MED-007
+    title: ".ignoresSafeArea() in FocusModeView"
+    severity: medium
+    category: api_usage
+    impact: "iOS-only modifier, has no effect on macOS"
+    files_affected:
+      - path: "Victor/Views/FocusMode/FocusModeView.swift"
+        lines: [17]
+    fix:
+      code_change: "Remove .ignoresSafeArea() modifier"
+    estimated_effort: "2 minutes"
+
+  - id: MED-008
+    title: "Missing Window State Restoration"
+    severity: medium
+    category: persistence
+    impact: "Window position/size not persisted across launches"
+    description: |
+      Window opens at system default position and size every time.
+      Should use @SceneStorage to persist window geometry.
+    files_affected:
+      - path: "Victor/VictorApp.swift"
+        lines: [10, 14]
+    fix:
+      code_change: "Add .defaultSize() and consider @SceneStorage"
+      example: |
+        .frame(minWidth: 1000, minHeight: 600)
+        .defaultSize(width: 1200, height: 800)
+    estimated_effort: "1 hour"
+
+  - id: MED-009
+    title: "Missing Selected File Persistence"
+    severity: medium
+    category: persistence
+    impact: "App reopens with no file selected"
+    files_affected:
+      - path: "Victor/ViewModels/SiteViewModel.swift"
+    fix:
+      code_change: "Add @SceneStorage for selectedFileID"
+      example: |
+        @SceneStorage("selectedFileID") private var selectedFileID: UUID?
+    estimated_effort: "30 minutes"
+
+  - id: MED-010
+    title: "Preferences Window Fixed Size"
+    severity: medium
+    category: ux
+    impact: "Window too small if content expands"
+    files_affected:
+      - path: "Victor/Views/Preferences/PreferencesView.swift"
+        lines: [32]
+    fix:
+      code_change: "Make resizable with min/max constraints"
+    estimated_effort: "10 minutes"
+
+# ============================================================================
+# LOW PRIORITY ISSUES
+# ============================================================================
+
+low_priority_issues:
+
+  - id: LOW-001
+    title: "Custom Resize Handle Duplicates HSplitView Functionality"
+    severity: low
+    category: optimization
+    impact: "Extra code when HSplitView has built-in resize"
+    files_affected:
+      - path: "Victor/Views/MainWindow/FrontmatterBottomPanel.swift"
+        lines: [161, 167]
+    fix:
+      note: "Current implementation is fine and provides good UX. Consider simplification only if needed."
+    estimated_effort: "N/A"
+
+  - id: LOW-002
+    title: "Empty Entitlements File"
+    severity: low
+    category: configuration
+    impact: "Works but should be explicit for clarity"
+    files_affected:
+      - path: "Victor/Victor.entitlements"
+    fix:
+      code_change: "Add explicit sandbox and file access declarations"
+      example: |
+        <key>com.apple.security.app-sandbox</key>
+        <true/>
+        <key>com.apple.security.files.user-selected.read-write</key>
+        <true/>
+    estimated_effort: "15 minutes"
+
+  - id: LOW-003
+    title: "No Popovers Used Anywhere"
+    severity: low
+    category: enhancement
+    impact: "Missing opportunity for rich contextual help"
+    description: |
+      The app uses .help() tooltips but never .popover().
+      Popovers could provide richer Hugo-specific documentation.
+    fix:
+      note: "Enhancement opportunity, not a bug"
+    estimated_effort: "Varies"
+
+  - id: LOW-004
+    title: "Missing Unsaved Changes Dialog on Quit"
+    severity: low
+    category: data_safety
+    impact: "Could lose edits if quitting with unsaved changes"
+    files_affected:
+      - path: "Victor/VictorApp.swift"
+    fix:
+      code_change: "Add NSApplicationDelegate hook for app termination"
+    estimated_effort: "1 hour"
+
+  - id: LOW-005
+    title: "No Drag-Drop Visual Hint on Asset Items"
+    severity: low
+    category: discoverability
+    impact: "Users might not know assets are draggable"
+    files_affected:
+      - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+    fix:
+      code_change: "Add cursor change or tooltip indicating drag capability"
+    estimated_effort: "20 minutes"
+
+# ============================================================================
+# POSITIVE FINDINGS (What's Done Right)
+# ============================================================================
+
+positive_findings:
+
+  - category: "Security"
+    finding: "Textbook security-scoped bookmark implementation"
+    files:
+      - "Victor/Services/FileSystemService.swift"
+    notes: |
+      Perfect App Sandbox compliance with proper bookmark lifecycle:
+      - Saves bookmarks to UserDefaults
+      - Handles stale bookmarks
+      - Calls startAccessingSecurityScopedResource/stopAccessingSecurityScopedResource
+      - Uses NSOpenPanel for user permission
+
+  - category: "Commands & Shortcuts"
+    finding: "Excellent command system with focused values"
+    files:
+      - "Victor/VictorApp.swift"
+    notes: |
+      - Uses CommandGroup instead of custom menus
+      - Context-aware shortcuts via focused values
+      - Proper .disabled() based on context
+      - Standard macOS shortcuts
+
+  - category: "View Lifecycle"
+    finding: "Proper cleanup and memory management"
+    files:
+      - "Victor/Views/MainWindow/EditorPanelView.swift"
+      - "Victor/Views/MainWindow/PreviewPanel.swift"
+      - "Victor/ViewModels/SiteViewModel.swift"
+    notes: |
+      - Cancels debounce tasks in onDisappear
+      - LRU cache respects edited files
+      - No retain cycles with [weak self]
+
+  - category: "macOS-Only Code"
+    finding: "No iOS-specific imports or APIs"
+    notes: |
+      - Uses NSOpenPanel, NSTextView, NSSplitView appropriately
+      - No UIKit imports
+      - No horizontalSizeClass/verticalSizeClass
+      - Proper NavigationSplitView usage
+
+  - category: "Context Menus"
+    finding: "Well-implemented file/folder context menus"
+    files:
+      - "Victor/Views/MainWindow/FileListView.swift"
+    notes: |
+      - Comprehensive actions (Create, Duplicate, Move to Trash, Reveal, Copy Path)
+      - Proper macOS right-click patterns
+
+  - category: "Tooltips"
+    finding: "Extensive .help() coverage"
+    notes: |
+      - Toolbar buttons have keyboard shortcut hints
+      - Form fields have explanatory help text
+      - Good accessibility foundation
+
+  - category: "Preferences"
+    finding: "Proper @AppStorage for persistent settings"
+    files:
+      - "Victor/Views/Preferences/PreferencesView.swift"
+    notes: |
+      - Settings sync across windows automatically
+      - Live preference updates
+      - Uses Settings scene for Cmd+,
+
+# ============================================================================
+# IMPLEMENTATION ROADMAP
+# ============================================================================
+
+implementation_roadmap:
+
+  phase_1:
+    title: "Quick Wins - Styling Fixes"
+    estimated_time: "2-3 hours"
+    issues: ["CRIT-001", "CRIT-003", "HIGH-001", "HIGH-005", "HIGH-006", "MED-007"]
+    description: |
+      Remove .roundedBorder, add .checkbox, fix padding/corner radius.
+      Low risk, high visual impact.
+
+  phase_2:
+    title: "Interaction Pattern Fixes"
+    estimated_time: "3-4 hours"
+    issues: ["CRIT-002", "HIGH-003", "HIGH-007", "MED-001"]
+    description: |
+      Fix .onTapGesture conflicts, remove .navigationSubtitle, change sheet to popover.
+      Requires testing but straightforward changes.
+
+  phase_3:
+    title: "Context Menu & Hover Enhancements"
+    estimated_time: "3-4 hours"
+    issues: ["HIGH-002", "HIGH-004", "HIGH-008", "HIGH-009", "HIGH-010", "MED-006"]
+    description: |
+      Add missing context menus, hover effects, and tooltips.
+      Significant UX improvement.
+
+  phase_4:
+    title: "Semantic Colors & Accessibility"
+    estimated_time: "2 hours"
+    issues: ["MED-003", "MED-004", "MED-005"]
+    description: |
+      Replace hard-coded colors, fix border widths, use semantic font sizes.
+      Better theme support and accessibility.
+
+  phase_5:
+    title: "State Persistence"
+    estimated_time: "2-3 hours"
+    issues: ["MED-008", "MED-009", "MED-010"]
+    description: |
+      Add @SceneStorage for window state, selected file, preferences window sizing.
+      Quality of life improvements.
+
+  phase_6:
+    title: "Polish & Enhancements"
+    estimated_time: "2-3 hours"
+    issues: ["LOW-002", "LOW-004", "LOW-005", "MED-002"]
+    description: |
+      Entitlements, quit dialog, drag hints, preferences refactor.
+      Optional refinements.
+
+# ============================================================================
+# FILE-SPECIFIC SUMMARY
+# ============================================================================
+
+files_requiring_changes:
+
+  high_impact:
+    - path: "Victor/Views/ConfigEditor/ConfigEditorView.swift"
+      issues: 15
+      types: ["textFieldStyle", "toggleStyle", "padding", "navigationSubtitle"]
+      estimated_time: "1 hour"
+
+    - path: "Victor/Views/MainWindow/FileListView.swift"
+      issues: 9
+      types: ["onTapGesture", "colors", "tooltips"]
+      estimated_time: "1 hour"
+
+    - path: "Victor/Views/AssetBrowser/AssetBrowserView.swift"
+      issues: 10
+      types: ["contextMenu", "hover", "onTapGesture", "cornerRadius", "textFieldStyle"]
+      estimated_time: "1.5 hours"
+
+    - path: "Victor/Views/Preferences/PreferencesView.swift"
+      issues: 7
+      types: ["toggleStyle", "textFieldStyle", "tabView", "windowSize"]
+      estimated_time: "45 minutes"
+
+  medium_impact:
+    - path: "Victor/Views/Editor/Components/CustomFieldEditor.swift"
+      issues: 2
+      types: ["textFieldStyle"]
+      estimated_time: "10 minutes"
+
+    - path: "Victor/Views/Editor/Components/MenuEntryEditor.swift"
+      issues: 7
+      types: ["textFieldStyle"]
+      estimated_time: "20 minutes"
+
+    - path: "Victor/Views/MainWindow/EditorPanelView.swift"
+      issues: 3
+      types: ["sheet", "navigationSubtitle"]
+      estimated_time: "30 minutes"
+
+    - path: "Victor/Views/MainWindow/SidebarView.swift"
+      issues: 1
+      types: ["contextMenu"]
+      estimated_time: "30 minutes"
+
+  low_impact:
+    - path: "Victor/Views/Editor/ShortcodeFormView.swift"
+      issues: 2
+      types: ["textFieldStyle", "toggleStyle"]
+      estimated_time: "10 minutes"
+
+    - path: "Victor/Views/FocusMode/FocusModeView.swift"
+      issues: 1
+      types: ["ignoresSafeArea"]
+      estimated_time: "2 minutes"
+
+    - path: "Victor/VictorApp.swift"
+      issues: 2
+      types: ["windowRestoration", "quitHandler"]
+      estimated_time: "1.5 hours"
+
+    - path: "Victor/Victor.entitlements"
+      issues: 1
+      types: ["configuration"]
+      estimated_time: "15 minutes"
+
+# ============================================================================
+# TESTING RECOMMENDATIONS
+# ============================================================================
+
+testing_recommendations:
+
+  - area: "List Selection"
+    description: "After removing .onTapGesture from FileListView"
+    tests:
+      - "Single-click file selection works"
+      - "Single-click folder selection works"
+      - "DisclosureGroup expand/collapse still works"
+      - "Page bundle index file selection works"
+      - "Keyboard navigation (arrow keys) works"
+
+  - area: "Asset Browser"
+    description: "After adding context menus and removing tap gestures"
+    tests:
+      - "Right-click shows context menu"
+      - "Insert markdown action works"
+      - "Copy path action works"
+      - "Reveal in Finder works"
+      - "Grid and list selection still works"
+      - "Drag-drop insertion still works"
+
+  - area: "Form Controls"
+    description: "After changing to .checkbox style"
+    tests:
+      - "All toggles render as checkboxes"
+      - "Toggle state changes work correctly"
+      - "Config editor toggles save properly"
+      - "Preferences toggles update @AppStorage"
+
+  - area: "Text Fields"
+    description: "After removing .roundedBorder"
+    tests:
+      - "Text fields render with native macOS appearance"
+      - "Focus states work correctly"
+      - "Placeholder text displays properly"
+      - "Text input and editing works"
+
+  - area: "Window Restoration"
+    description: "After adding @SceneStorage"
+    tests:
+      - "Window position persists across launches"
+      - "Window size persists across launches"
+      - "Selected file restores on relaunch"
+      - "Sidebar width persists"
+
+# ============================================================================
+# REFERENCES
+# ============================================================================
+
+references:
+  apple_hig:
+    - title: "macOS Human Interface Guidelines"
+      url: "https://developer.apple.com/design/human-interface-guidelines/macos"
+    - title: "Controls - macOS"
+      url: "https://developer.apple.com/design/human-interface-guidelines/controls"
+    - title: "Menus and Context Menus"
+      url: "https://developer.apple.com/design/human-interface-guidelines/menus"
+
+  swiftui_docs:
+    - title: "NavigationSplitView"
+      url: "https://developer.apple.com/documentation/swiftui/navigationsplitview"
+    - title: "ToggleStyle"
+      url: "https://developer.apple.com/documentation/swiftui/togglestyle"
+    - title: "SceneStorage"
+      url: "https://developer.apple.com/documentation/swiftui/scenestorage"
+
+  app_sandbox:
+    - title: "App Sandbox"
+      url: "https://developer.apple.com/documentation/security/app_sandbox"
+    - title: "Security-Scoped Bookmarks"
+      url: "https://developer.apple.com/documentation/foundation/url#1663783"
