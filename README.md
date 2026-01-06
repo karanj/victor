@@ -2,22 +2,26 @@
 
 A native macOS app built with SwiftUI that provides a sophisticated editing experience for Hugo static sites.
 
-**Last Updated**: January 1, 2026
+**Last Updated**: January 5, 2026
 **Build Status**: Clean build, no errors, no warnings
-**Code Quality**: All critical and high-priority issues fixed; most low-priority issues addressed
+**Code Quality**: All critical and high-priority issues fixed; macOS best practices reviewed
 **Test Coverage**: 121 tests covering config and frontmatter parsing
 **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based auto-save
+**Codebase**: 60 Swift files, ~14,590 lines of code
 
 ## Features
 
 ### Site Content Management
 
-- Open and browse Hugo site folders
+- Open and browse full Hugo sites (content, config, static, assets, layouts, data, themes)
+- **19 file types** with type-specific icons, colors, and Hugo role detection
 - Hierarchical file tree navigation with expand/collapse
 - File search (recursive through folders)
 - Security-scoped bookmarks for persistent folder access
 - Recent sites list for quick access
 - File status indicators (modified, recently saved)
+- Hugo page bundle detection and visualization (purple icon with gear badge)
+- Auto-restore last opened site on launch
 
 ### Layout Modes
 
@@ -56,13 +60,17 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 - **Two editing locations:**
   - Bottom panel (collapsible)
   - Inspector panel (right sidebar, ⌥⌘I)
-- Structured form editor with fields for:
-  - Title, Date, Draft status, Description
-  - Tags and Categories (chip-based input with flow layout)
-- Raw text editor for advanced editing
+- **Structured form editor** with 5 organized tabs:
+  - Essential (title, date, draft, description)
+  - Publishing (publish date, expiry date, last modified)
+  - SEO (summary, keywords, author)
+  - Menus (menu configuration)
+  - Advanced (type, layout, custom fields)
+- **Raw text editor** for advanced editing
+- Tags and Categories with chip-based input and flow layout
 - Parse validation with error feedback
-- Custom fields preserved
-- Round-trip format preservation
+- Custom fields preserved on save
+- Round-trip format preservation (no data loss)
 
 ### Inspector Panel (⌥⌘I)
 
@@ -72,10 +80,53 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 - Collapsible sections
 - Persisted visibility state
 
+### Hugo Config Editor
+
+- **GUI form editor** with 4 organized tabs:
+  - Essentials (baseURL, title, theme, language)
+  - Content (pagination, summaries, taxonomies)
+  - Taxonomies (tags, categories, custom taxonomies)
+  - Advanced (build flags, output formats, custom params)
+- **Raw text editor** for direct config editing
+- Supports all Hugo config formats: **TOML**, **YAML**, and **JSON**
+- Two-way sync between Form and Raw views (no data loss)
+- Custom fields preserved during edits
+- Round-trip format preservation
+- Validation and error feedback
+
+### Asset Browser
+
+- Browse static assets (`static/` folder) and page resources (`assets/` folder)
+- **Grid view** with image thumbnails and asset type icons
+- **List view** with compact file listing
+- **Asset detail panel** showing:
+  - Large preview for images
+  - File metadata (size, dimensions, type, dates)
+  - Quick actions (copy path, copy shortcode, reveal in Finder)
+- **Drag-and-drop** insertion into markdown editor
+- Folder-specific browsing (shows only assets in selected folder)
+- Support for images (PNG, JPG, GIF, SVG, WebP), PDFs, and other file types
+
+### Multi-File Viewing & Editing
+
+Victor intelligently routes files to the appropriate viewer based on file type:
+
+| File Type | Capability |
+|-----------|------------|
+| **Markdown** (.md) | Full editor with live preview and frontmatter editing |
+| **Images** (.png, .jpg, .gif, .svg, .webp) | Image viewer with zoom/pan controls |
+| **Hugo Config** (hugo.toml/yaml/json) | GUI form editor + raw text editing |
+| **Code Files** (HTML, CSS, JS, TS, Go) | Syntax-aware text editor |
+| **Data Files** (YAML, TOML, JSON in data/) | Text editor |
+| **Templates** (HTML in layouts/ or themes/) | Text editor |
+| **Other Files** | Open in default macOS application |
+
 ### Navigation
 
 - Breadcrumb navigation bar showing file path
 - Click breadcrumb segments to navigate
+- Sidebar toggle (⌃⌘S) for more editing space
+- View menu integration for UI controls
 - Quick Open (⌘P) for fuzzy file search (coming soon)
 
 ### Hugo Page Bundle Support
@@ -117,6 +168,7 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 | ⌘2 | Preview only mode |
 | ⌘3 | Split view mode |
 | ⌥⌘I | Toggle Inspector |
+| ⌃⌘S | Toggle Sidebar |
 | ⌃⌘F | Toggle Focus Mode |
 | ⌘F | Focus search field |
 | ⌘B | Bold selected text |
@@ -199,16 +251,23 @@ xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
 
 ```
 Victor/
-├── Models/              # Data models
+├── Models/              # Data models (12 files)
 │   ├── HugoSite.swift
+│   ├── HugoSiteStructure.swift
+│   ├── HugoConfig.swift
 │   ├── ContentFile.swift
+│   ├── TextFile.swift
+│   ├── Asset.swift
 │   ├── FileNode.swift
+│   ├── FileType.swift
 │   ├── Frontmatter.swift
+│   ├── FrontmatterTypes.swift
 │   └── HugoShortcode.swift
-├── ViewModels/          # State management
+├── ViewModels/          # State management (3 files)
 │   ├── SiteViewModel.swift
-│   └── EditorViewModel.swift
-├── Views/
+│   ├── EditorViewModel.swift
+│   └── TextEditorViewModel.swift
+├── Views/               # ~38 files
 │   ├── MainWindow/      # Main app layout
 │   │   ├── ContentView.swift
 │   │   ├── SidebarView.swift
@@ -222,22 +281,38 @@ Victor/
 │   │   ├── EditorTextView.swift
 │   │   ├── EditorStatusBar.swift
 │   │   ├── FrontmatterEditorView.swift
+│   │   ├── TextEditorPanel.swift
 │   │   ├── ShortcodePickerView.swift
-│   │   └── ShortcodeFormView.swift
+│   │   ├── ShortcodeFormView.swift
+│   │   ├── Components/          # Reusable components
+│   │   └── Tabs/                # Frontmatter tab views
+│   ├── ConfigEditor/
+│   │   └── ConfigEditorView.swift
+│   ├── AssetBrowser/
+│   │   ├── AssetBrowserView.swift
+│   │   └── AssetDetailPanel.swift
+│   ├── Viewers/
+│   │   ├── FileViewerRouter.swift
+│   │   ├── ImageViewerPanel.swift
+│   │   ├── TextViewerPanel.swift
+│   │   └── UnsupportedFilePanel.swift
 │   ├── Preview/
 │   │   └── PreviewWebView.swift
 │   ├── Inspector/
-│   │   └── InspectorPanel.swift
+│   │   ├── InspectorPanel.swift
+│   │   ├── MetadataSection.swift
+│   │   └── StatisticsSection.swift
 │   ├── FocusMode/
 │   │   └── FocusModeView.swift
 │   ├── Preferences/
 │   │   └── PreferencesView.swift
 │   └── Animations/
 │       └── AnimationModifiers.swift
-├── Services/
+├── Services/            # 7 files
 │   ├── FileSystemService.swift
 │   ├── FrontmatterParser.swift
 │   ├── HugoConfigParser.swift
+│   ├── AssetService.swift
 │   ├── MarkdownRenderer.swift
 │   ├── AutoSaveService.swift
 │   └── Logger.swift
@@ -245,9 +320,9 @@ Victor/
 └── Resources/
     └── preview-styles.css
 
-VictorTests/
-├── HugoConfigParserTests.swift   # Config file parsing tests
-└── FrontmatterParserTests.swift  # Frontmatter parsing tests
+VictorTests/             # 2 files
+├── HugoConfigParserTests.swift   # Hugo config parsing tests (61 tests)
+└── FrontmatterParserTests.swift  # Frontmatter parsing tests (60 tests)
 ```
 
 ## Dependencies
@@ -305,30 +380,52 @@ xcodebuild test -project Victor.xcodeproj -scheme Victor -only-testing:VictorTes
 
 ## Future Enhancements
 
-- File system watching with FSEvents for live reload
-- Image asset management and drag & drop
-- Syntax highlighting for code blocks
-- Git integration for version control
-- Hugo server integration for live preview
-- Hugo feature integration - understand the Hugo site model and leverage it for a more integrated CMS
-- Multi-file tabs
+### Planned Features
+
+- **File system watching** with FSEvents for automatic reload when files change externally
+- **Syntax highlighting** for code blocks in markdown preview
+- **Git integration** for version control (status, commit, push)
+- **Hugo server integration** for true live preview via `hugo server`
+- **Multi-file tabs** for editing multiple files simultaneously
+- **Data files management** (GUI for editing `data/` directory YAML/TOML/JSON)
+- **Archetype management** (create content from templates)
+- **Template editing** with Hugo syntax support for `layouts/` and `themes/`
+- **Search & replace** across multiple files
+- **Custom themes** and color schemes for the editor
+
+### Completed Features (Previously Planned)
+
+✅ Image asset management and drag & drop
+✅ Hugo config GUI editor
+✅ Multi-file type support (view/edit images, code files, data files)
+✅ File type detection and routing
+✅ Asset browser with thumbnails
 
 ## Hugo Site Structure
 
-Victor expects a standard Hugo site structure:
+Victor supports the complete Hugo site structure:
 
 ```
 your-hugo-site/
-├── content/           # Required: Markdown content files
+├── content/           # Markdown content files
 │   ├── posts/
 │   │   ├── post-1.md
-│   │   └── post-2.md
+│   │   └── my-bundle/     # Page bundle
+│   │       ├── index.md
+│   │       └── image.jpg
 │   └── about.md
-├── config.toml        # Hugo configuration
-├── static/            # Static assets
+├── config.toml        # Hugo configuration (or hugo.toml, config.yaml, etc.)
+├── static/            # Static assets (served as-is)
+│   └── images/
+├── assets/            # Asset processing pipeline
+├── layouts/           # Custom templates
 ├── themes/            # Hugo themes
+├── data/              # Data files (YAML, TOML, JSON)
+├── archetypes/        # Content templates
 └── public/            # Generated site (ignored)
 ```
+
+Victor detects and provides appropriate editing capabilities for all Hugo directories and file types.
 
 ## Security & Privacy
 
@@ -368,9 +465,10 @@ Contributions welcome for:
 - Bug fixes and real-world testing
 - UI/UX enhancements
 - Documentation improvements
-- Future enhancements (file watching, image drag & drop, Git integration, syntax highlighting)
-- Additional Hugo-specific features
+- Future enhancements (file watching, Git integration, syntax highlighting, Hugo server integration)
+- Additional Hugo-specific features (archetypes, data files GUI, template editing)
 - Expanding test coverage (ViewModels, Services, integration tests)
+- Performance optimizations
 
 ## License
 
