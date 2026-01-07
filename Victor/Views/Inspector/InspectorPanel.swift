@@ -76,6 +76,8 @@ struct InspectorSection<Content: View>: View {
     @Binding var isExpanded: Bool
     @ViewBuilder let content: Content
 
+    @State private var isHovered = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Section header
@@ -99,9 +101,17 @@ struct InspectorSection<Content: View>: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .background(isHovered ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : Color.clear)
+                .cornerRadius(4)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+            .help("Click to \(isExpanded ? "collapse" : "expand")")
 
             // Section content
             if isExpanded {

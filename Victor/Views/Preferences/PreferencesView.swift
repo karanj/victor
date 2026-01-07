@@ -81,6 +81,7 @@ struct EditorPreferencesTab: View {
                 .pickerStyle(.menu)
 
                 Toggle("Highlight current line", isOn: $highlightCurrentLine)
+                    .toggleStyle(.checkbox)
             } header: {
                 Text("Editor Appearance")
             } footer: {
@@ -113,6 +114,7 @@ struct AutoSavePreferencesTab: View {
         Form {
             Section {
                 Toggle("Enable auto-save", isOn: $isAutoSaveEnabled)
+                    .toggleStyle(.checkbox)
 
                 if isAutoSaveEnabled {
                     Picker("Save after:", selection: $autoSaveDelay) {

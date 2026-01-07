@@ -179,6 +179,21 @@ struct RecentSiteRow: View {
         .onHover { hovering in
             isHovering = hovering
         }
+        .contextMenu {
+            Button {
+                siteViewModel.removeRecentSite(path)
+            } label: {
+                Label("Remove from Recent", systemImage: "xmark.circle")
+            }
+
+            Divider()
+
+            Button {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+        }
     }
 }
 
@@ -261,7 +276,7 @@ struct SearchBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(6)
+        .padding(8)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(6)
         .onChange(of: siteViewModel.shouldFocusSearch) { _, newValue in

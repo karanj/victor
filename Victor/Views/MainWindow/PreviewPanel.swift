@@ -22,7 +22,6 @@ struct PreviewPanel: View {
     var body: some View {
         PreviewWebView(html: renderedHTML)
             .navigationTitle(previewTitle ?? contentFile.fileName)
-            .navigationSubtitle("Preview")
             .onAppear {
                 // Always render current content when view appears (e.g., switching to Preview tab)
                 updatePreview(content: currentContent)

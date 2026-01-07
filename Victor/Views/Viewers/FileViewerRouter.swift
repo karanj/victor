@@ -15,7 +15,8 @@ struct FileViewerRouter: View {
                 if node.hugoRole == .staticFiles || node.hugoRole == .assets {
                     assetBrowserContent
                 } else {
-                    directoryPlaceholder
+                    // Show folder contents for other directories
+                    FolderContentsView(node: node, siteViewModel: siteViewModel)
                 }
             } else if node.isConfigFile {
                 // Hugo config files get the GUI editor

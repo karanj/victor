@@ -23,26 +23,15 @@ struct FileListView: View {
                         FileTreeRow(node: child, siteViewModel: siteViewModel)
                     }
                 } label: {
-                    FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
-                        .tag(node.id)
+                    FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
                         .contextMenu {
                             FolderContextMenu(node: node, siteViewModel: siteViewModel)
                         }
-                        .onTapGesture(count: 2) {
-                            // Double-click to expand/collapse folder
-                            node.isExpanded.toggle()
-                            if node.isExpanded {
-                                siteViewModel.onFolderExpanded(node)
-                            }
-                        }
-                        .onTapGesture {
-                            // Single-click to select folder (DisclosureGroup doesn't work with List selection)
-                            siteViewModel.selectedFileID = node.id
-                        }
                 }
+                .tag(node.id)
             } else {
                 // Regular file row
-                FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
+                FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
                     .tag(node.id)
                     .contextMenu {
                         FileContextMenu(node: node, siteViewModel: siteViewModel)
@@ -75,25 +64,14 @@ struct FileTreeRow: View {
                     FileTreeRow(node: child, siteViewModel: siteViewModel)
                 }
             } label: {
-                FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
-                    .tag(node.id)
+                FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
                     .contextMenu {
                         FolderContextMenu(node: node, siteViewModel: siteViewModel)
                     }
-                    .onTapGesture(count: 2) {
-                        // Double-click to expand/collapse folder
-                        node.isExpanded.toggle()
-                        if node.isExpanded {
-                            siteViewModel.onFolderExpanded(node)
-                        }
-                    }
-                    .onTapGesture {
-                        // Single-click to select folder (DisclosureGroup doesn't work with List selection)
-                        siteViewModel.selectedFileID = node.id
-                    }
             }
+            .tag(node.id)
         } else {
-            FileRowView(viewModel: siteViewModel.rowViewModel(for: node))
+            FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
                 .tag(node.id)
                 .contextMenu {
                     FileContextMenu(node: node, siteViewModel: siteViewModel)
@@ -106,6 +84,8 @@ struct FileTreeRow: View {
 // MARK: - File Row View Model
 
 /// Cached view model for file row to avoid repeated computations
+/// Note: contentStatus is NOT cached here - it's read directly from FileNode
+/// to ensure async-loaded status metadata triggers re-renders
 struct FileRowViewModel: Equatable {
     let id: UUID
     let name: String
@@ -113,7 +93,6 @@ struct FileRowViewModel: Equatable {
     let iconColor: Color
     let accessibilityLabel: String
     let fileStatus: FileStatus
-    let contentStatus: ContentStatus?
     let isPageBundle: Bool
     let isConfigFile: Bool
     let isDirectory: Bool
@@ -130,7 +109,7 @@ struct FileRowViewModel: Equatable {
         // Compute icon (once)
         if node.isPageBundle {
             self.iconName = "folder.fill.badge.gearshape"
-            self.iconColor = .purple
+            self.iconColor = Color.FileIcon.pageBundle
             self.accessibilityLabel = "Page bundle"
         } else if node.isDirectory {
             if let role = node.hugoRole {
@@ -139,12 +118,12 @@ struct FileRowViewModel: Equatable {
                 self.accessibilityLabel = "\(role.displayName) folder"
             } else {
                 self.iconName = "folder"
-                self.iconColor = .blue
+                self.iconColor = Color.FileIcon.folder
                 self.accessibilityLabel = "Folder"
             }
         } else if node.isConfigFile {
             self.iconName = "gearshape.fill"
-            self.iconColor = .orange
+            self.iconColor = Color.FileIcon.config
             self.accessibilityLabel = "Hugo config file"
         } else {
             self.iconName = node.fileType.systemImage
@@ -165,7 +144,6 @@ struct FileRowViewModel: Equatable {
             self.fileStatus = .none
         }
 
-        self.contentStatus = node.contentStatus
         self.fileTypeDisplayName = (!node.isDirectory && !node.isMarkdownFile && !node.isConfigFile)
             ? node.fileType.displayName : nil
     }
@@ -175,6 +153,8 @@ struct FileRowViewModel: Equatable {
 
 struct FileRowView: View {
     let viewModel: FileRowViewModel
+    /// The node is passed separately to observe contentStatus changes (loaded async)
+    let node: FileNode
 
     var body: some View {
         HStack(spacing: 8) {
@@ -196,7 +176,7 @@ struct FileRowView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(.purple)
+                            .background(Color.Badge.pageBundle)
                             .cornerRadius(3)
                     }
 
@@ -207,14 +187,21 @@ struct FileRowView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(.orange)
+                            .background(Color.Badge.config)
                             .cornerRadius(3)
                     }
                 }
 
-                // Content status badge (Draft/Scheduled/Expired)
-                if let status = viewModel.contentStatus, status != .published {
-                    ContentStatusBadge(status: status)
+                // Content status badges (Draft/Scheduled/Expired)
+                // Read directly from node to observe async changes
+                // A file can have multiple statuses (e.g., draft AND scheduled)
+                let statuses = node.contentStatuses
+                if !statuses.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(statuses, id: \.self) { status in
+                            ContentStatusBadge(status: status)
+                        }
+                    }
                 }
 
                 // File type indicator for non-markdown files
@@ -256,7 +243,7 @@ struct FileStatusIndicator: View {
 
             case .modified:
                 Circle()
-                    .fill(.orange)
+                    .fill(Color.Status.modified)
                     .frame(width: 8, height: 8)
                     .accessibilityLabel("Unsaved changes")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
@@ -264,7 +251,7 @@ struct FileStatusIndicator: View {
             case .saved:
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.Status.saved)
                     .accessibilityLabel("Recently saved")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
             }
@@ -288,6 +275,7 @@ struct ContentStatusBadge: View {
             .padding(.vertical, 2)
             .background(status.badgeColor)
             .cornerRadius(3)
+            .help(tooltipText)
     }
 
     private var foregroundColor: Color {
@@ -296,6 +284,19 @@ struct ContentStatusBadge: View {
             return .white
         case .published:
             return .clear
+        }
+    }
+
+    private var tooltipText: String {
+        switch status {
+        case .draft:
+            return "Draft: This content has draft: true and won't be published"
+        case .scheduled:
+            return "Scheduled: This content has a future publish date"
+        case .expired:
+            return "Expired: This content has passed its expiry date"
+        case .published:
+            return "Published: This content is live"
         }
     }
 }

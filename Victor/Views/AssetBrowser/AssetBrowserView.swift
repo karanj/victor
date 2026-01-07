@@ -124,7 +124,6 @@ struct AssetBrowserView: View {
 
                 // Search
                 TextField("Search...", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
                     .frame(width: 150)
             }
         }
@@ -201,7 +200,7 @@ struct AssetBrowserView: View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 16) {
                 ForEach(filteredAssets) { asset in
-                    AssetGridItem(asset: asset, isSelected: asset == selectedAsset)
+                    AssetGridItem(asset: asset, isSelected: asset == selectedAsset, onInsert: onInsert)
                         .onTapGesture {
                             selectedAsset = asset
                         }
@@ -222,7 +221,7 @@ struct AssetBrowserView: View {
 
     private var assetListView: some View {
         List(filteredAssets, selection: $selectedAsset) { asset in
-            AssetListRow(asset: asset)
+            AssetListRow(asset: asset, onInsert: onInsert)
                 .onDrag {
                     NSItemProvider(object: asset.markdownSyntax as NSString)
                 }
@@ -260,6 +259,9 @@ struct AssetBrowserView: View {
 struct AssetGridItem: View {
     let asset: Asset
     let isSelected: Bool
+    let onInsert: ((String) -> Void)?
+
+    @State private var isHovered = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -277,7 +279,7 @@ struct AssetGridItem: View {
             }
             .frame(width: 100, height: 80)
             .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(8)
+            .cornerRadius(4)
 
             // Filename
             Text(asset.url.lastPathComponent)
@@ -296,12 +298,27 @@ struct AssetGridItem: View {
                 .cornerRadius(4)
         }
         .padding(8)
-        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-        .cornerRadius(8)
+        .background(backgroundColor)
+        .cornerRadius(4)
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 4)
                 .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
         )
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .contextMenu {
+            AssetContextMenu(asset: asset, onInsert: onInsert)
+        }
+    }
+
+    private var backgroundColor: Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.2)
+        } else if isHovered {
+            return Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+        }
+        return Color.clear
     }
 }
 
@@ -309,6 +326,9 @@ struct AssetGridItem: View {
 
 struct AssetListRow: View {
     let asset: Asset
+    let onInsert: ((String) -> Void)?
+
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -359,5 +379,81 @@ struct AssetListRow: View {
                 .cornerRadius(4)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+        .background(isHovered ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : Color.clear)
+        .cornerRadius(4)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .contextMenu {
+            AssetContextMenu(asset: asset, onInsert: onInsert)
+        }
+    }
+}
+
+// MARK: - Context Menu
+
+struct AssetContextMenu: View {
+    let asset: Asset
+    let onInsert: ((String) -> Void)?
+
+    var body: some View {
+        // Insert options (only if callback is provided)
+        if let onInsert = onInsert {
+            if asset.fileType == .image {
+                Button {
+                    onInsert(asset.markdownSyntax)
+                } label: {
+                    Label("Insert Markdown Image", systemImage: "photo")
+                }
+
+                Button {
+                    onInsert(asset.figureShortcode)
+                } label: {
+                    Label("Insert Figure Shortcode", systemImage: "text.below.photo")
+                }
+
+                Divider()
+            }
+        }
+
+        // Copy options
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(asset.relativePath, forType: .string)
+        } label: {
+            Label("Copy Relative Path", systemImage: "doc.on.clipboard")
+        }
+
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(asset.url.path, forType: .string)
+        } label: {
+            Label("Copy Full Path", systemImage: "doc.on.clipboard.fill")
+        }
+
+        if asset.fileType == .image {
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(asset.markdownSyntax, forType: .string)
+            } label: {
+                Label("Copy Markdown Syntax", systemImage: "curlybraces")
+            }
+        }
+
+        Divider()
+
+        // File operations
+        Button {
+            NSWorkspace.shared.selectFile(asset.url.path, inFileViewerRootedAtPath: asset.url.deletingLastPathComponent().path)
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Button {
+            NSWorkspace.shared.open(asset.url)
+        } label: {
+            Label("Open in Default App", systemImage: "arrow.up.forward.app")
+        }
     }
 }

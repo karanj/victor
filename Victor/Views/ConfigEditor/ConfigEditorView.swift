@@ -201,7 +201,8 @@ struct ConfigEssentialsTab: View {
             Section("Site Identity") {
                 LabeledContent("Base URL") {
                     TextField("",text: $config.baseURL, prompt: Text("https://example.com/"))
-                        .textFieldStyle(.roundedBorder)
+                        .padding(6)
+                        .background(Color(nsColor: .textBackgroundColor))
                         .disableAutocorrection(true)
                         .onChange(of: config.baseURL) { _, _ in
                             config.hasUnsavedChanges = true
@@ -211,7 +212,8 @@ struct ConfigEssentialsTab: View {
 
                 LabeledContent("Title") {
                     TextField("", text: $config.title, prompt: Text("My Site"))
-                        .textFieldStyle(.roundedBorder)
+                        .padding(6)
+                        .background(Color(nsColor: .textBackgroundColor))
                         .onChange(of: config.title) { _, _ in
                             config.hasUnsavedChanges = true
                         }
@@ -220,7 +222,8 @@ struct ConfigEssentialsTab: View {
 
                 LabeledContent("Language Code") {
                     TextField("", text: $config.languageCode,prompt: Text("en-us"))
-                        .textFieldStyle(.roundedBorder)
+                        .padding(6)
+                        .background(Color(nsColor: .textBackgroundColor))
                         .onChange(of: config.languageCode) { _, _ in
                             config.hasUnsavedChanges = true
                         }
@@ -234,7 +237,8 @@ struct ConfigEssentialsTab: View {
                         get: { config.theme ?? "" },
                         set: { config.theme = $0.isEmpty ? nil : $0 }
                     ),prompt: Text("theme-name"))
-                    .textFieldStyle(.roundedBorder)
+                    .padding(6)
+                    .background(Color(nsColor: .textBackgroundColor))
                     .onChange(of: config.theme) { _, _ in
                         config.hasUnsavedChanges = true
                     }
@@ -248,7 +252,8 @@ struct ConfigEssentialsTab: View {
                         get: { config.copyright ?? "" },
                         set: { config.copyright = $0.isEmpty ? nil : $0 }
                     ), prompt: Text("© 2025 Your Name"))
-                    .textFieldStyle(.roundedBorder)
+                    .padding(6)
+                    .background(Color(nsColor: .textBackgroundColor))
                     .onChange(of: config.copyright) { _, _ in
                         config.hasUnsavedChanges = true
                     }
@@ -269,18 +274,21 @@ struct ConfigContentTab: View {
         Form {
             Section("Build Options") {
                 Toggle("Build Drafts", isOn: $config.buildDrafts)
+                    .toggleStyle(.checkbox)
                     .help("Include draft content in builds")
                     .onChange(of: config.buildDrafts) { _, _ in
                         config.hasUnsavedChanges = true
                     }
 
                 Toggle("Build Future", isOn: $config.buildFuture)
+                    .toggleStyle(.checkbox)
                     .help("Include future-dated content in builds")
                     .onChange(of: config.buildFuture) { _, _ in
                         config.hasUnsavedChanges = true
                     }
 
                 Toggle("Build Expired", isOn: $config.buildExpired)
+                    .toggleStyle(.checkbox)
                     .help("Include expired content in builds")
                     .onChange(of: config.buildExpired) { _, _ in
                         config.hasUnsavedChanges = true
@@ -289,6 +297,7 @@ struct ConfigContentTab: View {
 
             Section("Output") {
                 Toggle("Enable robots.txt", isOn: $config.enableRobotsTXT)
+                    .toggleStyle(.checkbox)
                     .help("Generate robots.txt file")
                     .onChange(of: config.enableRobotsTXT) { _, _ in
                         config.hasUnsavedChanges = true
@@ -341,14 +350,16 @@ struct ConfigTaxonomiesTab: View {
 
                 HStack {
                     TextField("singular", text: $newSingular)
-                        .textFieldStyle(.roundedBorder)
                         .frame(width: 120)
+                        .padding(6)
+                        .background(Color(nsColor: .textBackgroundColor))
                     Image(systemName: "arrow.right")
                         .foregroundStyle(.secondary)
                         .font(.caption)
                     TextField("plural", text: $newPlural)
-                        .textFieldStyle(.roundedBorder)
                         .frame(width: 120)
+                        .padding(6)
+                        .background(Color(nsColor: .textBackgroundColor))
                     Button("Add") {
                         if !newSingular.isEmpty && !newPlural.isEmpty {
                             config.taxonomies[newSingular] = newPlural
@@ -381,8 +392,9 @@ struct ConfigAdvancedTab: View {
             Section("Localization") {
                 LabeledContent("Default Language") {
                     TextField("", text: $config.defaultContentLanguage,prompt: Text("en"))
-                        .textFieldStyle(.roundedBorder)
                         .frame(width: 100)
+                        .padding(6)
+                        .background(Color(nsColor: .textBackgroundColor))
                         .onChange(of: config.defaultContentLanguage) { _, _ in
                             config.hasUnsavedChanges = true
                         }
@@ -393,7 +405,8 @@ struct ConfigAdvancedTab: View {
                         get: { config.timeZone ?? "" },
                         set: { config.timeZone = $0.isEmpty ? nil : $0 }
                     ),prompt: Text("America/New_York"))
-                    .textFieldStyle(.roundedBorder)
+                    .padding(6)
+                    .background(Color(nsColor: .textBackgroundColor))
                     .onChange(of: config.timeZone) { _, _ in
                         config.hasUnsavedChanges = true
                     }

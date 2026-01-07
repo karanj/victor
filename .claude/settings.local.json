@@ -24,7 +24,10 @@
       "Bash(bd update:*)",
       "Skill(beads:ready)",
       "Bash(bd ready:*)",
-      "Bash(bd stats:*)"
+      "Bash(bd stats:*)",
+      "Bash(bd show:*)",
+      "Bash(gh issue list:*)",
+      "Bash(bd close:*)"
     ]
   }
 }

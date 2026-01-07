@@ -117,7 +117,6 @@ struct CustomFieldEditor: View {
 
             HStack(spacing: 8) {
                 TextField("Key", text: $newFieldKey)
-                    .textFieldStyle(.roundedBorder)
                     .frame(width: 100)
 
                 Picker("", selection: $newFieldType) {
@@ -129,7 +128,6 @@ struct CustomFieldEditor: View {
                 .frame(width: 80)
 
                 TextField(valuePlaceholder, text: $newFieldValue)
-                    .textFieldStyle(.roundedBorder)
             }
 
             HStack {

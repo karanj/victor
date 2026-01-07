@@ -49,9 +49,13 @@ struct EditorPanelView: View {
                 showSavedIndicator: viewModel.showSavedIndicator,
                 hasUnsavedChanges: viewModel.hasUnsavedChanges,
                 reduceMotion: reduceMotion,
+                contentPaths: siteViewModel.contentPaths,
                 onSave: { Task { await viewModel.save() } },
                 onFormat: { format in
                     editorCoordinator?.applyFormat(format)
+                },
+                onInsertShortcode: { shortcodeText in
+                    editorCoordinator?.insertText(shortcodeText)
                 }
             )
 
@@ -104,7 +108,6 @@ struct EditorPanelView: View {
             viewModel.cleanup()
         }
         .navigationTitle(viewModel.navigationTitle)
-        .navigationSubtitle(viewModel.navigationSubtitle)
         // Provide formatting function to focused value system for keyboard shortcuts
         .focusedValue(\.editorFormatting) { format in
             editorCoordinator?.applyFormat(format)
@@ -156,11 +159,6 @@ struct EditorPanelView: View {
         } message: {
             Text("This file was modified by another application. Auto-save has been cancelled. You can reload the file to see external changes, or keep editing to manually save your version.")
         }
-        .sheet(isPresented: $showShortcodePicker) {
-            ShortcodePickerView(contentPaths: siteViewModel.contentPaths) { shortcodeText in
-                editorCoordinator?.insertText(shortcodeText)
-            }
-        }
     }
 }
 
@@ -173,8 +171,10 @@ struct EditorToolbar: View {
     let showSavedIndicator: Bool
     let hasUnsavedChanges: Bool
     let reduceMotion: Bool
+    let contentPaths: [ContentPathSuggestion]
     let onSave: () -> Void
     let onFormat: (MarkdownFormat) -> Void
+    let onInsertShortcode: (String) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -253,8 +253,16 @@ struct EditorToolbar: View {
                 ToolbarButton(icon: "photo", label: "Image", help: "Insert Image (⌘⇧I)") {
                     onFormat(.image)
                 }
-                ToolbarButton(icon: "curlybraces", label: "Shortcode", help: "Insert Shortcode (⌘⇧K)") {
-                    showShortcodePicker = true
+                Button(action: { showShortcodePicker = true }) {
+                    Label("Shortcode", systemImage: "curlybraces")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .help("Insert Shortcode (⌘⇧K)")
+                .popover(isPresented: $showShortcodePicker) {
+                    ShortcodePickerView(contentPaths: contentPaths) { shortcodeText in
+                        onInsertShortcode(shortcodeText)
+                    }
                 }
             }
         }

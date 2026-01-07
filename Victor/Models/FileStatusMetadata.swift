@@ -17,27 +17,34 @@ struct FileStatusMetadata: Equatable {
     /// The expiry date from frontmatter
     let expiryDate: Date?
 
-    /// Computed status based on current date
+    /// Computed status based on current date (returns single status for backwards compatibility)
     var status: ContentStatus {
-        let now = Date()
+        // Return first non-published status, or published if none
+        return statuses.first ?? .published
+    }
 
-        // Check expired first (takes precedence)
-        if let expiry = expiryDate, expiry < now {
-            return .expired
+    /// All applicable statuses (a post can be both draft AND scheduled, for example)
+    var statuses: [ContentStatus] {
+        let now = Date()
+        var result: [ContentStatus] = []
+
+        // Check draft
+        if isDraft {
+            result.append(.draft)
         }
 
         // Check future-dated (publishDate or date in the future)
         let effectivePublishDate = publishDate ?? date
         if let pubDate = effectivePublishDate, pubDate > now {
-            return .scheduled
+            result.append(.scheduled)
         }
 
-        // Check draft
-        if isDraft {
-            return .draft
+        // Check expired
+        if let expiry = expiryDate, expiry < now {
+            result.append(.expired)
         }
 
-        return .published
+        return result
     }
 
     /// Initialize from a Frontmatter object (for when full content is loaded)
@@ -76,9 +83,9 @@ enum ContentStatus: Equatable {
     var badgeColor: Color {
         switch self {
         case .published: return .clear
-        case .draft: return .orange
-        case .scheduled: return .blue
-        case .expired: return .gray
+        case .draft: return Color.Badge.draft
+        case .scheduled: return Color.Badge.scheduled
+        case .expired: return Color.Badge.expired
         }
     }
 }

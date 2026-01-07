@@ -85,7 +85,6 @@ struct MenusTab: View {
             // Custom menu name
             HStack {
                 TextField("Custom menu name", text: $newMenuName)
-                    .textFieldStyle(.roundedBorder)
                     .onSubmit {
                         if !newMenuName.isEmpty {
                             addMenu(name: newMenuName)

@@ -20,7 +20,6 @@ struct ContentPathAutocompleteField: View {
             // Text field with validation indicator
             HStack(spacing: 8) {
                 TextField(parameter.placeholder, text: $value)
-                    .textFieldStyle(.roundedBorder)
                     .focused($isFocused)
                     .onChange(of: value) { _, newValue in
                         // Dispatch async to avoid layout recursion

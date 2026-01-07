@@ -126,7 +126,6 @@ struct TagInputView: View {
             // Input for new tags
             HStack {
                 TextField(placeholder, text: $newTag)
-                    .textFieldStyle(.roundedBorder)
                     .focused($isFocused)
                     .onSubmit {
                         addTag()

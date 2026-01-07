@@ -112,6 +112,7 @@ struct SEOTab: View {
                         frontmatter.sitemap?.disable = $0
                     }
                 ))
+                .toggleStyle(.checkbox)
             }
         }
     }

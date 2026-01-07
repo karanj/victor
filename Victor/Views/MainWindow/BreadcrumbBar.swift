@@ -23,7 +23,12 @@ struct BreadcrumbBar: View {
                 BreadcrumbSegment(
                     component: component,
                     isLast: index == pathComponents.count - 1,
-                    onNavigate: { navigateToComponent(component) }
+                    onNavigate: { navigateToComponent(component) },
+                    onNewFile: component.isDirectory && component.node != nil ? {
+                        Task {
+                            await siteViewModel.createMarkdownFile(in: component.node!)
+                        }
+                    } : nil
                 )
             }
 
@@ -152,6 +157,7 @@ struct BreadcrumbSegment: View {
     let component: PathComponent
     let isLast: Bool
     let onNavigate: () -> Void
+    let onNewFile: (() -> Void)?
 
     @State private var isHovered = false
 
@@ -175,6 +181,9 @@ struct BreadcrumbSegment: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .contextMenu {
+            BreadcrumbContextMenu(component: component, onNewFile: onNewFile)
+        }
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(isLast ? "" : "Click to navigate to this folder")
     }
@@ -192,6 +201,47 @@ struct BreadcrumbSegment: View {
             return "Folder: \(component.name)"
         } else {
             return "File: \(component.name)"
+        }
+    }
+}
+
+// MARK: - Breadcrumb Context Menu
+
+struct BreadcrumbContextMenu: View {
+    let component: PathComponent
+    let onNewFile: (() -> Void)?
+
+    var body: some View {
+        // Copy path
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(component.url.path, forType: .string)
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.clipboard")
+        }
+
+        Divider()
+
+        // Reveal in Finder
+        Button {
+            if component.isDirectory {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: component.url.path)
+            } else {
+                NSWorkspace.shared.selectFile(component.url.path, inFileViewerRootedAtPath: component.url.deletingLastPathComponent().path)
+            }
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        // New file option (only for directories)
+        if component.isDirectory, let onNewFile = onNewFile {
+            Divider()
+
+            Button {
+                onNewFile()
+            } label: {
+                Label("New Markdown File Here", systemImage: "doc.badge.plus")
+            }
         }
     }
 }

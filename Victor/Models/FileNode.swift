@@ -41,7 +41,7 @@ class FileNode: Identifiable, Hashable {
     /// This is separate from contentFile to allow status display without full file loading
     var statusMetadata: FileStatusMetadata?
 
-    /// Computed status for display in sidebar
+    /// Computed status for display in sidebar (single status for backwards compatibility)
     /// Prefers full contentFile data if loaded, otherwise uses lightweight statusMetadata
     var contentStatus: ContentStatus? {
         // If full contentFile is loaded, derive from it (more accurate)
@@ -50,6 +50,17 @@ class FileNode: Identifiable, Hashable {
         }
         // Otherwise use lightweight metadata
         return statusMetadata?.status
+    }
+
+    /// All applicable statuses for display in sidebar (e.g., draft AND scheduled)
+    /// Prefers full contentFile data if loaded, otherwise uses lightweight statusMetadata
+    var contentStatuses: [ContentStatus] {
+        // If full contentFile is loaded, derive from it (more accurate)
+        if let contentFile = contentFile {
+            return FileStatusMetadata(from: contentFile.frontmatter).statuses
+        }
+        // Otherwise use lightweight metadata
+        return statusMetadata?.statuses ?? []
     }
 
     /// Display name

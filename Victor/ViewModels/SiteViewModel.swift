@@ -406,7 +406,14 @@ class SiteViewModel {
 
     /// Clear recent sites list
     func clearRecentSites() {
-        UserDefaults.standard.removeObject(forKey: "recentSitePaths")
+        UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
+    }
+
+    /// Remove a single site from the recent sites list
+    func removeRecentSite(_ path: String) {
+        var paths = recentSitePaths
+        paths.removeAll { $0 == path }
+        UserDefaults.standard.set(paths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
     }
 
     /// Load previously saved site

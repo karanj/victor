@@ -208,7 +208,6 @@ private struct ParameterField: View {
 
                 case .string, .int:
                     TextField(parameter.placeholder, text: $value)
-                        .textFieldStyle(.roundedBorder)
 
                 case .bool:
                     Toggle(isOn: boolBinding) {
@@ -216,7 +215,7 @@ private struct ParameterField: View {
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
-                    .toggleStyle(.switch)
+                    .toggleStyle(.checkbox)
 
                 case .enumeration(let options):
                     Picker("", selection: $value) {

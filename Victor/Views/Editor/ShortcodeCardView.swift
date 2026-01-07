@@ -27,8 +27,8 @@ struct ShortcodeCardView: View {
                             .fontWeight(.medium)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.2))
-                            .foregroundStyle(.orange)
+                            .background(Color.Status.warning.opacity(0.2))
+                            .foregroundStyle(Color.Status.warning)
                             .clipShape(Capsule())
                     }
 
@@ -38,8 +38,8 @@ struct ShortcodeCardView: View {
                             .fontWeight(.medium)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.2))
-                            .foregroundStyle(.blue)
+                            .background(Color.Status.info.opacity(0.2))
+                            .foregroundStyle(Color.Status.info)
                             .clipShape(Capsule())
                     }
                 }

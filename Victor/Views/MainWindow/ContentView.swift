@@ -51,8 +51,7 @@ struct ContentView: View {
                     }
 
                     // Content based on selected layout mode
-                    if let selectedNode = siteViewModel.selectedNode,
-                       (!selectedNode.isDirectory || selectedNode.isAssetDirectory) {
+                    if let selectedNode = siteViewModel.selectedNode {
                         layoutContent(for: selectedNode)
                             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.layoutMode)
                     } else {

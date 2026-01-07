@@ -57,10 +57,6 @@ class EditorViewModel {
         contentFile.frontmatter?.title ?? "No title"
     }
 
-    var navigationSubtitle: String {
-        hasUnsavedChanges ? "\(contentFile.fileName) • Edited" : contentFile.fileName
-    }
-
     /// Word count for the current document
     var wordCount: Int {
         let words = editableContent

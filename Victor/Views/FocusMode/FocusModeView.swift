@@ -14,7 +14,6 @@ struct FocusModeView: View {
         ZStack {
             // Dimmed background
             Color(nsColor: .windowBackgroundColor)
-                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Top bar with file name and exit button (appears on hover)

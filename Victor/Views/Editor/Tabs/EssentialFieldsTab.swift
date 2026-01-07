@@ -12,7 +12,6 @@ struct EssentialFieldsTab: View {
                     get: { frontmatter.title ?? "" },
                     set: { frontmatter.title = $0.isEmpty ? nil : $0 }
                 ))
-                .textFieldStyle(.roundedBorder)
             }
 
             // Date
@@ -28,6 +27,7 @@ struct EssentialFieldsTab: View {
                     get: { frontmatter.isDraft ?? false },
                     set: { frontmatter.isDraft = $0 }
                 ))
+                .toggleStyle(.checkbox)
             }
 
             // Description with character count

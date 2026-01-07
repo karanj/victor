@@ -13,7 +13,6 @@ struct MetadataSection: View {
                     get: { frontmatter.title ?? "" },
                     set: { frontmatter.title = $0.isEmpty ? nil : $0 }
                 ))
-                .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
             }
 
@@ -156,7 +155,6 @@ struct InspectorTagInput: View {
             // Add new tag
             HStack(spacing: 4) {
                 TextField("Add...", text: $newTag)
-                    .textFieldStyle(.roundedBorder)
                     .controlSize(.small)
                     .onSubmit {
                         addTag()

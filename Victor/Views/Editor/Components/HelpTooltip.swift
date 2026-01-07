@@ -122,8 +122,7 @@ struct NumberField: View {
                         get: { value ?? 0 },
                         set: { value = $0 }
                     ), format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 80)
+                        .frame(width: 80)
 
                     Stepper("", value: Binding(
                         get: { value ?? 0 },
@@ -174,7 +173,6 @@ struct TextFieldWithCount: View {
                     get: { text ?? "" },
                     set: { text = $0.isEmpty ? nil : $0 }
                 ))
-                .textFieldStyle(.roundedBorder)
 
                 if idealLength != nil || maxLength != nil {
                     HStack {
@@ -286,7 +284,6 @@ struct TextEditorWithCount: View {
     VStack(spacing: 16) {
         FormFieldWithHelp(label: "Title", help: "The main title of your page") {
             TextField("Enter title", text: .constant("My Blog Post"))
-                .textFieldStyle(.roundedBorder)
         }
 
         OptionalDateField(

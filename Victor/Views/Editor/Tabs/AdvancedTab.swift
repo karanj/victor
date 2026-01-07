@@ -113,6 +113,7 @@ struct AdvancedTab: View {
                         frontmatter.build?.publishResources = $0
                     }
                 ))
+                .toggleStyle(.checkbox)
             }
         }
     }
@@ -160,6 +161,7 @@ struct AdvancedTab: View {
                     get: { frontmatter.headless ?? false },
                     set: { frontmatter.headless = $0 ? $0 : nil }
                 ))
+                .toggleStyle(.checkbox)
             }
 
             // CJK Language
@@ -168,6 +170,7 @@ struct AdvancedTab: View {
                     get: { frontmatter.isCJKLanguage ?? false },
                     set: { frontmatter.isCJKLanguage = $0 ? $0 : nil }
                 ))
+                .toggleStyle(.checkbox)
             }
 
             // Translation Key

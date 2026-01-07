@@ -34,7 +34,6 @@ struct MenuEntryEditor: View {
                         get: { entry.name ?? "" },
                         set: { entry.name = $0.isEmpty ? nil : $0 }
                     ))
-                    .textFieldStyle(.roundedBorder)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -45,7 +44,6 @@ struct MenuEntryEditor: View {
                         get: { entry.weight ?? 0 },
                         set: { entry.weight = $0 == 0 ? nil : $0 }
                     ), format: .number)
-                    .textFieldStyle(.roundedBorder)
                     .frame(width: 60)
                 }
             }
@@ -59,7 +57,6 @@ struct MenuEntryEditor: View {
                         get: { entry.parent ?? "" },
                         set: { entry.parent = $0.isEmpty ? nil : $0 }
                     ))
-                    .textFieldStyle(.roundedBorder)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -70,7 +67,6 @@ struct MenuEntryEditor: View {
                         get: { entry.identifier ?? "" },
                         set: { entry.identifier = $0.isEmpty ? nil : $0 }
                     ))
-                    .textFieldStyle(.roundedBorder)
                 }
             }
 
@@ -86,8 +82,7 @@ struct MenuEntryEditor: View {
                                 get: { entry.pre ?? "" },
                                 set: { entry.pre = $0.isEmpty ? nil : $0 }
                             ))
-                            .textFieldStyle(.roundedBorder)
-                        }
+                                }
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Post HTML")
@@ -97,8 +92,7 @@ struct MenuEntryEditor: View {
                                 get: { entry.post ?? "" },
                                 set: { entry.post = $0.isEmpty ? nil : $0 }
                             ))
-                            .textFieldStyle(.roundedBorder)
-                        }
+                                }
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -109,8 +103,7 @@ struct MenuEntryEditor: View {
                             get: { entry.title ?? "" },
                             set: { entry.title = $0.isEmpty ? nil : $0 }
                         ))
-                        .textFieldStyle(.roundedBorder)
-                    }
+                        }
                 }
                 .padding(.top, 8)
             }
