@@ -23,10 +23,7 @@ struct FileListView: View {
                         FileTreeRow(node: child, siteViewModel: siteViewModel)
                     }
                 } label: {
-                    FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
-                        .contextMenu {
-                            FolderContextMenu(node: node, siteViewModel: siteViewModel)
-                        }
+                    FolderRowWithSheets(node: node, siteViewModel: siteViewModel)
                 }
                 .tag(node.id)
             } else {
@@ -64,10 +61,7 @@ struct FileTreeRow: View {
                     FileTreeRow(node: child, siteViewModel: siteViewModel)
                 }
             } label: {
-                FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
-                    .contextMenu {
-                        FolderContextMenu(node: node, siteViewModel: siteViewModel)
-                    }
+                FolderRowWithSheets(node: node, siteViewModel: siteViewModel)
             }
             .tag(node.id)
         } else {
@@ -303,16 +297,14 @@ struct ContentStatusBadge: View {
 
 // MARK: - Context Menus
 
-/// Context menu for folder nodes
+/// Context menu for folder nodes - returns menu items only
+/// Sheets are handled by FolderRowWithSheets wrapper
 struct FolderContextMenu: View {
     let node: FileNode
     let siteViewModel: SiteViewModel
-
-    @State private var isRenaming = false
-    @State private var newName = ""
-    @State private var showNewContentSheet = false
-    @State private var showNewDataFileSheet = false
-    @State private var showNewTranslationSheet = false
+    @Binding var showNewContentSheet: Bool
+    @Binding var showNewDataFileSheet: Bool
+    @Binding var showNewTranslationSheet: Bool
 
     /// Check if this folder is within content/ directory
     private var isInContentDirectory: Bool {
@@ -342,7 +334,7 @@ struct FolderContextMenu: View {
 
     var body: some View {
         // Content directory: New Content from Archetype
-        if isInContentDirectory, let siteURL = siteViewModel.site?.rootURL {
+        if isInContentDirectory, siteViewModel.site?.rootURL != nil {
             Button {
                 showNewContentSheet = true
             } label: {
@@ -409,12 +401,47 @@ struct FolderContextMenu: View {
         } label: {
             Label("Copy Path", systemImage: "doc.on.clipboard")
         }
+    }
+}
 
-        // Sheets for new file creation
-        .sheet(isPresented: $showNewContentSheet) {
-            if let siteURL = siteViewModel.site?.rootURL {
-                NewContentView(
-                    siteURL: siteURL,
+/// Wrapper view that handles folder row with context menu and sheets
+struct FolderRowWithSheets: View {
+    let node: FileNode
+    let siteViewModel: SiteViewModel
+
+    @State private var showNewContentSheet = false
+    @State private var showNewDataFileSheet = false
+    @State private var showNewTranslationSheet = false
+
+    var body: some View {
+        FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
+            .contextMenu {
+                FolderContextMenu(
+                    node: node,
+                    siteViewModel: siteViewModel,
+                    showNewContentSheet: $showNewContentSheet,
+                    showNewDataFileSheet: $showNewDataFileSheet,
+                    showNewTranslationSheet: $showNewTranslationSheet
+                )
+            }
+            .sheet(isPresented: $showNewContentSheet) {
+                if let siteURL = siteViewModel.site?.rootURL {
+                    NewContentView(
+                        siteURL: siteURL,
+                        targetDirectory: node.url,
+                        onCreated: { fileURL in
+                            Task {
+                                await siteViewModel.reloadSite()
+                                if let newNode = findNodeByURL(fileURL) {
+                                    siteViewModel.selectNode(newNode)
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+            .sheet(isPresented: $showNewDataFileSheet) {
+                NewDataFileView(
                     targetDirectory: node.url,
                     onCreated: { fileURL in
                         Task {
@@ -426,33 +453,19 @@ struct FolderContextMenu: View {
                     }
                 )
             }
-        }
-        .sheet(isPresented: $showNewDataFileSheet) {
-            NewDataFileView(
-                targetDirectory: node.url,
-                onCreated: { fileURL in
-                    Task {
-                        await siteViewModel.reloadSite()
-                        if let newNode = findNodeByURL(fileURL) {
-                            siteViewModel.selectNode(newNode)
+            .sheet(isPresented: $showNewTranslationSheet) {
+                NewTranslationFileView(
+                    targetDirectory: node.url,
+                    onCreated: { fileURL in
+                        Task {
+                            await siteViewModel.reloadSite()
+                            if let newNode = findNodeByURL(fileURL) {
+                                siteViewModel.selectNode(newNode)
+                            }
                         }
                     }
-                }
-            )
-        }
-        .sheet(isPresented: $showNewTranslationSheet) {
-            NewTranslationFileView(
-                targetDirectory: node.url,
-                onCreated: { fileURL in
-                    Task {
-                        await siteViewModel.reloadSite()
-                        if let newNode = findNodeByURL(fileURL) {
-                            siteViewModel.selectNode(newNode)
-                        }
-                    }
-                }
-            )
-        }
+                )
+            }
     }
 
     private func findNodeByURL(_ url: URL) -> FileNode? {
