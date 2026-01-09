@@ -76,6 +76,7 @@
 		E377D5F95770FB4C8F91C393 /* UnsupportedFilePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CA5AFA43CB94F384AF612A6 /* UnsupportedFilePanel.swift */; };
 		E3B5107BD7EFEFB06B8D9508 /* EditorStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70CEA56165BC5AE8129FC85 /* EditorStatusBar.swift */; };
 		E4C2149B5C19701E0A86D985 /* TOMLKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70DFCF636C30F4A8932AD0 /* TOMLKit */; };
+		E81AFDDFD1D71A5CC2BA765E /* DataFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075B5E6FDA9BACC7F43D546D /* DataFile.swift */; };
 		ED43D85DDC635D16CB2366E5 /* preview-styles.css in Resources */ = {isa = PBXBuildFile; fileRef = D03696993E969C4B2AEFF0AC /* preview-styles.css */; };
 		EDB40E79FEFDAFC7CC96ABAD /* Asset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5016D6DF893CC0A0982B13DE /* Asset.swift */; };
 		FA9870EBF3AEABAADAC7CAF7 /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83C6A730A22D17CDD281C5A4 /* AppConstants.swift */; };
@@ -97,6 +98,7 @@
 		044151EAFFD0111E4BB58878 /* CustomFieldEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFieldEditor.swift; sourceTree = "<group>"; };
 		062838065437851B5ABB7404 /* HelpTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpTooltip.swift; sourceTree = "<group>"; };
 		06554071BE570A431BEC465A /* Victor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Victor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		075B5E6FDA9BACC7F43D546D /* DataFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFile.swift; sourceTree = "<group>"; };
 		1267DA7632633B7AFFC1B175 /* InspectorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPanel.swift; sourceTree = "<group>"; };
 		145C91ED7E811E319BFA6906 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		1CA5AFA43CB94F384AF612A6 /* UnsupportedFilePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedFilePanel.swift; sourceTree = "<group>"; };
@@ -260,6 +262,7 @@
 				5016D6DF893CC0A0982B13DE /* Asset.swift */,
 				BB264C657F8176E886525790 /* ContentFile.swift */,
 				D348372BE172D6852B5ABCFD /* ContentPathSuggestion.swift */,
+				075B5E6FDA9BACC7F43D546D /* DataFile.swift */,
 				FA41D9A1277C904AD8ABD61B /* FileNode.swift */,
 				A3EC761DE9530FB84BB6756B /* FileStatusMetadata.swift */,
 				ABD4827B74BCFB4B98565639 /* FileType.swift */,
@@ -567,6 +570,7 @@
 				D556897406EB91F7498EE3D9 /* ContentPathSuggestion.swift in Sources */,
 				D9374EEF6D0183261A98DA57 /* ContentView.swift in Sources */,
 				01B90D1C125D875E5D0A551D /* CustomFieldEditor.swift in Sources */,
+				E81AFDDFD1D71A5CC2BA765E /* DataFile.swift in Sources */,
 				7DC75F62B0D44C3047A036C5 /* EditorPanelView.swift in Sources */,
 				E3B5107BD7EFEFB06B8D9508 /* EditorStatusBar.swift in Sources */,
 				191C191C9DAC62DC001530F3 /* EditorTextView.swift in Sources */,
