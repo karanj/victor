@@ -54,7 +54,7 @@ struct TextEditorPanel: View {
             // Unsaved indicator
             if viewModel.hasUnsavedChanges {
                 Circle()
-                    .fill(.orange)
+                    .fill(Color.Status.modified)
                     .frame(width: 8, height: 8)
                     .accessibilityLabel("Unsaved changes")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
@@ -63,8 +63,8 @@ struct TextEditorPanel: View {
             // Saved indicator
             if viewModel.showSavedIndicator {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.green)
+                    .font(.caption)
+                    .foregroundStyle(Color.Status.saved)
                     .accessibilityLabel("Saved")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
             }

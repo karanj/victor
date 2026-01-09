@@ -1,4 +1,54 @@
 import SwiftUI
+import AppKit
+
+// MARK: - App Delegate for Quit Confirmation
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Reference to check for unsaved changes
+    weak var siteViewModel: SiteViewModel?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Disable native window tabbing - app architecture is single-window
+        // Enabling tabs causes freeze due to shared SiteViewModel state conflicts
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Check if there are unsaved changes
+        guard let viewModel = siteViewModel, viewModel.hasUnsavedChanges else {
+            return .terminateNow
+        }
+
+        // Show confirmation dialog
+        let alert = NSAlert()
+        alert.messageText = "You have unsaved changes"
+        alert.informativeText = "Do you want to save your changes before quitting?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Save and Quit")
+        alert.addButton(withTitle: "Quit Without Saving")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+
+        switch response {
+        case .alertFirstButtonReturn:
+            // Save and quit
+            Task { @MainActor in
+                await viewModel.saveAllModifiedFiles()
+                NSApp.terminate(nil)
+            }
+            return .terminateCancel // Cancel for now, will terminate after save
+
+        case .alertSecondButtonReturn:
+            // Quit without saving
+            return .terminateNow
+
+        default:
+            // Cancel
+            return .terminateCancel
+        }
+    }
+}
 
 // MARK: - Focused Values for Editor Commands
 
@@ -24,6 +74,7 @@ extension FocusedValues {
 
 @main
 struct VictorApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var siteViewModel = SiteViewModel()
     @FocusedValue(\.editorFormatting) private var editorFormatting
     @FocusedValue(\.showShortcodePicker) private var showShortcodePicker
@@ -39,7 +90,12 @@ struct VictorApp: App {
         WindowGroup {
             ContentView(siteViewModel: siteViewModel)
                 .frame(minWidth: AppConstants.Window.minWidth, minHeight: AppConstants.Window.minHeight)
+                .onAppear {
+                    // Wire up app delegate to view model for quit confirmation
+                    appDelegate.siteViewModel = siteViewModel
+                }
         }
+        .defaultSize(width: AppConstants.Window.defaultWidth, height: AppConstants.Window.defaultHeight)
         .commands {
             // File menu commands
             CommandGroup(replacing: .newItem) {

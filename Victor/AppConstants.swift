@@ -70,6 +70,10 @@ enum AppConstants {
 
     /// Main window constants
     enum Window {
+        /// Default window width
+        static let defaultWidth: CGFloat = 1200
+        /// Default window height
+        static let defaultHeight: CGFloat = 800
         /// Minimum window width
         static let minWidth: CGFloat = 1000
         /// Minimum window height
@@ -120,5 +124,6 @@ enum AppConstants {
         static let autoSaveDelay = "autoSaveDelay"
         static let isInspectorVisible = "isInspectorVisible"
         static let recentSitePaths = "recentSitePaths"
+        static let lastSelectedFilePath = "lastSelectedFilePath"
     }
 }

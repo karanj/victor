@@ -166,12 +166,12 @@ struct BreadcrumbSegment: View {
             HStack(spacing: 4) {
                 // Icon
                 Image(systemName: iconName)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(isLast ? .primary : .secondary)
 
                 // Name
                 Text(component.name)
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(isLast ? .primary : .secondary)
                     .underline(isHovered && !isLast)
             }

@@ -121,8 +121,8 @@ struct ConfigEditorView: View {
             // Saved indicator
             if showSavedIndicator {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.green)
+                    .font(.caption)
+                    .foregroundStyle(Color.Status.saved)
                     .accessibilityLabel("Saved")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
             }

@@ -24,7 +24,7 @@ struct EditorStatusBar: View {
 
             Spacer()
         }
-        .font(.system(size: 11))
+        .font(.caption2)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
         .frame(height: 24)

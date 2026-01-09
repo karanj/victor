@@ -235,9 +235,9 @@ struct FolderItemGridCell: View {
 
     private var iconColor: Color {
         if node.isPageBundle {
-            return .purple
+            return Color.FileIcon.pageBundle
         } else if node.isDirectory {
-            return node.hugoRole?.accentColor ?? .blue
+            return node.hugoRole?.accentColor ?? Color.FileIcon.folder
         } else {
             return node.fileType.defaultColor
         }
@@ -269,7 +269,7 @@ struct FolderItemListRow: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(.purple)
+                            .background(Color.Badge.pageBundle)
                             .cornerRadius(3)
                     }
 
@@ -320,9 +320,9 @@ struct FolderItemListRow: View {
 
     private var iconColor: Color {
         if node.isPageBundle {
-            return .purple
+            return Color.FileIcon.pageBundle
         } else if node.isDirectory {
-            return node.hugoRole?.accentColor ?? .blue
+            return node.hugoRole?.accentColor ?? Color.FileIcon.folder
         } else {
             return node.fileType.defaultColor
         }

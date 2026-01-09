@@ -266,20 +266,35 @@ struct AssetGridItem: View {
     var body: some View {
         VStack(spacing: 8) {
             // Thumbnail or icon
-            Group {
-                if let thumbnail = asset.thumbnail {
-                    Image(nsImage: thumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    Image(systemName: asset.fileType.systemImage)
-                        .font(.system(size: 32))
-                        .foregroundStyle(asset.fileType.defaultColor)
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let thumbnail = asset.thumbnail {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        Image(systemName: asset.fileType.systemImage)
+                            .font(.system(size: 32))
+                            .foregroundStyle(asset.fileType.defaultColor)
+                    }
+                }
+                .frame(width: 100, height: 80)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(4)
+
+                // Drag hint indicator on hover
+                if isHovered {
+                    Image(systemName: "hand.draw")
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                        .padding(3)
+                        .background(Color.accentColor.opacity(0.8))
+                        .cornerRadius(4)
+                        .offset(x: 4, y: -4)
+                        .transition(.opacity.combined(with: .scale))
                 }
             }
-            .frame(width: 100, height: 80)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(4)
+            .animation(.easeInOut(duration: 0.15), value: isHovered)
 
             // Filename
             Text(asset.url.lastPathComponent)
@@ -302,11 +317,12 @@ struct AssetGridItem: View {
         .cornerRadius(4)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
         )
         .onHover { hovering in
             isHovered = hovering
         }
+        .help("Drag to insert into editor")
         .contextMenu {
             AssetContextMenu(asset: asset, onInsert: onInsert)
         }
@@ -333,18 +349,33 @@ struct AssetListRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Thumbnail or icon
-            Group {
-                if let thumbnail = asset.thumbnail {
-                    Image(nsImage: thumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    Image(systemName: asset.fileType.systemImage)
-                        .font(.title2)
-                        .foregroundStyle(asset.fileType.defaultColor)
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let thumbnail = asset.thumbnail {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        Image(systemName: asset.fileType.systemImage)
+                            .font(.title2)
+                            .foregroundStyle(asset.fileType.defaultColor)
+                    }
+                }
+                .frame(width: 40, height: 40)
+
+                // Drag hint indicator on hover
+                if isHovered {
+                    Image(systemName: "hand.draw")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.white)
+                        .padding(2)
+                        .background(Color.accentColor.opacity(0.8))
+                        .cornerRadius(3)
+                        .offset(x: 2, y: 2)
+                        .transition(.opacity.combined(with: .scale))
                 }
             }
-            .frame(width: 40, height: 40)
+            .animation(.easeInOut(duration: 0.15), value: isHovered)
 
             // Info
             VStack(alignment: .leading, spacing: 2) {
@@ -385,6 +416,7 @@ struct AssetListRow: View {
         .onHover { hovering in
             isHovered = hovering
         }
+        .help("Drag to insert into editor")
         .contextMenu {
             AssetContextMenu(asset: asset, onInsert: onInsert)
         }
