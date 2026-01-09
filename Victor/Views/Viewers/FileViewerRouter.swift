@@ -21,6 +21,12 @@ struct FileViewerRouter: View {
             } else if node.isConfigFile {
                 // Hugo config files get the GUI editor
                 configEditorContent
+            } else if node.isTranslationFile {
+                // Translation files in i18n/ directory get the translation editor
+                translationEditorContent
+            } else if node.isDataFile {
+                // Data files in data/ directory get the data editor
+                dataFileEditorContent
             } else {
                 switch node.fileType {
                 case .markdown:
@@ -114,5 +120,61 @@ struct FileViewerRouter: View {
             isAssetsDir: node.hugoRole == .assets,
             onInsert: nil  // Drag-drop is supported; clipboard copy is in detail panel
         )
+    }
+
+    /// Data file editor content - shows loading, editor, or fallback
+    @ViewBuilder
+    private var dataFileEditorContent: some View {
+        if siteViewModel.isLoadingDataFile {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading data file...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let dataFile = siteViewModel.currentDataFile, dataFile.url == node.url {
+            DataFileEditorView(dataFile: dataFile, onSave: {
+                await siteViewModel.saveDataFile()
+            })
+        } else {
+            // Data file not loaded yet - trigger load
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading data file...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task {
+                await siteViewModel.loadDataFile(from: node.url)
+            }
+        }
+    }
+
+    /// Translation file editor content - shows loading, editor, or fallback
+    @ViewBuilder
+    private var translationEditorContent: some View {
+        if siteViewModel.isLoadingDataFile {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading translation file...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let dataFile = siteViewModel.currentDataFile, dataFile.url == node.url {
+            TranslationEditorView(dataFile: dataFile, onSave: {
+                await siteViewModel.saveDataFile()
+            })
+        } else {
+            // Translation file not loaded yet - trigger load
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading translation file...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task {
+                await siteViewModel.loadDataFile(from: node.url)
+            }
+        }
     }
 }

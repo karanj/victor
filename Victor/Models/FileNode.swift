@@ -31,6 +31,48 @@ class FileNode: Identifiable, Hashable {
         isDirectory && (hugoRole == .staticFiles || hugoRole == .assets)
     }
 
+    /// Whether this is a data file (YAML/JSON/TOML in data/ directory)
+    var isDataFile: Bool {
+        guard !isDirectory else { return false }
+        // Check if file type is a data format
+        let isDataFormat = fileType == .yaml || fileType == .json || fileType == .toml
+        guard isDataFormat else { return false }
+        // Check if in data/ directory (walk up to find parent with data role)
+        return isInDataDirectory
+    }
+
+    /// Check if this node is within the data/ directory
+    private var isInDataDirectory: Bool {
+        var current: FileNode? = parent
+        while let node = current {
+            if node.hugoRole == .data {
+                return true
+            }
+            current = node.parent
+        }
+        return false
+    }
+
+    /// Whether this is a translation file (YAML/JSON/TOML in i18n/ directory)
+    var isTranslationFile: Bool {
+        guard !isDirectory else { return false }
+        let isDataFormat = fileType == .yaml || fileType == .json || fileType == .toml
+        guard isDataFormat else { return false }
+        return isInI18nDirectory
+    }
+
+    /// Check if this node is within the i18n/ directory
+    private var isInI18nDirectory: Bool {
+        var current: FileNode? = parent
+        while let node = current {
+            if node.hugoRole == .i18n {
+                return true
+            }
+            current = node.parent
+        }
+        return false
+    }
+
     /// Associated content file (only for .md files in content directory)
     var contentFile: ContentFile?
 

@@ -139,6 +139,12 @@ class SiteViewModel {
     /// Whether the Hugo config is currently loading
     var isLoadingConfig = false
 
+    /// Currently loaded data file (for data/ directory files)
+    var currentDataFile: DataFile?
+
+    /// Whether a data file is currently loading
+    var isLoadingDataFile = false
+
     /// Maximum number of ContentFiles to keep cached in memory
     /// Files beyond this limit will have their contentFile released
     private let maxCachedContentFiles = 20
@@ -358,6 +364,9 @@ class SiteViewModel {
             // Track this site in recent sites
             addRecentSite(url.path)
 
+            // Restore last selected file if it exists in this site
+            restoreLastSelectedFile()
+
             Logger.shared.info("Loaded Hugo site: \(site.displayName)")
             Logger.shared.info("Found \(nodes.count) markdown files")
 
@@ -414,6 +423,31 @@ class SiteViewModel {
         var paths = recentSitePaths
         paths.removeAll { $0 == path }
         UserDefaults.standard.set(paths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
+    }
+
+    /// Restore last selected file from UserDefaults
+    private func restoreLastSelectedFile() {
+        guard let lastPath = UserDefaults.standard.string(forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath) else {
+            return
+        }
+
+        let lastURL = URL(fileURLWithPath: lastPath)
+
+        // Search for the node with matching URL
+        if let node = findNode(url: lastURL) {
+            selectNode(node)
+            Logger.shared.info("Restored last selected file: \(node.name)")
+        }
+    }
+
+    /// Find a node by URL
+    private func findNode(url: URL) -> FileNode? {
+        for rootNode in fileNodes {
+            if let found = rootNode.findNode(url: url) {
+                return found
+            }
+        }
+        return nil
     }
 
     /// Load previously saved site
@@ -494,6 +528,13 @@ class SiteViewModel {
         // Only set selectedFileID if it's different to avoid triggering didSet again
         if selectedFileID != actualNode?.id {
             selectedFileID = actualNode?.id
+        }
+
+        // Persist selected file path for restoration on next launch
+        if let path = actualNode?.url.path {
+            UserDefaults.standard.set(path, forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath)
         }
 
         // Clear editing content to prevent stale data flash
@@ -616,6 +657,38 @@ class SiteViewModel {
             return false
         }
         return Date().timeIntervalSince(savedDate) < savedIndicatorDuration
+    }
+
+    /// Check if any files have unsaved changes
+    var hasUnsavedChanges: Bool {
+        !modifiedFileIDs.isEmpty
+    }
+
+    /// Save all files with unsaved changes
+    func saveAllModifiedFiles() async {
+        let modifiedIDs = modifiedFileIDs
+        for nodeID in modifiedIDs {
+            guard let node = findNode(id: nodeID) else { continue }
+
+            if node.isMarkdownFile, let contentFile = node.contentFile {
+                do {
+                    try await fileSystemService.saveContentFile(contentFile)
+                    clearFileModified(nodeID)
+                    Logger.shared.info("Saved: \(node.name)")
+                } catch {
+                    Logger.shared.error("Failed to save \(node.name)", error: error)
+                }
+            } else if let textFile = node.textFile {
+                do {
+                    try await fileSystemService.writeFile(to: textFile.url, content: textFile.content)
+                    textFile.markAsSaved()
+                    clearFileModified(nodeID)
+                    Logger.shared.info("Saved: \(node.name)")
+                } catch {
+                    Logger.shared.error("Failed to save \(node.name)", error: error)
+                }
+            }
+        }
     }
 
     // MARK: - Status Metadata Loading (Lazy)
@@ -805,6 +878,38 @@ class SiteViewModel {
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"
             Logger.shared.error("Error saving Hugo config", error: error)
+        }
+    }
+
+    // MARK: - Data File Management
+
+    /// Load a data file from URL (for files in data/ directory)
+    func loadDataFile(from url: URL) async {
+        isLoadingDataFile = true
+        do {
+            let dataFile = try await DataFileParser.shared.parseDataFile(at: url)
+            currentDataFile = dataFile
+            Logger.shared.info("Loaded data file: \(url.lastPathComponent)")
+        } catch {
+            errorMessage = "Failed to load data file: \(error.localizedDescription)"
+            Logger.shared.error("Error loading data file", error: error)
+        }
+        isLoadingDataFile = false
+    }
+
+    /// Save the current data file
+    func saveDataFile() async {
+        guard let dataFile = currentDataFile else {
+            errorMessage = "No data file to save"
+            return
+        }
+
+        do {
+            try await DataFileParser.shared.save(dataFile)
+            Logger.shared.info("Saved data file: \(dataFile.fileName)")
+        } catch {
+            errorMessage = "Failed to save data file: \(error.localizedDescription)"
+            Logger.shared.error("Error saving data file", error: error)
         }
     }
 
