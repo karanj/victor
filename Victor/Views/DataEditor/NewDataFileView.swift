@@ -110,15 +110,15 @@ struct NewDataFileView: View {
             return
         }
 
-        // Create empty data file with appropriate format
+        // Create data file with valid parseable content
         let content: String
         switch selectedFormat {
         case .yaml:
-            content = "# Data file\n"
+            content = "# Data file\n# Add your data below\nkey: value\n"
         case .json:
-            content = "{\n}\n"
+            content = "{\n  \"key\": \"value\"\n}\n"
         case .toml:
-            content = "# Data file\n"
+            content = "# Data file\n# Add your data below\nkey = \"value\"\n"
         }
 
         do {

@@ -145,6 +145,12 @@ class SiteViewModel {
     /// Whether a data file is currently loading
     var isLoadingDataFile = false
 
+    /// Error from last data file load attempt (to prevent infinite retry)
+    var dataFileLoadError: String?
+
+    /// URL of the last failed data file load (to prevent infinite retry)
+    var failedDataFileURL: URL?
+
     /// Maximum number of ContentFiles to keep cached in memory
     /// Files beyond this limit will have their contentFile released
     private let maxCachedContentFiles = 20
@@ -885,12 +891,18 @@ class SiteViewModel {
 
     /// Load a data file from URL (for files in data/ directory)
     func loadDataFile(from url: URL) async {
+        // Clear previous error state
+        dataFileLoadError = nil
+        failedDataFileURL = nil
         isLoadingDataFile = true
+
         do {
             let dataFile = try await DataFileParser.shared.parseDataFile(at: url)
             currentDataFile = dataFile
             Logger.shared.info("Loaded data file: \(url.lastPathComponent)")
         } catch {
+            dataFileLoadError = error.localizedDescription
+            failedDataFileURL = url
             errorMessage = "Failed to load data file: \(error.localizedDescription)"
             Logger.shared.error("Error loading data file", error: error)
         }

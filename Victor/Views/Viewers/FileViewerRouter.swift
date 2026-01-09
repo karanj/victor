@@ -136,6 +136,34 @@ struct FileViewerRouter: View {
             DataFileEditorView(dataFile: dataFile, onSave: {
                 await siteViewModel.saveDataFile()
             })
+        } else if let error = siteViewModel.dataFileLoadError, siteViewModel.failedDataFileURL == node.url {
+            // Show error state - don't retry
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text("Failed to load data file")
+                    .font(.headline)
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button("Retry") {
+                    Task {
+                        await siteViewModel.loadDataFile(from: node.url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top)
+
+                Button("Open in Default App") {
+                    NSWorkspace.shared.open(node.url)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             // Data file not loaded yet - trigger load
             VStack(spacing: 12) {
@@ -164,6 +192,34 @@ struct FileViewerRouter: View {
             TranslationEditorView(dataFile: dataFile, onSave: {
                 await siteViewModel.saveDataFile()
             })
+        } else if let error = siteViewModel.dataFileLoadError, siteViewModel.failedDataFileURL == node.url {
+            // Show error state - don't retry
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text("Failed to load translation file")
+                    .font(.headline)
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button("Retry") {
+                    Task {
+                        await siteViewModel.loadDataFile(from: node.url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top)
+
+                Button("Open in Default App") {
+                    NSWorkspace.shared.open(node.url)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             // Translation file not loaded yet - trigger load
             VStack(spacing: 12) {
