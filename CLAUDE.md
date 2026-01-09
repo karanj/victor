@@ -26,9 +26,9 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ## Current Status: Production Ready + Active Development
 
-**Last Updated**: 2026-01-05
+**Last Updated**: 2026-01-10
 **Build Status**: Clean build, no errors, no warnings
-**Codebase Size**: 60 Swift files, ~14,590 lines of code
+**Codebase Size**: 74 Swift files, ~18,610 lines of code
 
 ### Completed Phases
 
@@ -38,12 +38,24 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 | Phase 2: Multi-File Viewing | COMPLETE | Image viewer, text viewer, file router |
 | Phase 3: Text File Editing | COMPLETE | Edit YAML, TOML, JSON, HTML, CSS, JS, etc. |
 | Phase 4: Hugo Config GUI Editor | COMPLETE | Form/Raw views for hugo.toml/yaml/json |
-| Phase 5: Data & Archetypes | NOT STARTED | Manage data/ files and archetypes |
+| Phase 5: Data & Archetypes | COMPLETE | Data file editor, archetype manager, translation editor |
 | Phase 6: Asset Management | COMPLETE | Asset browser, drag-drop, detail panel |
 | Phase 7: Template Editing | NOT STARTED | layouts/ and themes/ editing |
 | Phase 8: Hugo Server Integration | NOT STARTED | Live preview via hugo server |
 
-### Recent Updates (2026-01-05)
+### Recent Updates (2026-01-10)
+
+**Phase 5: Data & Archetypes Management (NEW):**
+- Data file editor with Form/Raw toggle for YAML/JSON/TOML files in data/
+- Dynamic field editing supporting dictionaries, arrays, and nested structures
+- Archetype manager for loading and processing content templates
+- New Content dialog for creating content from archetypes with variable substitution
+- Translation editor for i18n/ files with key-value editing and plural form support
+- Context menus: "New Content from Archetype...", "New Data File...", "New Translation File..."
+- Comprehensive test coverage (45 new tests for DataFileParser and ArchetypeManager)
+- See `Docs/DATA-ARCHETYPES-GUIDE.md` for detailed usage
+
+### Previous Updates (2026-01-05)
 
 **Config Editor Improvements:**
 - Fixed two-way sync between Form and Raw editor views
@@ -60,18 +72,6 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 - Removed duplicate sidebar toggle buttons
 - Added View menu sidebar toggle (Ctrl+Cmd+S)
 - Conditional inspector button visibility for content files
-
-### Previous Updates (2025-12-28 - 2026-01-01)
-
-- Full-site Hugo CMS transformation (Phases 1-4, 6)
-- Asset browser with grid/list views and drag-drop insertion
-- Hugo config GUI editor with 4 tabs + raw YAML/TOML/JSON editing
-- Image viewer with zoom/pan controls
-- Text file editing for all code file types
-- Tab-based editor layout with Cmd+1/2/3 shortcuts
-- Word/character count status bar
-- Breadcrumb navigation bar
-- Inspector panel for metadata viewing
 
 ---
 
@@ -92,8 +92,9 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 | Markdown (.md) | Full editor + live preview + frontmatter |
 | Images (.png, .jpg, .gif, .svg, .webp) | Viewer with zoom/pan |
 | Config (hugo.toml/yaml/json) | GUI form editor + raw text |
+| Data files (data/*.yaml/json/toml) | GUI form editor with dynamic fields |
+| Translation files (i18n/*.yaml/json/toml) | Key-value editor with plural support |
 | Code files (HTML, CSS, JS, TS, Go, etc.) | Syntax-aware text editor |
-| Data files (YAML, TOML, JSON) | Text editor |
 | Other | Open in default app |
 
 ### Hugo Config Editor
@@ -182,7 +183,7 @@ View Update (automatic via @Observable)
 
 ## Code Structure
 
-### Models (12 files)
+### Models (14 files)
 | File | Purpose |
 |------|---------|
 | HugoSite.swift | Site representation with config detection |
@@ -190,6 +191,8 @@ View Update (automatic via @Observable)
 | HugoConfig.swift | Hugo config with form/raw sync |
 | ContentFile.swift | Markdown file with frontmatter + content |
 | TextFile.swift | Non-markdown text file |
+| DataFile.swift | Data file (YAML/JSON/TOML) in data/ directory |
+| Archetype.swift | Content template with variable substitution |
 | Asset.swift | Static/asset file representation |
 | FileNode.swift | Tree structure for navigation |
 | FileType.swift | 19 file type enum with icons/colors |
@@ -204,18 +207,20 @@ View Update (automatic via @Observable)
 | EditorViewModel.swift | Markdown editor business logic |
 | TextEditorViewModel.swift | Text file editor business logic |
 
-### Services (7 files)
+### Services (9 files)
 | File | Purpose |
 |------|---------|
 | FileSystemService.swift | File I/O, bookmarks, directory scanning |
 | AutoSaveService.swift | Debounced saves with conflict detection (actor) |
 | FrontmatterParser.swift | YAML/TOML/JSON frontmatter parsing |
 | HugoConfigParser.swift | Hugo config parsing and serialization |
+| DataFileParser.swift | Data file parsing and serialization |
+| ArchetypeManager.swift | Archetype loading and template processing |
 | AssetService.swift | Asset discovery and metadata |
 | MarkdownRenderer.swift | Markdown to HTML conversion |
 | Logger.swift | Logging utilities |
 
-### Views (~38 files)
+### Views (~48 files)
 ```
 MainWindow/
   ├── ContentView.swift          # Three-column NavigationSplitView
@@ -223,7 +228,7 @@ MainWindow/
   ├── FrontmatterBottomPanel.swift
   ├── PreviewPanel.swift
   ├── SidebarView.swift
-  ├── FileListView.swift
+  ├── FileListView.swift         # Includes FolderRowWithSheets for context menus
   ├── TabBarView.swift
   └── BreadcrumbBar.swift
 
@@ -238,6 +243,17 @@ Editor/
 
 ConfigEditor/
   └── ConfigEditorView.swift     # Hugo config GUI editor
+
+DataEditor/
+  ├── DataFileEditorView.swift   # Data file GUI editor with Form/Raw toggle
+  └── NewDataFileView.swift      # Create new data file dialog
+
+NewContent/
+  └── NewContentView.swift       # Create content from archetype dialog
+
+TranslationEditor/
+  ├── TranslationEditorView.swift   # i18n translation editor
+  └── NewTranslationFileView.swift  # Create new translation file dialog
 
 AssetBrowser/
   ├── AssetBrowserView.swift     # Grid/list asset browser
@@ -264,11 +280,14 @@ Preferences/
   └── PreferencesView.swift
 ```
 
-### Tests (2 files)
+### Tests (5 files)
 | File | Purpose |
 |------|---------|
 | FrontmatterParserTests.swift | Frontmatter round-trip tests |
 | HugoConfigParserTests.swift | Config parsing and serialization tests |
+| DataFileParserTests.swift | Data file parsing tests (22 tests) |
+| ArchetypeManagerTests.swift | Archetype processing tests (23 tests) |
+| FileStatusMetadataTests.swift | File status metadata tests |
 
 ---
 
