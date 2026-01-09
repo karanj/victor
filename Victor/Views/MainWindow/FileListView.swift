@@ -250,7 +250,7 @@ struct FileStatusIndicator: View {
 
             case .saved:
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(Color.Status.saved)
                     .accessibilityLabel("Recently saved")
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
@@ -310,15 +310,81 @@ struct FolderContextMenu: View {
 
     @State private var isRenaming = false
     @State private var newName = ""
+    @State private var showNewContentSheet = false
+    @State private var showNewDataFileSheet = false
+    @State private var showNewTranslationSheet = false
+
+    /// Check if this folder is within content/ directory
+    private var isInContentDirectory: Bool {
+        node.hugoRole == .content || isDescendantOf(role: .content)
+    }
+
+    /// Check if this folder is within data/ directory
+    private var isInDataDirectory: Bool {
+        node.hugoRole == .data || isDescendantOf(role: .data)
+    }
+
+    /// Check if this folder is within i18n/ directory
+    private var isInI18nDirectory: Bool {
+        node.hugoRole == .i18n || isDescendantOf(role: .i18n)
+    }
+
+    private func isDescendantOf(role: HugoRole) -> Bool {
+        var current: FileNode? = node.parent
+        while let parent = current {
+            if parent.hugoRole == role {
+                return true
+            }
+            current = parent.parent
+        }
+        return false
+    }
 
     var body: some View {
-        // Create operations
-        Button {
-            Task {
-                await siteViewModel.createMarkdownFile(in: node)
+        // Content directory: New Content from Archetype
+        if isInContentDirectory, let siteURL = siteViewModel.site?.rootURL {
+            Button {
+                showNewContentSheet = true
+            } label: {
+                Label("New Content from Archetype...", systemImage: "doc.badge.gearshape")
             }
-        } label: {
-            Label("New Markdown File", systemImage: "doc.badge.plus")
+
+            Button {
+                Task {
+                    await siteViewModel.createMarkdownFile(in: node)
+                }
+            } label: {
+                Label("New Markdown File", systemImage: "doc.badge.plus")
+            }
+        }
+
+        // Data directory: New Data File
+        if isInDataDirectory {
+            Button {
+                showNewDataFileSheet = true
+            } label: {
+                Label("New Data File...", systemImage: "doc.badge.gearshape")
+            }
+        }
+
+        // i18n directory: New Translation File
+        if isInI18nDirectory {
+            Button {
+                showNewTranslationSheet = true
+            } label: {
+                Label("New Translation File...", systemImage: "globe.badge.plus")
+            }
+        }
+
+        // Generic folder operations (always shown)
+        if !isInContentDirectory && !isInDataDirectory && !isInI18nDirectory {
+            Button {
+                Task {
+                    await siteViewModel.createMarkdownFile(in: node)
+                }
+            } label: {
+                Label("New Markdown File", systemImage: "doc.badge.plus")
+            }
         }
 
         Button {
@@ -343,6 +409,59 @@ struct FolderContextMenu: View {
         } label: {
             Label("Copy Path", systemImage: "doc.on.clipboard")
         }
+
+        // Sheets for new file creation
+        .sheet(isPresented: $showNewContentSheet) {
+            if let siteURL = siteViewModel.site?.rootURL {
+                NewContentView(
+                    siteURL: siteURL,
+                    targetDirectory: node.url,
+                    onCreated: { fileURL in
+                        Task {
+                            await siteViewModel.reloadSite()
+                            if let newNode = findNodeByURL(fileURL) {
+                                siteViewModel.selectNode(newNode)
+                            }
+                        }
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showNewDataFileSheet) {
+            NewDataFileView(
+                targetDirectory: node.url,
+                onCreated: { fileURL in
+                    Task {
+                        await siteViewModel.reloadSite()
+                        if let newNode = findNodeByURL(fileURL) {
+                            siteViewModel.selectNode(newNode)
+                        }
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showNewTranslationSheet) {
+            NewTranslationFileView(
+                targetDirectory: node.url,
+                onCreated: { fileURL in
+                    Task {
+                        await siteViewModel.reloadSite()
+                        if let newNode = findNodeByURL(fileURL) {
+                            siteViewModel.selectNode(newNode)
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    private func findNodeByURL(_ url: URL) -> FileNode? {
+        for rootNode in siteViewModel.fileNodes {
+            if let found = rootNode.findNode(url: url) {
+                return found
+            }
+        }
+        return nil
     }
 }
 
