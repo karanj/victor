@@ -450,6 +450,18 @@ struct DataRawEditorView: View {
     @Bindable var dataFile: DataFile
     @State private var editableContent: String = ""
 
+    /// Map data file format to Highlightr language
+    private var highlightrLanguage: String {
+        switch dataFile.format {
+        case .yaml:
+            return "yaml"
+        case .toml:
+            return "ini" // Closest match for TOML
+        case .json:
+            return "json"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -464,13 +476,13 @@ struct DataRawEditorView: View {
             .padding(.vertical, 8)
             .background(.blue.opacity(0.05))
 
-            TextEditor(text: $editableContent)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .background(Color(nsColor: .textBackgroundColor))
-                .onChange(of: editableContent) { _, newValue in
-                    dataFile.updateRawContent(newValue)
+            SyntaxHighlightedTextView(
+                text: $editableContent,
+                language: highlightrLanguage,
+                onTextChange: {
+                    dataFile.updateRawContent(editableContent)
                 }
+            )
         }
         .onAppear {
             editableContent = dataFile.rawContent

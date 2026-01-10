@@ -18,6 +18,9 @@ packages:
   TOMLKit:
     url: https://github.com/LebJe/TOMLKit.git
     from: 0.5.0
+  Highlightr:
+    url: https://github.com/raspu/Highlightr.git
+    from: 2.1.0
 
 targets:
   Victor:
@@ -36,6 +39,7 @@ targets:
       - package: Down
       - package: Yams
       - package: TOMLKit
+      - package: Highlightr
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.victor.Victor

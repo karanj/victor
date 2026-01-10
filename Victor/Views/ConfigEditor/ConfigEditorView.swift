@@ -461,6 +461,18 @@ struct ConfigRawEditorView: View {
     @State private var hasParseError = false
     @State private var parseErrorMessage = ""
 
+    /// Map config format to Highlightr language
+    private var highlightrLanguage: String {
+        switch config.sourceFormat {
+        case .yaml:
+            return "yaml"
+        case .toml:
+            return "ini" // Closest match for TOML
+        case .json:
+            return "json"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Info banner
@@ -505,15 +517,15 @@ struct ConfigRawEditorView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                TextEditor(text: $editableContent)
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .onChange(of: editableContent) { _, newValue in
+                SyntaxHighlightedTextView(
+                    text: $editableContent,
+                    language: highlightrLanguage,
+                    onTextChange: {
                         // Update the rawContent in config when edited
-                        config.rawContent = newValue
+                        config.rawContent = editableContent
                         config.hasUnsavedChanges = true
                     }
+                )
             }
         }
         .onAppear {

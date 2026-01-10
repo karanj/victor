@@ -185,8 +185,9 @@ struct TextEditorTextView: NSViewRepresentable {
         // Set up delegate
         textView.delegate = context.coordinator
 
-        // Set initial text
+        // Set initial text and apply syntax highlighting
         textView.string = text
+        context.coordinator.applySyntaxHighlighting(to: textView)
 
         return scrollView
     }
@@ -201,6 +202,7 @@ struct TextEditorTextView: NSViewRepresentable {
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
+            context.coordinator.applySyntaxHighlighting(to: textView)
             textView.selectedRanges = selectedRanges
         }
     }
@@ -211,6 +213,7 @@ struct TextEditorTextView: NSViewRepresentable {
 
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: TextEditorTextView
+        private var highlightingTimer: Timer?
 
         init(_ parent: TextEditorTextView) {
             self.parent = parent
@@ -220,6 +223,29 @@ struct TextEditorTextView: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
             parent.onTextChange()
+
+            // Debounce syntax highlighting
+            highlightingTimer?.invalidate()
+            highlightingTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
+                self?.applySyntaxHighlighting(to: textView)
+            }
+        }
+
+        func applySyntaxHighlighting(to textView: NSTextView) {
+            guard let textStorage = textView.textStorage else { return }
+
+            let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+            let fileType = parent.fileType
+
+            // Apply highlighting using SyntaxHighlighter (MainActor-isolated)
+            Task { @MainActor in
+                // Check if we have a language mapping for this file type
+                guard let language = SyntaxHighlighter.shared.languageName(for: fileType) else {
+                    // No highlighting for this type - just use default text color
+                    return
+                }
+                SyntaxHighlighter.shared.applyHighlighting(to: textStorage, language: language, font: font)
+            }
         }
     }
 }

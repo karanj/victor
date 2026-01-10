@@ -284,87 +284,11 @@ struct TemplateTextView: NSViewRepresentable {
         func applySyntaxHighlighting(to textView: NSTextView) {
             guard let textStorage = textView.textStorage else { return }
 
-            let fullRange = NSRange(location: 0, length: textStorage.length)
-            let text = textView.string
+            let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
 
-            // Reset to default color
-            let defaultColor = NSColor.textColor
-            textStorage.addAttribute(.foregroundColor, value: defaultColor, range: fullRange)
-
-            // Apply syntax highlighting
-            applySyntaxColors(to: textStorage, text: text)
-        }
-
-        private func applySyntaxColors(to textStorage: NSTextStorage, text: String) {
-            // Order matters - later patterns can override earlier ones
-
-            // 1. HTML tags (opening and closing) - e.g., <div>, </div>, <img />, <br/>
-            let tagColor = NSColor.systemOrange
-            // Match full tags including attributes: <tagname ...> or </tagname>
-            if let tagRegex = try? NSRegularExpression(pattern: "</?[a-zA-Z][a-zA-Z0-9]*(?:\\s+[^>]*)?>", options: []) {
-                let matches = tagRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-                for match in matches {
-                    textStorage.addAttribute(.foregroundColor, value: tagColor, range: match.range)
-                }
-            }
-
-            // 2. HTML comments <!-- -->
-            let commentColor = NSColor.systemGray
-            if let commentRegex = try? NSRegularExpression(pattern: "<!--[\\s\\S]*?-->", options: []) {
-                let matches = commentRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-                for match in matches {
-                    textStorage.addAttribute(.foregroundColor, value: commentColor, range: match.range)
-                }
-            }
-
-            // 3. Go template blocks {{ ... }}
-            let delimiterColor = NSColor.systemPurple
-            if let templateRegex = try? NSRegularExpression(pattern: "\\{\\{-?|\\-?\\}\\}", options: []) {
-                let matches = templateRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-                for match in matches {
-                    textStorage.addAttribute(.foregroundColor, value: delimiterColor, range: match.range)
-                }
-            }
-
-            // 4. Go template comments {{/* */}}
-            if let templateCommentRegex = try? NSRegularExpression(pattern: "\\{\\{/\\*[\\s\\S]*?\\*/\\}\\}", options: []) {
-                let matches = templateCommentRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-                for match in matches {
-                    textStorage.addAttribute(.foregroundColor, value: commentColor, range: match.range)
-                }
-            }
-
-            // 5. Template keywords after {{ or {{-
-            let keywordColor = NSColor.systemBlue
-            let keywords = ["if", "else", "end", "range", "with", "define", "block", "template", "partial", "return"]
-            for keyword in keywords {
-                let pattern = "\\{\\{-?\\s*(\(keyword))\\b"
-                if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-                    let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-                    for match in matches {
-                        if match.range(at: 1).location != NSNotFound {
-                            textStorage.addAttribute(.foregroundColor, value: keywordColor, range: match.range(at: 1))
-                        }
-                    }
-                }
-            }
-
-            // 6. Variables (starting with . or $) - e.g., .Title, .Params.author, $myVar
-            let variableColor = NSColor.systemTeal
-            if let varRegex = try? NSRegularExpression(pattern: "\\.[A-Z][a-zA-Z0-9_.]*|\\$[a-zA-Z_][a-zA-Z0-9_]*", options: []) {
-                let matches = varRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-                for match in matches {
-                    textStorage.addAttribute(.foregroundColor, value: variableColor, range: match.range)
-                }
-            }
-
-            // 7. Strings in double quotes
-            let stringColor = NSColor.systemGreen
-            if let stringRegex = try? NSRegularExpression(pattern: "\"[^\"]*\"", options: []) {
-                let matches = stringRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
-                for match in matches {
-                    textStorage.addAttribute(.foregroundColor, value: stringColor, range: match.range)
-                }
+            // Use SyntaxHighlighter for Go template highlighting
+            Task { @MainActor in
+                SyntaxHighlighter.shared.applyGoTemplateHighlighting(to: textStorage, font: font)
             }
         }
     }
