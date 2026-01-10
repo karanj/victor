@@ -48,10 +48,19 @@ The browser offers three view modes:
 
 Each template row shows:
 - Template type icon (color-coded)
-- Filename and directory path
+- Filename
+- Full directory path (e.g., `layouts/_default` or `themes/mytheme/layouts/partials`)
 - "theme" badge for theme templates
 - Block icon if the template defines blocks
 - Partial count showing how many partials are used
+
+### Navigation Integration
+
+When you click a template in the browser:
+- The template opens in the editor
+- All parent folders expand in the sidebar file tree
+- The file is selected/highlighted in the sidebar
+- This provides clear context of where the file lives in the hierarchy
 
 ## Template Editor
 
