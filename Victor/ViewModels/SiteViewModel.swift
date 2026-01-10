@@ -198,15 +198,52 @@ class SiteViewModel {
     /// Set of node IDs that should be auto-expanded during search
     private(set) var autoExpandedNodeIDs: Set<UUID> = []
 
+    // MARK: - Filtered Nodes Cache
+
+    /// Cached result of filteredNodes computation
+    private var _cachedFilteredNodes: [FileNode]?
+
+    /// The search query used to compute the cached result
+    private var _cachedSearchQuery: String = ""
+
+    /// Version counter for fileNodes - incremented when fileNodes changes
+    private var _fileNodesVersion: Int = 0
+
+    /// The fileNodes version when cache was last computed
+    private var _cachedFileNodesVersion: Int = -1
 
     /// Filtered file nodes based on search (recursively searches tree)
+    /// Results are cached to avoid recomputation on every SwiftUI render cycle
     var filteredNodes: [FileNode] {
+        // Empty search - return fileNodes directly (no caching needed)
         guard !searchQuery.isEmpty else {
             autoExpandedNodeIDs.removeAll()
+            _cachedFilteredNodes = nil
             return fileNodes
         }
+
+        // Check if cache is valid
+        if let cached = _cachedFilteredNodes,
+           _cachedSearchQuery == searchQuery,
+           _cachedFileNodesVersion == _fileNodesVersion {
+            return cached
+        }
+
+        // Recompute and cache
         autoExpandedNodeIDs.removeAll()
-        return filterNodesRecursively(fileNodes, query: searchQuery)
+        let result = filterNodesRecursively(fileNodes, query: searchQuery)
+
+        _cachedFilteredNodes = result
+        _cachedSearchQuery = searchQuery
+        _cachedFileNodesVersion = _fileNodesVersion
+
+        return result
+    }
+
+    /// Invalidate the filtered nodes cache (call when fileNodes changes)
+    private func invalidateFilterCache() {
+        _fileNodesVersion += 1
+        _cachedFilteredNodes = nil
     }
 
     /// Content file paths for autocomplete (relative to content/ directory)
@@ -376,7 +413,8 @@ class SiteViewModel {
             self.site = site
             self.fileNodes = nodes
 
-            // Build lookup table for fast node access
+            // Invalidate filter cache and build lookup table
+            invalidateFilterCache()
             buildNodeLookupTable()
 
             // Track this site in recent sites
@@ -484,6 +522,7 @@ class SiteViewModel {
         }
         site = nil
         fileNodes = []
+        invalidateFilterCache()
         selectedNode = nil
         selectedFileID = nil
         currentEditingContent = ""
@@ -747,18 +786,20 @@ class SiteViewModel {
 
         let urls = markdownChildren.map { $0.url }
 
-        Task { [weak self] in
+        // Use userInitiated priority for responsive folder expansion
+        Task(priority: .userInitiated) { [weak self] in
             guard let self = self else { return }
 
+            // Load all metadata in parallel (on background threads)
             let metadataMap = await FileSystemService.shared.loadStatusMetadata(for: urls)
 
-            // Update nodes with loaded metadata
+            // Update all nodes in a batch - since we're on @MainActor,
+            // SwiftUI will coalesce these updates into a single render pass
             for child in markdownChildren {
                 if let metadata = metadataMap[child.url] {
                     child.statusMetadata = metadata
                 }
             }
-
             self.loadedStatusFolderIDs.insert(folder.id)
         }
     }
@@ -1005,6 +1046,9 @@ class SiteViewModel {
             let newNode = FileNode(url: newFileURL, isDirectory: false, isPageBundle: false)
             folder.addChild(newNode)
 
+            // Invalidate filter cache since tree changed
+            invalidateFilterCache()
+
             // Select the newly created file
             selectNode(newNode)
         } catch {
@@ -1084,6 +1128,9 @@ class SiteViewModel {
                 }
             }
 
+            // Invalidate filter cache since tree changed
+            invalidateFilterCache()
+
             // Select the new file
             selectNode(newNode)
         } catch {
@@ -1104,6 +1151,9 @@ class SiteViewModel {
                 // Top-level file
                 fileNodes.removeAll { $0.id == node.id }
             }
+
+            // Invalidate filter cache since tree changed
+            invalidateFilterCache()
 
             // Clear selection if this was selected
             if selectedNode?.id == node.id {
@@ -1137,6 +1187,9 @@ class SiteViewModel {
             // Create a FileNode for the new folder
             let newNode = FileNode(url: newURL, isDirectory: true, isPageBundle: false)
             parent.addChild(newNode)
+
+            // Invalidate filter cache since tree changed
+            invalidateFilterCache()
         } catch {
             errorMessage = "Failed to create folder: \(error.localizedDescription)"
             Logger.shared.error("Error creating folder", error: error)
