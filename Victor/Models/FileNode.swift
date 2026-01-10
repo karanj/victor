@@ -73,6 +73,39 @@ class FileNode: Identifiable, Hashable {
         return false
     }
 
+    /// Whether this is a template file (HTML in layouts/ or themes/ directory)
+    var isTemplateFile: Bool {
+        guard !isDirectory else { return false }
+        guard fileType == .html else { return false }
+        return isInLayoutsDirectory || isInThemesDirectory
+    }
+
+    /// Check if this node is within the layouts/ directory
+    private var isInLayoutsDirectory: Bool {
+        if hugoRole == .layouts { return true }
+        var current: FileNode? = parent
+        while let node = current {
+            if node.hugoRole == .layouts {
+                return true
+            }
+            current = node.parent
+        }
+        return false
+    }
+
+    /// Check if this node is within the themes/ directory
+    private var isInThemesDirectory: Bool {
+        if hugoRole == .themes { return true }
+        var current: FileNode? = parent
+        while let node = current {
+            if node.hugoRole == .themes {
+                return true
+            }
+            current = node.parent
+        }
+        return false
+    }
+
     /// Associated content file (only for .md files in content directory)
     var contentFile: ContentFile?
 

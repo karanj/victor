@@ -14,6 +14,9 @@ struct FileViewerRouter: View {
                 // Check if this is an asset directory (static/ or assets/)
                 if node.hugoRole == .staticFiles || node.hugoRole == .assets {
                     assetBrowserContent
+                } else if node.hugoRole == .layouts || node.hugoRole == .themes {
+                    // Show template browser for layouts/ and themes/ directories
+                    templateBrowserContent
                 } else {
                     // Show folder contents for other directories
                     FolderContentsView(node: node, siteViewModel: siteViewModel)
@@ -27,6 +30,9 @@ struct FileViewerRouter: View {
             } else if node.isDataFile {
                 // Data files in data/ directory get the data editor
                 dataFileEditorContent
+            } else if node.isTemplateFile {
+                // Template files in layouts/ or themes/ get the template editor
+                templateEditorContent
             } else {
                 switch node.fileType {
                 case .markdown:
@@ -120,6 +126,26 @@ struct FileViewerRouter: View {
             isAssetsDir: node.hugoRole == .assets,
             onInsert: nil  // Drag-drop is supported; clipboard copy is in detail panel
         )
+    }
+
+    /// Template browser content for layouts/ and themes/ directories
+    @ViewBuilder
+    private var templateBrowserContent: some View {
+        if let siteURL = siteViewModel.site?.rootURL {
+            TemplateBrowserView(
+                siteURL: siteURL,
+                siteViewModel: siteViewModel
+            )
+        } else {
+            VStack(spacing: 12) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("No site loaded")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     /// Data file editor content - shows loading, editor, or fallback
@@ -230,6 +256,62 @@ struct FileViewerRouter: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .task {
                 await siteViewModel.loadDataFile(from: node.url)
+            }
+        }
+    }
+
+    /// Template editor content - shows loading, editor, or fallback
+    @ViewBuilder
+    private var templateEditorContent: some View {
+        if siteViewModel.isLoadingTemplate {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading template...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let template = siteViewModel.currentTemplate, template.url == node.url {
+            TemplateEditorView(template: template, onSave: {
+                await siteViewModel.saveTemplate()
+            })
+        } else if let error = siteViewModel.templateLoadError, siteViewModel.failedTemplateURL == node.url {
+            // Show error state - don't retry
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text("Failed to load template")
+                    .font(.headline)
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button("Retry") {
+                    Task {
+                        await siteViewModel.loadTemplate(from: node.url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top)
+
+                Button("Open in Default App") {
+                    NSWorkspace.shared.open(node.url)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            // Template not loaded yet - trigger load
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading template...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task {
+                await siteViewModel.loadTemplate(from: node.url)
             }
         }
     }

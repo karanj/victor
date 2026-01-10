@@ -151,6 +151,18 @@ class SiteViewModel {
     /// URL of the last failed data file load (to prevent infinite retry)
     var failedDataFileURL: URL?
 
+    /// Currently loaded template (for layouts/ and themes/ files)
+    var currentTemplate: Template?
+
+    /// Whether a template is currently loading
+    var isLoadingTemplate = false
+
+    /// Error from last template load attempt
+    var templateLoadError: String?
+
+    /// URL of the last failed template load
+    var failedTemplateURL: URL?
+
     /// Maximum number of ContentFiles to keep cached in memory
     /// Files beyond this limit will have their contentFile released
     private let maxCachedContentFiles = 20
@@ -922,6 +934,44 @@ class SiteViewModel {
         } catch {
             errorMessage = "Failed to save data file: \(error.localizedDescription)"
             Logger.shared.error("Error saving data file", error: error)
+        }
+    }
+
+    // MARK: - Template Management
+
+    /// Load a template file from URL (for files in layouts/ or themes/ directories)
+    func loadTemplate(from url: URL) async {
+        // Clear previous error state
+        templateLoadError = nil
+        failedTemplateURL = nil
+        isLoadingTemplate = true
+
+        do {
+            let template = try await TemplateParser.shared.parseTemplate(at: url)
+            currentTemplate = template
+            Logger.shared.info("Loaded template: \(url.lastPathComponent)")
+        } catch {
+            templateLoadError = error.localizedDescription
+            failedTemplateURL = url
+            errorMessage = "Failed to load template: \(error.localizedDescription)"
+            Logger.shared.error("Error loading template", error: error)
+        }
+        isLoadingTemplate = false
+    }
+
+    /// Save the current template
+    func saveTemplate() async {
+        guard let template = currentTemplate else {
+            errorMessage = "No template to save"
+            return
+        }
+
+        do {
+            try await TemplateParser.shared.save(template)
+            Logger.shared.info("Saved template: \(template.fileName)")
+        } catch {
+            errorMessage = "Failed to save template: \(error.localizedDescription)"
+            Logger.shared.error("Error saving template", error: error)
         }
     }
 

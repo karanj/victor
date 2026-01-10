@@ -28,7 +28,7 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 **Last Updated**: 2026-01-10
 **Build Status**: Clean build, no errors, no warnings
-**Codebase Size**: 74 Swift files, ~18,610 lines of code
+**Codebase Size**: 78 Swift files, ~20,000 lines of code
 
 ### Completed Phases
 
@@ -40,12 +40,22 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 | Phase 4: Hugo Config GUI Editor | COMPLETE | Form/Raw views for hugo.toml/yaml/json |
 | Phase 5: Data & Archetypes | COMPLETE | Data file editor, archetype manager, translation editor |
 | Phase 6: Asset Management | COMPLETE | Asset browser, drag-drop, detail panel |
-| Phase 7: Template Editing | NOT STARTED | layouts/ and themes/ editing |
+| Phase 7: Template Editing | COMPLETE | Template editor, browser, syntax highlighting |
 | Phase 8: Hugo Server Integration | NOT STARTED | Live preview via hugo server |
 
 ### Recent Updates (2026-01-10)
 
-**Phase 5: Data & Archetypes Management (NEW):**
+**Phase 7: Template Editing (NEW):**
+- Template model with type detection (base, single, list, partial, shortcode, taxonomy, home)
+- TemplateParser service for metadata extraction (blocks, partials, functions, variables)
+- TemplateEditorView with Go template syntax highlighting ({{ }}, keywords, variables, strings)
+- TemplateMetadataPanel showing blocks, partials, functions, and variables used
+- TemplateBrowserView for navigating template hierarchy with type/directory/inheritance views
+- Template browser shows when clicking layouts/ or themes/ directories
+- Automatic routing of HTML files in layouts/ and themes/ to template editor
+- Support for theme templates with theme name badges
+
+**Phase 5: Data & Archetypes Management:**
 - Data file editor with Form/Raw toggle for YAML/JSON/TOML files in data/
 - Dynamic field editing supporting dictionaries, arrays, and nested structures
 - Archetype manager for loading and processing content templates

@@ -15,6 +15,7 @@
 		17D178CDEC82395F7D3F980C /* HugoConfigParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */; };
 		17FB120BE8BC8540D825F864 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F51F8DDFBFAE5CBCAE2AC50 /* EditorViewModel.swift */; };
 		191C191C9DAC62DC001530F3 /* EditorTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7788DB7550B1240381DEFEC /* EditorTextView.swift */; };
+		192653214297E2D2B27353F6 /* TemplateBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CF09C9E3E72F6EEBFC8E75 /* TemplateBrowserView.swift */; };
 		1AB800034AD6B46009B0CF37 /* TranslationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE3B3FDD8FB3F3B4F879F11 /* TranslationEditorView.swift */; };
 		1C03AF9B620F1639386046F1 /* Archetype.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DDA15AF4B156F54C8752CCD /* Archetype.swift */; };
 		27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */; };
@@ -30,6 +31,7 @@
 		405335F179D0CCFF442DCD7D /* ArchetypeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7C05C4033AD36F669C7AF0 /* ArchetypeManager.swift */; };
 		46AD3C5EB1472BD20E20CDD7 /* HugoConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C10280F6580C58FDF7E32AB /* HugoConfig.swift */; };
 		477348AC4CA59FF3081989AB /* FolderContentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA087B8214B1972274BA6F5E /* FolderContentsView.swift */; };
+		4BD67639E270CB34BE47E5D5 /* TemplateParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDFE1122F73DA5BCF708843 /* TemplateParser.swift */; };
 		50BE90B7C8241A53283CE11C /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 145C91ED7E811E319BFA6906 /* SidebarView.swift */; };
 		52ABCFDF402217689C1661AC /* HugoSite.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CAC2609C5C9E175A47C8BD2 /* HugoSite.swift */; };
 		54DD741D23FA651B168E4207 /* FrontmatterTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB27DF426185C0D87A1F7EFF /* FrontmatterTypes.swift */; };
@@ -39,6 +41,7 @@
 		649E87B52E9E159C8DF5E117 /* AssetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1EEC2183F119D72ACAE837 /* AssetService.swift */; };
 		6AB4A8EF38CEF3BB2109E0F3 /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D5DFBC7BB7EE3AA4800B5F9 /* TabBarView.swift */; };
 		6B4B70AA10B0C39CB1AB8B0C /* NewTranslationFileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA440D6CB6066809274DD1F /* NewTranslationFileView.swift */; };
+		6EC06E16839B86FBA265A864 /* Template.swift in Sources */ = {isa = PBXBuildFile; fileRef = B77359CF942B864CCDB1D4BF /* Template.swift */; };
 		71156DCD5C11099B7DD81EE6 /* AssetDetailPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71FA51E291417520E104548 /* AssetDetailPanel.swift */; };
 		75539CC1FFB95CC787AFC758 /* FrontmatterBottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9853E3C0E35EC9D2CEBEC4D5 /* FrontmatterBottomPanel.swift */; };
 		79AE302C21A4981C82CDFDCF /* FileStatusMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3EC761DE9530FB84BB6756B /* FileStatusMetadata.swift */; };
@@ -68,6 +71,7 @@
 		BA894FADE169193B513F4318 /* SEOTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0BBFA1B7290B46E6F0291C9 /* SEOTab.swift */; };
 		BB171CB452137D7DAE0B6F6B /* FileType.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD4827B74BCFB4B98565639 /* FileType.swift */; };
 		BF92ACDC6215F924D9DAD767 /* FileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7895D7CEE7F9900B99CFA87B /* FileListView.swift */; };
+		C088053C4D19DC7E779B7357 /* TemplateEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6889CEA2B5E5BE79CB752D9 /* TemplateEditorView.swift */; };
 		C7277992CA172129069BDE11 /* TOMLKit in Frameworks */ = {isa = PBXBuildFile; productRef = C8A8A2B11C204EA0D24AEF5D /* TOMLKit */; };
 		C7C16AAEBEB1B6427E7E004B /* PublishingTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E425A63F6B4F5A81217B8AB /* PublishingTab.swift */; };
 		C92F0586E16024CD0B3929A8 /* HugoConfigParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */; };
@@ -129,7 +133,9 @@
 		3B1EEC2183F119D72ACAE837 /* AssetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetService.swift; sourceTree = "<group>"; };
 		3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
 		3CA78287241B161C53327133 /* DataFileParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFileParserTests.swift; sourceTree = "<group>"; };
+		3DDFE1122F73DA5BCF708843 /* TemplateParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateParser.swift; sourceTree = "<group>"; };
 		3F51F8DDFBFAE5CBCAE2AC50 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
+		42CF09C9E3E72F6EEBFC8E75 /* TemplateBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateBrowserView.swift; sourceTree = "<group>"; };
 		4677CA9101F20BE0B2C8D145 /* FrontmatterParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterParser.swift; sourceTree = "<group>"; };
 		475F31600F73E13C6DF64214 /* TextEditorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditorPanel.swift; sourceTree = "<group>"; };
 		4B079A275E62933402BD92F8 /* ConfigEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigEditorView.swift; sourceTree = "<group>"; };
@@ -162,6 +168,7 @@
 		ABD4827B74BCFB4B98565639 /* FileType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileType.swift; sourceTree = "<group>"; };
 		ABDB8DE15392A0FC66617993 /* AnimationModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationModifiers.swift; sourceTree = "<group>"; };
 		B1B94D70C8953FB652EA5AB4 /* StatisticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsSection.swift; sourceTree = "<group>"; };
+		B77359CF942B864CCDB1D4BF /* Template.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Template.swift; sourceTree = "<group>"; };
 		B7788DB7550B1240381DEFEC /* EditorTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextView.swift; sourceTree = "<group>"; };
 		BA087B8214B1972274BA6F5E /* FolderContentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderContentsView.swift; sourceTree = "<group>"; };
 		BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoConfigParser.swift; sourceTree = "<group>"; };
@@ -171,6 +178,7 @@
 		BF7C05C4033AD36F669C7AF0 /* ArchetypeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchetypeManager.swift; sourceTree = "<group>"; };
 		C0BBFA1B7290B46E6F0291C9 /* SEOTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SEOTab.swift; sourceTree = "<group>"; };
 		C0C64E4BC3CB89092AD3D394 /* MenusTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenusTab.swift; sourceTree = "<group>"; };
+		C6889CEA2B5E5BE79CB752D9 /* TemplateEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateEditorView.swift; sourceTree = "<group>"; };
 		C7C29CB2FE5672D265C73C51 /* HugoSiteStructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoSiteStructure.swift; sourceTree = "<group>"; };
 		CA9CF34E8384633FA5738322 /* Color+Semantic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Semantic.swift"; sourceTree = "<group>"; };
 		D03696993E969C4B2AEFF0AC /* preview-styles.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = "preview-styles.css"; sourceTree = "<group>"; };
@@ -241,6 +249,7 @@
 				BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */,
 				9102466F776A1B376AC8C5E4 /* Logger.swift */,
 				3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */,
+				3DDFE1122F73DA5BCF708843 /* TemplateParser.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -303,9 +312,19 @@
 				8CF18C11530F31087472421D /* HugoShortcode.swift */,
 				2CAC2609C5C9E175A47C8BD2 /* HugoSite.swift */,
 				C7C29CB2FE5672D265C73C51 /* HugoSiteStructure.swift */,
+				B77359CF942B864CCDB1D4BF /* Template.swift */,
 				20942866D9502CCA93571D19 /* TextFile.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		6DD3A35B0CF216CC7E5429EB /* TemplateEditor */ = {
+			isa = PBXGroup;
+			children = (
+				42CF09C9E3E72F6EEBFC8E75 /* TemplateBrowserView.swift */,
+				C6889CEA2B5E5BE79CB752D9 /* TemplateEditorView.swift */,
+			);
+			path = TemplateEditor;
 			sourceTree = "<group>";
 		};
 		7682DE18DB8FF777B046436C /* MainWindow */ = {
@@ -478,6 +497,7 @@
 				20890C3977F09F5D75D74C20 /* NewContent */,
 				0B5A01BE8DDE89A7B36C0734 /* Preferences */,
 				CC3C4B92ED23870AB560ED7C /* Preview */,
+				6DD3A35B0CF216CC7E5429EB /* TemplateEditor */,
 				EBF06DFA526941FBC0C9E831 /* TranslationEditor */,
 				DB8C67C5894CABF926B69474 /* Viewers */,
 			);
@@ -675,6 +695,10 @@
 				401723A9BF52E565758A4A9A /* SiteViewModel.swift in Sources */,
 				7E82AFB2273A37866F51325E /* StatisticsSection.swift in Sources */,
 				6AB4A8EF38CEF3BB2109E0F3 /* TabBarView.swift in Sources */,
+				6EC06E16839B86FBA265A864 /* Template.swift in Sources */,
+				192653214297E2D2B27353F6 /* TemplateBrowserView.swift in Sources */,
+				C088053C4D19DC7E779B7357 /* TemplateEditorView.swift in Sources */,
+				4BD67639E270CB34BE47E5D5 /* TemplateParser.swift in Sources */,
 				836BBABC830236F962B40629 /* TextEditorPanel.swift in Sources */,
 				A4460481D03FDBC2AE246411 /* TextEditorViewModel.swift in Sources */,
 				16F9AF53EE7EA58919CD8D0E /* TextFile.swift in Sources */,
