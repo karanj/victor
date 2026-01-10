@@ -254,41 +254,39 @@ class Template: Identifiable, Hashable {
     var relativePath: String {
         // Extract path relative to layouts/ or themes/
         let path = url.path
-        if let range = path.range(of: "/layouts/") {
+        // Check themes/ first - theme templates have /themes/ in their path
+        // and we need to preserve the full path including theme name
+        if let range = path.range(of: "/themes/") {
+            // Include theme name in path: mytheme/layouts/partials/file.html
             return String(path[range.upperBound...])
         }
-        if let range = path.range(of: "/themes/") {
-            // Include theme name in path
+        // For site templates, extract path after /layouts/
+        if let range = path.range(of: "/layouts/") {
             return String(path[range.upperBound...])
         }
         return fileName
     }
 
-    /// Directory path relative to layouts/
+    /// Directory path relative to layouts/ (without prefix)
     var directoryPath: String {
         let components = relativePath.split(separator: "/").dropLast()
         return components.joined(separator: "/")
     }
 
-    /// Full display path including layouts/ or themes/ prefix for better context
+    /// Full display path from site root for clear context
+    /// e.g., "layouts/_default/single.html" or "themes/mytheme/layouts/partials/header.html"
     var fullDisplayPath: String {
         if isThemeTemplate {
-            // For theme templates, show: themes/themename/layouts/path
-            if let themeName = themeName {
-                let pathAfterTheme = relativePath.dropFirst(themeName.count + 1) // Remove "themename/"
-                if pathAfterTheme.hasPrefix("layouts/") {
-                    return "themes/\(themeName)/\(pathAfterTheme)"
-                }
-                return "themes/\(relativePath)"
-            }
+            // Theme templates: themes/themename/layouts/...
             return "themes/\(relativePath)"
         } else {
-            // For site templates, show: layouts/path
+            // Site templates: layouts/...
             return "layouts/\(relativePath)"
         }
     }
 
-    /// Full directory path including layouts/ or themes/ prefix
+    /// Full directory path from site root (without filename)
+    /// e.g., "layouts/_default" or "themes/mytheme/layouts/partials"
     var fullDirectoryPath: String {
         let components = fullDisplayPath.split(separator: "/").dropLast()
         return components.joined(separator: "/")
