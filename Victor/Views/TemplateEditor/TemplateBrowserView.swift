@@ -411,10 +411,11 @@ struct TemplateBrowserView: View {
     }
 
     private func selectTemplate(_ template: Template) {
-        // Find the file node for this template and select it
+        // Find the file node for this template and select it in the sidebar
         for rootNode in siteViewModel.fileNodes {
             if let node = rootNode.findNode(url: template.url) {
-                siteViewModel.selectNode(node)
+                // Use selectAndRevealNode to expand parent folders and select
+                siteViewModel.selectAndRevealNode(node)
                 return
             }
         }
@@ -449,12 +450,11 @@ private struct TemplateRow: View {
                 Text(template.fileName)
                     .lineLimit(1)
 
-                if !template.directoryPath.isEmpty {
-                    Text(template.directoryPath)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                // Show full path for context (e.g., "layouts/_default" or "themes/mytheme/layouts/partials")
+                Text(template.fullDirectoryPath)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()

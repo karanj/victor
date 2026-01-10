@@ -270,6 +270,30 @@ class Template: Identifiable, Hashable {
         return components.joined(separator: "/")
     }
 
+    /// Full display path including layouts/ or themes/ prefix for better context
+    var fullDisplayPath: String {
+        if isThemeTemplate {
+            // For theme templates, show: themes/themename/layouts/path
+            if let themeName = themeName {
+                let pathAfterTheme = relativePath.dropFirst(themeName.count + 1) // Remove "themename/"
+                if pathAfterTheme.hasPrefix("layouts/") {
+                    return "themes/\(themeName)/\(pathAfterTheme)"
+                }
+                return "themes/\(relativePath)"
+            }
+            return "themes/\(relativePath)"
+        } else {
+            // For site templates, show: layouts/path
+            return "layouts/\(relativePath)"
+        }
+    }
+
+    /// Full directory path including layouts/ or themes/ prefix
+    var fullDirectoryPath: String {
+        let components = fullDisplayPath.split(separator: "/").dropLast()
+        return components.joined(separator: "/")
+    }
+
     // MARK: - Hashable & Equatable
 
     static func == (lhs: Template, rhs: Template) -> Bool {

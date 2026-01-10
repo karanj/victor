@@ -594,6 +594,24 @@ class SiteViewModel {
         // For non-editable files and folders, no content loading needed
     }
 
+    /// Expand all parent folders to make a node visible in the sidebar
+    func expandToNode(_ node: FileNode) {
+        // Walk up the parent chain and expand each folder
+        var current = node.parent
+        while let parent = current {
+            if !parent.isExpanded {
+                parent.isExpanded = true
+            }
+            current = parent.parent
+        }
+    }
+
+    /// Select a node and expand its parent folders to make it visible
+    func selectAndRevealNode(_ node: FileNode) {
+        expandToNode(node)
+        selectNode(node)
+    }
+
     /// Add a file to the recent files list
     func addRecentFile(_ node: FileNode) {
         // Remove if already in list (to move to front)
