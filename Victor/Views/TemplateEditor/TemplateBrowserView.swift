@@ -101,7 +101,7 @@ struct TemplateBrowserView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 200)
+            .frame(width: AppConstants.Toolbar.viewFormLabelFrameWidth*2)
 
             Divider()
                 .frame(height: 20)

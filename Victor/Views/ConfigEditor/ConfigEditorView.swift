@@ -135,7 +135,7 @@ struct ConfigEditorView: View {
                 Text("Raw").tag(true)
             }
             .pickerStyle(.segmented)
-            .frame(width: 180)
+            .frame(width: AppConstants.Toolbar.viewFormLabelFrameWidth)
 
             Divider()
                 .frame(height: 20)

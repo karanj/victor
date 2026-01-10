@@ -107,7 +107,7 @@ struct DataFileEditorView: View {
                 Text("Raw").tag(true)
             }
             .pickerStyle(.segmented)
-            .frame(width: 140)
+            .frame(width: AppConstants.Toolbar.viewFormLabelFrameWidth)
 
             Divider()
                 .frame(height: 20)
@@ -169,7 +169,7 @@ struct DataFormEditorView: View {
                         ),
                         onChanged: { markChanged() }
                     )
-                } else if let dict = dataFile.dataDictionary {
+                } else if dataFile.dataDictionary != nil {
                     DataDictionaryEditor(
                         data: Binding(
                             get: { dataFile.dataDictionary ?? [:] },
@@ -298,7 +298,7 @@ struct DataArrayItemRow: View {
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
-            if let dict = item as? [String: Any] {
+            if item is [String: Any] {
                 DataDictionaryEditor(
                     data: Binding(
                         get: { item as? [String: Any] ?? [:] },

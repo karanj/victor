@@ -110,6 +110,10 @@ enum AppConstants {
         static let saveSpringResponse: Double = 0.3
         /// Save indicator spring damping
         static let saveSpringDamping: Double = 0.6
+        /// View with Icons label frame width
+        static let viewIconLabelFrameWidth: CGFloat = 100
+        /// View with form/raw label frame width
+        static let viewFormLabelFrameWidth: CGFloat = 150
     }
 
     // MARK: - UserDefaults Keys

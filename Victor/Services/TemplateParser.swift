@@ -103,7 +103,7 @@ class TemplateParser {
         let lines = content.components(separatedBy: .newlines)
 
         // Pattern for {{ partial "name.html" . }} or {{ partial "name.html" $context }}
-        let partialPattern = #/\{\{\s*partial(?:Cached)?\s+"([^"]+)"(?:\s+(\S+))?\s*\}\}/#
+        let partialPattern = #/\{\{(?:-)?\s*partial(?:Cached)?\s+"([^"]+)"(?:\s+(\S+))?\s*(?:-)?\}\}/#
 
         for (lineIndex, line) in lines.enumerated() {
             for match in line.matches(of: partialPattern) {
@@ -118,7 +118,6 @@ class TemplateParser {
                 ))
             }
         }
-
         return partials
     }
 

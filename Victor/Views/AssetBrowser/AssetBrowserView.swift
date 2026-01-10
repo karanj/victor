@@ -71,25 +71,22 @@ struct AssetBrowserView: View {
             HStack {
                 Image(systemName: "photo.on.rectangle.angled")
                     .foregroundStyle(.blue)
-                Text(isAssetsDir ? "assets/" : "static/")
-                    .font(.headline)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isAssetsDir ? "assets/" : "static/")
+                        .font(.headline)
 
+                    Text("Site Assets")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
                 Text("\(filteredAssets.count) of \(assets.count)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
-                // Refresh button
-                Button {
-                    Task { await loadAssets() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .help("Refresh assets")
-            }
-
-            HStack {
                 // Filter
                 Picker("Filter", selection: $filterType) {
                     ForEach(AssetFilterType.allCases) { type in
@@ -100,7 +97,16 @@ struct AssetBrowserView: View {
                 .frame(maxWidth: 300)
 
                 Spacer()
-
+                
+                // Refresh button
+                Button {
+                    Task { await loadAssets() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh assets")
+                
+                Divider().frame(height: 20)
                 // Sort
                 Picker("Sort", selection: $sortOrder) {
                     ForEach(AssetSortOrder.allCases) { order in
@@ -118,7 +124,7 @@ struct AssetBrowserView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 100)
+                .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
 
                 Divider().frame(height: 20)
 

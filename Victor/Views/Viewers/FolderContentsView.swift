@@ -67,7 +67,7 @@ struct FolderContentsView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 80)
+            .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
 
             // Reveal in Finder
             Button {
@@ -101,6 +101,7 @@ struct FolderContentsView: View {
             }
             .buttonStyle(.bordered)
             .padding(.top, 8)
+            // TODO Add buttons for contextually appropriate data, e.g. New Data File in the data/ folder, New Translation in i18n/, new post in content/, etc
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

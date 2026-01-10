@@ -134,7 +134,7 @@ struct TranslationEditorView: View {
                 Text("Raw").tag(true)
             }
             .pickerStyle(.segmented)
-            .frame(width: 140)
+            .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
 
             Divider()
                 .frame(height: 20)

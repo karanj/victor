@@ -1,12 +1,11 @@
 import SwiftUI
 import AppKit
 
-/// Editor view for Hugo template files with syntax highlighting and metadata panel
+/// Editor view for Hugo template files with syntax highlighting
 struct TemplateEditorView: View {
     @Bindable var template: Template
     let onSave: () async -> Void
 
-    @State private var showMetadataPanel = true
     @State private var isSaving = false
     @State private var showSavedIndicator = false
     @State private var errorMessage: String?
@@ -14,27 +13,17 @@ struct TemplateEditorView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HSplitView {
-            // Main editor area
-            VStack(spacing: 0) {
-                templateToolbar
+        VStack(spacing: 0) {
+            templateToolbar
 
-                Divider()
+            Divider()
 
-                TemplateTextView(
-                    text: $template.content,
-                    onTextChange: {
-                        // Content changed - handled by Template's hasUnsavedChanges
-                    }
-                )
-            }
-            .frame(minWidth: 400)
-
-            // Metadata panel (collapsible)
-            if showMetadataPanel {
-                TemplateMetadataPanel(template: template)
-                    .frame(minWidth: 200, idealWidth: 280, maxWidth: 350)
-            }
+            TemplateTextView(
+                text: $template.content,
+                onTextChange: {
+                    // Content changed - handled by Template's hasUnsavedChanges
+                }
+            )
         }
     }
 
@@ -104,20 +93,6 @@ struct TemplateEditorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Divider()
-                .frame(height: 20)
-
-            // Toggle metadata panel
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showMetadataPanel.toggle()
-                }
-            } label: {
-                Image(systemName: showMetadataPanel ? "sidebar.trailing" : "sidebar.trailing")
-                    .symbolVariant(showMetadataPanel ? .none : .slash)
-            }
-            .help(showMetadataPanel ? "Hide Info Panel" : "Show Info Panel")
 
             Divider()
                 .frame(height: 20)
@@ -316,283 +291,81 @@ struct TemplateTextView: NSViewRepresentable {
             let defaultColor = NSColor.textColor
             textStorage.addAttribute(.foregroundColor, value: defaultColor, range: fullRange)
 
-            // Apply Go template syntax highlighting
+            // Apply syntax highlighting
             applySyntaxColors(to: textStorage, text: text)
         }
 
         private func applySyntaxColors(to textStorage: NSTextStorage, text: String) {
-            // Template delimiters {{ }}
-            let delimiterColor = NSColor.systemPurple
-            let delimiterPattern = #/\{\{|\}\}/#
+            // Order matters - later patterns can override earlier ones
 
-            for match in text.matches(of: delimiterPattern) {
-                let range = NSRange(match.range, in: text)
-                textStorage.addAttribute(.foregroundColor, value: delimiterColor, range: range)
+            // 1. HTML tags (opening and closing) - e.g., <div>, </div>, <img />, <br/>
+            let tagColor = NSColor.systemOrange
+            // Match full tags including attributes: <tagname ...> or </tagname>
+            if let tagRegex = try? NSRegularExpression(pattern: "</?[a-zA-Z][a-zA-Z0-9]*(?:\\s+[^>]*)?>", options: []) {
+                let matches = tagRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+                for match in matches {
+                    textStorage.addAttribute(.foregroundColor, value: tagColor, range: match.range)
+                }
             }
 
-            // Template keywords (if, else, end, range, with, define, block, template)
+            // 2. HTML comments <!-- -->
+            let commentColor = NSColor.systemGray
+            if let commentRegex = try? NSRegularExpression(pattern: "<!--[\\s\\S]*?-->", options: []) {
+                let matches = commentRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+                for match in matches {
+                    textStorage.addAttribute(.foregroundColor, value: commentColor, range: match.range)
+                }
+            }
+
+            // 3. Go template blocks {{ ... }}
+            let delimiterColor = NSColor.systemPurple
+            if let templateRegex = try? NSRegularExpression(pattern: "\\{\\{-?|\\-?\\}\\}", options: []) {
+                let matches = templateRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+                for match in matches {
+                    textStorage.addAttribute(.foregroundColor, value: delimiterColor, range: match.range)
+                }
+            }
+
+            // 4. Go template comments {{/* */}}
+            if let templateCommentRegex = try? NSRegularExpression(pattern: "\\{\\{/\\*[\\s\\S]*?\\*/\\}\\}", options: []) {
+                let matches = templateCommentRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+                for match in matches {
+                    textStorage.addAttribute(.foregroundColor, value: commentColor, range: match.range)
+                }
+            }
+
+            // 5. Template keywords after {{ or {{-
             let keywordColor = NSColor.systemBlue
             let keywords = ["if", "else", "end", "range", "with", "define", "block", "template", "partial", "return"]
             for keyword in keywords {
-                let pattern = "\\{\\{\\s*(\(keyword))\\b|\\{\\{-?\\s*(\(keyword))\\b"
+                let pattern = "\\{\\{-?\\s*(\(keyword))\\b"
                 if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
                     let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
                     for match in matches {
-                        // Color the keyword part (group 1 or 2)
                         if match.range(at: 1).location != NSNotFound {
                             textStorage.addAttribute(.foregroundColor, value: keywordColor, range: match.range(at: 1))
-                        }
-                        if match.range(at: 2).location != NSNotFound {
-                            textStorage.addAttribute(.foregroundColor, value: keywordColor, range: match.range(at: 2))
                         }
                     }
                 }
             }
 
-            // Variables (starting with . or $)
+            // 6. Variables (starting with . or $) - e.g., .Title, .Params.author, $myVar
             let variableColor = NSColor.systemTeal
-            let variablePattern = #/(\.[A-Z][a-zA-Z0-9_.]*|\$[a-zA-Z_][a-zA-Z0-9_]*)/#
-
-            for match in text.matches(of: variablePattern) {
-                let range = NSRange(match.range, in: text)
-                textStorage.addAttribute(.foregroundColor, value: variableColor, range: range)
+            if let varRegex = try? NSRegularExpression(pattern: "\\.[A-Z][a-zA-Z0-9_.]*|\\$[a-zA-Z_][a-zA-Z0-9_]*", options: []) {
+                let matches = varRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+                for match in matches {
+                    textStorage.addAttribute(.foregroundColor, value: variableColor, range: match.range)
+                }
             }
 
-            // Strings inside templates
+            // 7. Strings in double quotes
             let stringColor = NSColor.systemGreen
-            let stringPattern = #/"[^"]*"/#
-
-            for match in text.matches(of: stringPattern) {
-                let range = NSRange(match.range, in: text)
-                textStorage.addAttribute(.foregroundColor, value: stringColor, range: range)
-            }
-
-            // HTML comments
-            let commentColor = NSColor.systemGray
-            let commentPattern = #/<!--[\s\S]*?-->/#
-
-            for match in text.matches(of: commentPattern) {
-                let range = NSRange(match.range, in: text)
-                textStorage.addAttribute(.foregroundColor, value: commentColor, range: range)
-            }
-
-            // Go template comments {{/* */}}
-            let templateCommentPattern = #/\{\{/\*[\s\S]*?\*/\}\}/#
-
-            for match in text.matches(of: templateCommentPattern) {
-                let range = NSRange(match.range, in: text)
-                textStorage.addAttribute(.foregroundColor, value: commentColor, range: range)
-            }
-
-            // HTML tags
-            let tagColor = NSColor.systemOrange
-            let tagPattern = #/<\/?[a-zA-Z][a-zA-Z0-9]*/#
-
-            for match in text.matches(of: tagPattern) {
-                let range = NSRange(match.range, in: text)
-                textStorage.addAttribute(.foregroundColor, value: tagColor, range: range)
-            }
-        }
-    }
-}
-
-// MARK: - Template Metadata Panel
-
-/// Panel showing template metadata (blocks, partials, functions, variables)
-struct TemplateMetadataPanel: View {
-    let template: Template
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Template Info
-                templateInfoSection
-
-                Divider()
-
-                // Blocks section
-                if !template.metadata.blocks.isEmpty {
-                    blocksSection
-                    Divider()
-                }
-
-                // Partials section
-                if !template.metadata.partials.isEmpty {
-                    partialsSection
-                    Divider()
-                }
-
-                // Functions section
-                if !template.metadata.functions.isEmpty {
-                    functionsSection
-                    Divider()
-                }
-
-                // Variables section
-                if !template.metadata.variables.isEmpty {
-                    variablesSection
-                }
-
-                Spacer()
-            }
-            .padding()
-        }
-        .background(Color(NSColor.controlBackgroundColor))
-    }
-
-    // MARK: - Sections
-
-    private var templateInfoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Template Info", systemImage: "info.circle")
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: 4) {
-                InfoRow(label: "Type", value: template.templateType.displayName)
-                InfoRow(label: "Path", value: template.relativePath)
-
-                if template.isThemeTemplate, let themeName = template.themeName {
-                    InfoRow(label: "Theme", value: themeName)
-                }
-
-                if template.metadata.hasBaseTemplate {
-                    InfoRow(label: "Extends", value: "Base template (baseof.html)")
-                }
-
-                if template.metadata.definesBlocks {
-                    InfoRow(label: "Defines", value: "\(template.metadata.blocksDefinedCount) block(s)")
+            if let stringRegex = try? NSRegularExpression(pattern: "\"[^\"]*\"", options: []) {
+                let matches = stringRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+                for match in matches {
+                    textStorage.addAttribute(.foregroundColor, value: stringColor, range: match.range)
                 }
             }
-            .font(.caption)
-        }
-    }
-
-    private var blocksSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Blocks (\(template.metadata.blocks.count))", systemImage: "square.stack.3d.up")
-                .font(.headline)
-
-            ForEach(template.metadata.blocks) { block in
-                HStack {
-                    Image(systemName: block.isDefinition ? "square.and.pencil" : "square.dashed")
-                        .foregroundStyle(block.isDefinition ? .blue : .orange)
-                        .frame(width: 20)
-
-                    Text(block.name)
-                        .font(.system(.caption, design: .monospaced))
-
-                    Spacer()
-
-                    Text(":\(block.lineNumber)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private var partialsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Partials (\(template.metadata.partials.count))", systemImage: "puzzlepiece")
-                .font(.headline)
-
-            ForEach(template.metadata.partials) { partial in
-                HStack {
-                    Image(systemName: "puzzlepiece")
-                        .foregroundStyle(.teal)
-                        .frame(width: 20)
-
-                    Text(partial.shortName)
-                        .font(.system(.caption, design: .monospaced))
-
-                    Spacer()
-
-                    Text(":\(partial.lineNumber)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private var functionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Functions (\(template.metadata.functions.count))", systemImage: "function")
-                .font(.headline)
-
-            let topFunctions = Array(template.metadata.functions.prefix(10))
-            ForEach(topFunctions) { function in
-                HStack {
-                    Text(function.name)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(function.isControlFlow ? .blue : .primary)
-
-                    Spacer()
-
-                    Text("×\(function.count)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if template.metadata.functions.count > 10 {
-                Text("... and \(template.metadata.functions.count - 10) more")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var variablesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Variables (\(template.metadata.variables.count))", systemImage: "dollarsign.circle")
-                .font(.headline)
-
-            let topVariables = Array(template.metadata.variables.prefix(10))
-            ForEach(topVariables) { variable in
-                HStack {
-                    Text(variable.name)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(variableColor(for: variable))
-
-                    Spacer()
-
-                    Text("×\(variable.count)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if template.metadata.variables.count > 10 {
-                Text("... and \(template.metadata.variables.count - 10) more")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func variableColor(for variable: TemplateVariable) -> Color {
-        switch variable.category {
-        case .page: return .blue
-        case .site: return .purple
-        case .params: return .orange
-        case .local: return .teal
-        case .other: return .primary
-        }
-    }
-}
-
-// MARK: - Helper Views
-
-private struct InfoRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label + ":")
-                .foregroundStyle(.secondary)
-            Text(value)
         }
     }
 }
