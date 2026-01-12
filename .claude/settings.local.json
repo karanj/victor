@@ -29,7 +29,8 @@
       "Bash(gh issue list:*)",
       "Bash(bd close:*)",
       "Bash(find:*)",
-      "Bash(bd sync:*)"
+      "Bash(bd sync:*)",
+      "Bash(gh issue close:*)"
     ]
   }
 }

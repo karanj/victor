@@ -94,3 +94,6 @@ iOSInjectionProject/
 
 # XcodeGen - generated project (regenerate with: xcodegen generate)
 Victor.xcodeproj
+
+# bv (beads viewer) local config and caches
+.bv/
