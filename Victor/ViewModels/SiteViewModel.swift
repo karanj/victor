@@ -782,8 +782,24 @@ class SiteViewModel {
     }
 
     /// Check if a file has unsaved changes
+    /// Checks modifiedFileIDs for markdown, and model state for data files/templates
     func isFileModified(_ nodeID: UUID) -> Bool {
-        modifiedFileIDs.contains(nodeID)
+        // Check markdown/text files via modifiedFileIDs
+        if modifiedFileIDs.contains(nodeID) {
+            return true
+        }
+
+        // Check data files and templates via their model state
+        if let node = findNode(id: nodeID) {
+            if let dataFile = loadedDataFiles[node.url], dataFile.hasUnsavedChanges {
+                return true
+            }
+            if let template = loadedTemplates[node.url], template.hasUnsavedChanges {
+                return true
+            }
+        }
+
+        return false
     }
 
     /// Check if a file was recently saved
@@ -796,11 +812,24 @@ class SiteViewModel {
 
     /// Check if any files have unsaved changes
     var hasUnsavedChanges: Bool {
-        !modifiedFileIDs.isEmpty
+        // Check markdown/text files
+        if !modifiedFileIDs.isEmpty {
+            return true
+        }
+        // Check data files
+        if loadedDataFiles.values.contains(where: { $0.hasUnsavedChanges }) {
+            return true
+        }
+        // Check templates
+        if loadedTemplates.values.contains(where: { $0.hasUnsavedChanges }) {
+            return true
+        }
+        return false
     }
 
     /// Save all files with unsaved changes
     func saveAllModifiedFiles() async {
+        // Save markdown and text files tracked in modifiedFileIDs
         let modifiedIDs = modifiedFileIDs
         for nodeID in modifiedIDs {
             guard let node = findNode(id: nodeID) else { continue }
@@ -822,6 +851,26 @@ class SiteViewModel {
                 } catch {
                     Logger.shared.error("Failed to save \(node.name)", error: error)
                 }
+            }
+        }
+
+        // Save data files with unsaved changes
+        for (_, dataFile) in loadedDataFiles where dataFile.hasUnsavedChanges {
+            do {
+                try await DataFileParser.shared.save(dataFile)
+                Logger.shared.info("Saved data file: \(dataFile.fileName)")
+            } catch {
+                Logger.shared.error("Failed to save data file \(dataFile.fileName)", error: error)
+            }
+        }
+
+        // Save templates with unsaved changes
+        for (_, template) in loadedTemplates where template.hasUnsavedChanges {
+            do {
+                try await TemplateParser.shared.save(template)
+                Logger.shared.info("Saved template: \(template.fileName)")
+            } catch {
+                Logger.shared.error("Failed to save template \(template.fileName)", error: error)
             }
         }
     }
