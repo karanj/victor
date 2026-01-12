@@ -574,6 +574,7 @@ class SiteViewModel {
         editedContentByFile.removeAll()  // Clear all per-file markdown edits
         loadedDataFiles.removeAll()      // Clear all loaded data files
         loadedTemplates.removeAll()      // Clear all loaded templates
+        hugoConfig = nil                 // Clear loaded Hugo config
         recentFiles = []
         contentCacheOrder = []
         modifiedFileIDs = []
@@ -782,15 +783,19 @@ class SiteViewModel {
     }
 
     /// Check if a file has unsaved changes
-    /// Checks modifiedFileIDs for markdown, and model state for data files/templates
+    /// Checks modifiedFileIDs for markdown, and model state for config/data files/templates
     func isFileModified(_ nodeID: UUID) -> Bool {
         // Check markdown/text files via modifiedFileIDs
         if modifiedFileIDs.contains(nodeID) {
             return true
         }
 
-        // Check data files and templates via their model state
+        // Check config, data files, and templates via their model state
         if let node = findNode(id: nodeID) {
+            // Check Hugo config
+            if let config = hugoConfig, config.sourceURL == node.url, config.hasUnsavedChanges {
+                return true
+            }
             if let dataFile = loadedDataFiles[node.url], dataFile.hasUnsavedChanges {
                 return true
             }
@@ -814,6 +819,10 @@ class SiteViewModel {
     var hasUnsavedChanges: Bool {
         // Check markdown/text files
         if !modifiedFileIDs.isEmpty {
+            return true
+        }
+        // Check Hugo config
+        if hugoConfig?.hasUnsavedChanges == true {
             return true
         }
         // Check data files
@@ -852,6 +861,11 @@ class SiteViewModel {
                     Logger.shared.error("Failed to save \(node.name)", error: error)
                 }
             }
+        }
+
+        // Save Hugo config if modified
+        if hugoConfig?.hasUnsavedChanges == true {
+            await saveHugoConfig()
         }
 
         // Save data files with unsaved changes
