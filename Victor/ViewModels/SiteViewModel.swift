@@ -153,8 +153,24 @@ class SiteViewModel {
     /// Whether the Hugo config is currently loading
     var isLoadingConfig = false
 
-    /// Currently loaded data file (for data/ directory files)
-    var currentDataFile: DataFile?
+    /// Per-file storage for data files - preserves unsaved edits when switching
+    private var loadedDataFiles: [URL: DataFile] = [:]
+
+    /// Currently loaded data file (computed from per-file storage based on selected node)
+    var currentDataFile: DataFile? {
+        get {
+            guard let url = selectedNode?.url else { return nil }
+            return loadedDataFiles[url]
+        }
+        set {
+            guard let url = selectedNode?.url else { return }
+            if let file = newValue {
+                loadedDataFiles[url] = file
+            } else {
+                loadedDataFiles.removeValue(forKey: url)
+            }
+        }
+    }
 
     /// Whether a data file is currently loading
     var isLoadingDataFile = false
@@ -165,8 +181,24 @@ class SiteViewModel {
     /// URL of the last failed data file load (to prevent infinite retry)
     var failedDataFileURL: URL?
 
-    /// Currently loaded template (for layouts/ and themes/ files)
-    var currentTemplate: Template?
+    /// Per-file storage for templates - preserves unsaved edits when switching
+    private var loadedTemplates: [URL: Template] = [:]
+
+    /// Currently loaded template (computed from per-file storage based on selected node)
+    var currentTemplate: Template? {
+        get {
+            guard let url = selectedNode?.url else { return nil }
+            return loadedTemplates[url]
+        }
+        set {
+            guard let url = selectedNode?.url else { return }
+            if let file = newValue {
+                loadedTemplates[url] = file
+            } else {
+                loadedTemplates.removeValue(forKey: url)
+            }
+        }
+    }
 
     /// Whether a template is currently loading
     var isLoadingTemplate = false
@@ -539,7 +571,9 @@ class SiteViewModel {
         invalidateFilterCache()
         selectedNode = nil
         selectedFileID = nil
-        editedContentByFile.removeAll()  // Clear all per-file edits
+        editedContentByFile.removeAll()  // Clear all per-file markdown edits
+        loadedDataFiles.removeAll()      // Clear all loaded data files
+        loadedTemplates.removeAll()      // Clear all loaded templates
         recentFiles = []
         contentCacheOrder = []
         modifiedFileIDs = []
@@ -987,7 +1021,14 @@ class SiteViewModel {
     // MARK: - Data File Management
 
     /// Load a data file from URL (for files in data/ directory)
+    /// Only loads from disk if not already in memory (preserves unsaved edits)
     func loadDataFile(from url: URL) async {
+        // If already loaded, don't reload (preserves unsaved edits)
+        if loadedDataFiles[url] != nil {
+            isLoadingDataFile = false
+            return
+        }
+
         // Clear previous error state
         dataFileLoadError = nil
         failedDataFileURL = nil
@@ -995,7 +1036,7 @@ class SiteViewModel {
 
         do {
             let dataFile = try await DataFileParser.shared.parseDataFile(at: url)
-            currentDataFile = dataFile
+            loadedDataFiles[url] = dataFile
             Logger.shared.info("Loaded data file: \(url.lastPathComponent)")
         } catch {
             dataFileLoadError = error.localizedDescription
@@ -1025,7 +1066,14 @@ class SiteViewModel {
     // MARK: - Template Management
 
     /// Load a template file from URL (for files in layouts/ or themes/ directories)
+    /// Only loads from disk if not already in memory (preserves unsaved edits)
     func loadTemplate(from url: URL) async {
+        // If already loaded, don't reload (preserves unsaved edits)
+        if loadedTemplates[url] != nil {
+            isLoadingTemplate = false
+            return
+        }
+
         // Clear previous error state
         templateLoadError = nil
         failedTemplateURL = nil
@@ -1033,7 +1081,7 @@ class SiteViewModel {
 
         do {
             let template = try await TemplateParser.shared.parseTemplate(at: url)
-            currentTemplate = template
+            loadedTemplates[url] = template
             Logger.shared.info("Loaded template: \(url.lastPathComponent)")
         } catch {
             templateLoadError = error.localizedDescription
