@@ -602,18 +602,17 @@ class SiteViewModel {
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath)
         }
 
-        // Clear editing content to prevent stale data flash
-        currentEditingContent = ""
-
-        // Load content in background if needed
+        // Load content based on file type
+        // Note: We avoid clearing currentEditingContent before setting new content
+        // to prevent a flash of empty content during file switches
         if let node = actualNode, node.isMarkdownFile {
             if let contentFile = node.contentFile {
-                // Content already loaded - initialize immediately
+                // Content already loaded - update immediately (no clear needed)
                 currentEditingContent = contentFile.markdownContent
                 addRecentFile(node)
                 updateContentCache(accessedNodeID: node.id)
             } else {
-                // Content not loaded - load in background
+                // Content not loaded - show loading state, keep old content until ready
                 isLoadingFile = true
                 Task { [weak self] in
                     guard let self = self else { return }
@@ -627,18 +626,23 @@ class SiteViewModel {
                     self.isLoadingFile = false
                 }
             }
-        } else if let node = actualNode, node.isEditable && node.fileType.isTextBased {
-            // Non-markdown editable text file
-            if node.textFile == nil {
-                isLoadingFile = true
-                Task { [weak self] in
-                    guard let self = self else { return }
-                    await self.loadTextFileContent(for: node)
-                    self.isLoadingFile = false
+        } else {
+            // Non-markdown file selected - clear markdown editing content
+            currentEditingContent = ""
+
+            if let node = actualNode, node.isEditable && node.fileType.isTextBased {
+                // Non-markdown editable text file
+                if node.textFile == nil {
+                    isLoadingFile = true
+                    Task { [weak self] in
+                        guard let self = self else { return }
+                        await self.loadTextFileContent(for: node)
+                        self.isLoadingFile = false
+                    }
                 }
             }
+            // For non-editable files and folders, no content loading needed
         }
-        // For non-editable files and folders, no content loading needed
     }
 
     /// Expand all parent folders to make a node visible in the sidebar

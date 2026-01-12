@@ -53,9 +53,12 @@ struct ContentView: View {
                     // Content based on selected layout mode
                     if let selectedNode = siteViewModel.selectedNode {
                         layoutContent(for: selectedNode)
+                            .id(selectedNode.id)  // Force view recreation on file switch
+                            .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
                             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.layoutMode)
                     } else {
                         noFileSelectedView
+                            .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
                     }
                 }
                 .frame(minWidth: AppConstants.Content.minWidth)
