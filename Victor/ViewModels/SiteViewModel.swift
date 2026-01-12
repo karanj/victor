@@ -582,6 +582,14 @@ class SiteViewModel {
 
         // OPTIMISTIC UPDATE: Update UI immediately, before any loading
         selectedNode = actualNode
+
+        // Auto-hide inspector when switching to a non-markdown file
+        // (The inspector toolbar button is only shown for markdown files,
+        // so we need to auto-dismiss to prevent the user being stuck)
+        if isInspectorVisible && (actualNode == nil || !actualNode!.isMarkdownFile) {
+            isInspectorVisible = false
+        }
+
         // Only set selectedFileID if it's different to avoid triggering didSet again
         if selectedFileID != actualNode?.id {
             selectedFileID = actualNode?.id
