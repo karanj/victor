@@ -5,7 +5,6 @@ struct FocusModeView: View {
     @Binding var text: String
     @Bindable var siteViewModel: SiteViewModel
     let fileName: String
-    let contentFile: ContentFile
 
     /// Maximum comfortable reading/writing width
     private let maxEditorWidth: CGFloat = 700
@@ -51,10 +50,10 @@ struct FocusModeView: View {
             // Escape key exits focus mode
             siteViewModel.exitFocusMode()
         }
-        .onChange(of: text) { _, newValue in
-            // Sync changes to the content file so EditorViewModel picks them up
-            contentFile.markdownContent = newValue
-        }
+        // Note: No need to sync text changes to contentFile.markdownContent
+        // The binding to siteViewModel.currentEditingContent routes all changes
+        // through the ViewModel layer (stored in editedContentByFile dictionary).
+        // contentFile.markdownContent represents the saved state and is updated on save.
     }
 }
 
@@ -260,15 +259,9 @@ struct FocusModeEditor: NSViewRepresentable {
     Press Escape to exit focus mode.
     """
 
-    let contentFile = ContentFile(
-        url: URL(fileURLWithPath: "/sample.md"),
-        markdownContent: sampleText
-    )
-
     FocusModeView(
         text: $sampleText,
         siteViewModel: SiteViewModel(),
-        fileName: "sample-post.md",
-        contentFile: contentFile
+        fileName: "sample-post.md"
     )
 }

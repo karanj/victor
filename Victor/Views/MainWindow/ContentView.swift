@@ -14,12 +14,11 @@ struct ContentView: View {
             // Focus Mode overlay
             if siteViewModel.isFocusModeActive,
                let selectedNode = siteViewModel.selectedNode,
-               let contentFile = selectedNode.contentFile {
+               selectedNode.contentFile != nil {
                 FocusModeView(
                     text: $siteViewModel.currentEditingContent,
                     siteViewModel: siteViewModel,
-                    fileName: selectedNode.name,
-                    contentFile: contentFile
+                    fileName: selectedNode.name
                 )
                 .transition(.opacity)
                 .zIndex(100)
