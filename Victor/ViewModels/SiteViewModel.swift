@@ -61,8 +61,22 @@ class SiteViewModel {
         }
     }
 
+    /// Per-file edited content storage - preserves unsaved edits when switching files
+    /// Key is file node ID, value is the edited content
+    private var editedContentByFile: [UUID: String] = [:]
+
     /// Current editing content (for preview sync across layout modes)
-    var currentEditingContent: String = ""
+    /// Computed property that reads/writes from per-file storage based on selected node
+    var currentEditingContent: String {
+        get {
+            guard let nodeID = selectedNode?.id else { return "" }
+            return editedContentByFile[nodeID] ?? ""
+        }
+        set {
+            guard let nodeID = selectedNode?.id else { return }
+            editedContentByFile[nodeID] = newValue
+        }
+    }
 
     /// Live preview enabled state (controls real-time updates in split view)
     var isLivePreviewEnabled: Bool = true
@@ -525,7 +539,7 @@ class SiteViewModel {
         invalidateFilterCache()
         selectedNode = nil
         selectedFileID = nil
-        currentEditingContent = ""
+        editedContentByFile.removeAll()  // Clear all per-file edits
         recentFiles = []
         contentCacheOrder = []
         modifiedFileIDs = []
@@ -603,46 +617,46 @@ class SiteViewModel {
         }
 
         // Load content based on file type
-        // Note: We avoid clearing currentEditingContent before setting new content
-        // to prevent a flash of empty content during file switches
+        // Only initialize content if there's no existing edited content for this file
+        // (preserves unsaved edits when switching between files)
         if let node = actualNode, node.isMarkdownFile {
             if let contentFile = node.contentFile {
-                // Content already loaded - update immediately (no clear needed)
-                currentEditingContent = contentFile.markdownContent
+                // Content already loaded - only set if no existing edits
+                if editedContentByFile[node.id] == nil {
+                    editedContentByFile[node.id] = contentFile.markdownContent
+                }
                 addRecentFile(node)
                 updateContentCache(accessedNodeID: node.id)
             } else {
-                // Content not loaded - show loading state, keep old content until ready
+                // Content not loaded - load in background
                 isLoadingFile = true
                 Task { [weak self] in
                     guard let self = self else { return }
                     await self.loadFileContent(for: node)
-                    // Only update content if this node is still selected
+                    // Only update content if this node is still selected and has no edits
+                    if node.id == self.selectedNode?.id,
+                       self.editedContentByFile[node.id] == nil {
+                        self.editedContentByFile[node.id] = node.contentFile?.markdownContent ?? ""
+                    }
                     if node.id == self.selectedNode?.id {
-                        self.currentEditingContent = node.contentFile?.markdownContent ?? ""
                         self.addRecentFile(node)
                         self.updateContentCache(accessedNodeID: node.id)
                     }
                     self.isLoadingFile = false
                 }
             }
-        } else {
-            // Non-markdown file selected - clear markdown editing content
-            currentEditingContent = ""
-
-            if let node = actualNode, node.isEditable && node.fileType.isTextBased {
-                // Non-markdown editable text file
-                if node.textFile == nil {
-                    isLoadingFile = true
-                    Task { [weak self] in
-                        guard let self = self else { return }
-                        await self.loadTextFileContent(for: node)
-                        self.isLoadingFile = false
-                    }
+        } else if let node = actualNode, node.isEditable && node.fileType.isTextBased {
+            // Non-markdown editable text file
+            if node.textFile == nil {
+                isLoadingFile = true
+                Task { [weak self] in
+                    guard let self = self else { return }
+                    await self.loadTextFileContent(for: node)
+                    self.isLoadingFile = false
                 }
             }
-            // For non-editable files and folders, no content loading needed
         }
+        // For non-editable files and folders, no content loading needed
     }
 
     /// Expand all parent folders to make a node visible in the sidebar
@@ -1086,6 +1100,9 @@ class SiteViewModel {
             // Update the node's content file
             node.contentFile = freshContent
 
+            // Update the edited content to match fresh disk content
+            editedContentByFile[node.id] = freshContent.markdownContent
+
             // If this is the currently selected node, trigger a UI update
             if selectedNode?.id == node.id {
                 selectedNode = node
@@ -1169,9 +1186,9 @@ class SiteViewModel {
 
             // Clear selection if this was selected
             if selectedNode?.id == node.id {
+                editedContentByFile.removeValue(forKey: node.id)  // Clear edited content for this file
                 selectedNode = nil
                 selectedFileID = nil
-                currentEditingContent = ""
             }
         } catch {
             errorMessage = "Failed to move to trash: \(error.localizedDescription)"
