@@ -13,7 +13,13 @@ class EditorViewModel {
 
     // MARK: - State
 
-    var editableContent: String
+    /// Editable content - computed property that reads/writes directly to SiteViewModel
+    /// This eliminates state duplication between EditorViewModel and SiteViewModel
+    var editableContent: String {
+        get { siteViewModel.currentEditingContent }
+        set { siteViewModel.currentEditingContent = newValue }
+    }
+
     var isSaving = false
     var showSavedIndicator = false
     var showConflictAlert = false
@@ -76,7 +82,9 @@ class EditorViewModel {
         self.fileNode = fileNode
         self.contentFile = contentFile
         self.siteViewModel = siteViewModel
-        self.editableContent = contentFile.markdownContent
+        // Note: editableContent is now a computed property that reads/writes
+        // siteViewModel.currentEditingContent directly, which is already set
+        // by SiteViewModel.selectNode() when the file is selected.
         // Snapshot initial frontmatter state
         self.lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
     }
@@ -90,12 +98,10 @@ class EditorViewModel {
         lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
     }
 
-    /// Handle content changes for live preview and auto-save
+    /// Handle content changes for file status tracking and auto-save
+    /// Note: Preview sync is automatic since editableContent is a computed property
+    /// that reads/writes directly to siteViewModel.currentEditingContent
     func handleContentChange() {
-        // Always sync content for preview (needed for tab-based layout)
-        // The preview panel handles its own debouncing
-        siteViewModel.currentEditingContent = editableContent
-
         // Update file status in sidebar
         if hasUnsavedChanges {
             siteViewModel.markFileModified(fileNode.id)
