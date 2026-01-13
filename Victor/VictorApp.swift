@@ -5,11 +5,19 @@ import AppKit
 
 /// Helper to trigger NSTextView's native find panel from SwiftUI menu commands
 enum FindPanelHelper {
+    /// Extended actions from NSTextFinder.Action (not all in NSFindPanelAction)
+    static let showReplaceInterface = 12  // NSTextFinder.Action.showReplaceInterface
+
     /// Perform a find panel action on the current first responder
     static func performAction(_ action: NSFindPanelAction) {
+        performActionWithTag(Int(action.rawValue))
+    }
+
+    /// Perform a find panel action with a raw tag value (for NSTextFinder.Action values)
+    static func performActionWithTag(_ tag: Int) {
         // Create a menu item with the action tag (NSTextView uses sender.tag)
         let menuItem = NSMenuItem()
-        menuItem.tag = Int(action.rawValue)
+        menuItem.tag = tag
 
         // Send the action through the responder chain
         NSApp.sendAction(#selector(NSTextView.performFindPanelAction(_:)), to: nil, from: menuItem)
@@ -120,7 +128,8 @@ struct VictorApp: App {
                 .keyboardShortcut("f", modifiers: .command)
 
                 Button("Find and Replace...") {
-                    FindPanelHelper.performAction(.replace)
+                    // Use NSTextFinder.Action.showReplaceInterface (value 12)
+                    FindPanelHelper.performActionWithTag(FindPanelHelper.showReplaceInterface)
                 }
                 .keyboardShortcut("f", modifiers: [.command, .option])
 
@@ -138,6 +147,14 @@ struct VictorApp: App {
                     FindPanelHelper.performAction(.setFindString)
                 }
                 .keyboardShortcut("e", modifiers: .command)
+
+                Divider()
+
+                Button("Find in Files...") {
+                    siteViewModel.isGlobalSearchPresented = true
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(siteViewModel.site == nil)
             }
 
             // File menu commands
@@ -208,12 +225,6 @@ struct VictorApp: App {
                     siteViewModel.shouldFocusSearch = true
                 }
                 .keyboardShortcut("p", modifiers: .command)
-                .disabled(siteViewModel.site == nil)
-
-                Button("Find in Files...") {
-                    siteViewModel.isGlobalSearchPresented = true
-                }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
                 .disabled(siteViewModel.site == nil)
             }
 
