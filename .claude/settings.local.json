@@ -30,7 +30,9 @@
       "Bash(bd close:*)",
       "Bash(find:*)",
       "Bash(bd sync:*)",
-      "Bash(gh issue close:*)"
+      "Bash(gh issue close:*)",
+      "Bash(bd reopen:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
