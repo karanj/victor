@@ -26,9 +26,9 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 
 ## Current Status: Production Ready + Active Development
 
-**Last Updated**: 2026-01-10
+**Last Updated**: 2026-01-13
 **Build Status**: Clean build, no errors, no warnings
-**Codebase Size**: 78 Swift files, ~20,000 lines of code
+**Codebase Size**: 88 Swift files, ~23,000 lines of code
 
 ### Completed Phases
 
@@ -41,9 +41,25 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 | Phase 5: Data & Archetypes | COMPLETE | Data file editor, archetype manager, translation editor |
 | Phase 6: Asset Management | COMPLETE | Asset browser, drag-drop, detail panel |
 | Phase 7: Template Editing | COMPLETE | Template editor, browser, syntax highlighting |
-| Phase 8: Hugo Server Integration | NOT STARTED | Live preview via hugo server |
+| Phase 8: Hugo Server Integration | COMPLETE | Live preview via hugo server, build errors |
 
-### Recent Updates (2026-01-10)
+### Recent Updates (2026-01-13)
+
+**Phase 8: Hugo Server Integration (NEW):**
+- HugoServerService actor for managing Hugo development server subprocess
+- Server controls in toolbar (start/stop, status indicator, config, error badge)
+- ServerConfigPopover for port, drafts, future, expired settings
+- LivePreviewPanel with WKWebView showing Hugo-rendered site
+- BuildErrorOverlay displaying build errors with clickable file paths
+- BuildErrorParser service for robust Hugo output parsing
+- Multi-observer pattern for server state changes
+- Auto-crash recovery (up to 3 restart attempts)
+- Server tab in Preferences showing Hugo installation status
+- Toggle button to switch between Live Preview and Markdown Preview
+- 19 new tests for HugoServerService and BuildErrorParser
+- See `Docs/HUGO-SERVER-INTEGRATION.md` for detailed documentation
+
+### Previous Updates (2026-01-10)
 
 **Phase 7: Template Editing (NEW):**
 - Template model with type detection (base, single, list, partial, shortcode, taxonomy, home)
@@ -222,7 +238,7 @@ View Update (automatic via @Observable)
 | EditorViewModel.swift | Markdown editor business logic |
 | TextEditorViewModel.swift | Text file editor business logic |
 
-### Services (9 files)
+### Services (11 files)
 | File | Purpose |
 |------|---------|
 | FileSystemService.swift | File I/O, bookmarks, directory scanning |
@@ -233,9 +249,11 @@ View Update (automatic via @Observable)
 | ArchetypeManager.swift | Archetype loading and template processing |
 | AssetService.swift | Asset discovery and metadata |
 | MarkdownRenderer.swift | Markdown to HTML conversion |
+| HugoServerService.swift | Hugo dev server management (actor) |
+| BuildErrorParser.swift | Hugo build output parsing |
 | Logger.swift | Logging utilities |
 
-### Views (~48 files)
+### Views (~55 files)
 ```
 MainWindow/
   ├── ContentView.swift          # Three-column NavigationSplitView
@@ -244,7 +262,7 @@ MainWindow/
   ├── PreviewPanel.swift
   ├── SidebarView.swift
   ├── FileListView.swift         # Includes FolderRowWithSheets for context menus
-  ├── TabBarView.swift
+  ├── TabBarView.swift           # Layout mode + live preview toggle
   └── BreadcrumbBar.swift
 
 Editor/
@@ -274,6 +292,11 @@ AssetBrowser/
   ├── AssetBrowserView.swift     # Grid/list asset browser
   └── AssetDetailPanel.swift     # Asset metadata panel
 
+ServerControls/
+  ├── ServerControlView.swift    # Toolbar server controls
+  ├── ServerConfigPopover.swift  # Server configuration popover
+  └── ServerLogView.swift        # Server output log viewer
+
 Viewers/
   ├── FileViewerRouter.swift     # Routes to appropriate viewer
   ├── ImageViewerPanel.swift     # Image viewer with zoom
@@ -289,13 +312,15 @@ FocusMode/
   └── FocusModeView.swift
 
 Preview/
-  └── PreviewWebView.swift       # WKWebView wrapper
+  ├── PreviewWebView.swift       # WKWebView wrapper
+  ├── LivePreviewPanel.swift     # Hugo server live preview
+  └── BuildErrorOverlay.swift    # Build error display overlay
 
 Preferences/
-  └── PreferencesView.swift
+  └── PreferencesView.swift      # Includes Server tab
 ```
 
-### Tests (5 files)
+### Tests (6 files)
 | File | Purpose |
 |------|---------|
 | FrontmatterParserTests.swift | Frontmatter round-trip tests |
@@ -303,6 +328,7 @@ Preferences/
 | DataFileParserTests.swift | Data file parsing tests (22 tests) |
 | ArchetypeManagerTests.swift | Archetype processing tests (23 tests) |
 | FileStatusMetadataTests.swift | File status metadata tests |
+| HugoServerTests.swift | Hugo server and build error parsing tests (19 tests) |
 
 ---
 
@@ -367,16 +393,6 @@ xcodebuild test -project Victor.xcodeproj -scheme Victor -destination 'platform=
 - GUI for editing data/ files (JSON, YAML, TOML)
 - Archetype template management
 - Create new content from archetypes
-
-### Phase 7: Template Editing
-- layouts/ directory editing
-- Theme file browsing
-- Template syntax highlighting
-
-### Phase 8: Hugo Server Integration
-- Built-in hugo server controls
-- True live preview
-- Build status indicators
 
 ### UI Stage 3: Navigation Improvements
 - UI-012: File status indicators in sidebar
@@ -469,26 +485,27 @@ dictionary["buildExpired"] = config.buildExpired
 - `FULL-SITE-CMS-PLAN.md` - Detailed implementation plan with code snippets
 - `Docs/FRONTMATTER-ENHANCEMENT-PLAN.md` - Frontmatter editor improvements
 - `Docs/SHORTCODE-IMPLEMENTATION-PLAN.md` - Shortcode picker design
+- `Docs/HUGO-SERVER-INTEGRATION.md` - Hugo server integration guide
 - `Docs/CODE-REVIEW-ISSUES.yaml` - Code review findings
 
 ---
 
 ## For Future Claude Sessions
 
-1. **Current State**: Full-site CMS with config editor, asset browser, multi-file support
-2. **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based auto-save
+1. **Current State**: Full-site CMS with all 8 phases complete, including Hugo server integration
+2. **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based services
 3. **Code Location**: `/Users/karan/Developer/macos/victor/`
 4. **Build Method**: XcodeGen → Victor.xcodeproj
-5. **Key Files**: FileViewerRouter.swift, HugoConfigParser.swift, AssetBrowserView.swift
+5. **Key Files**: HugoServerService.swift, FileViewerRouter.swift, SiteViewModel.swift
 
 ### Quick Context
-- 60 Swift files, ~14,590 LOC
+- 88 Swift files, ~23,000 LOC
 - Build: Clean, no errors, no warnings
-- Phases 1-4 and 6 complete, Phases 5/7/8 not started
-- Recent work: Config editor Form/Raw sync fixes, boolean serialization
+- All 8 phases complete
+- Recent work: Phase 8 Hugo Server Integration with live preview
 
 ---
 
-**Document Version**: 5.0 (Full-Site CMS Update)
-**Last Updated**: 2026-01-05
-**Status**: Production Ready - Active Development
+**Document Version**: 6.0 (Hugo Server Integration)
+**Last Updated**: 2026-01-13
+**Status**: Production Ready - All Phases Complete

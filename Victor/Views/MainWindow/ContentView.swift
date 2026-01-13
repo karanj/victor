@@ -28,6 +28,9 @@ struct ContentView: View {
         .sheet(isPresented: $siteViewModel.isGlobalSearchPresented) {
             GlobalSearchView(siteViewModel: siteViewModel)
         }
+        .onAppear {
+            siteViewModel.setupHugoServerObservers()
+        }
     }
 
     // MARK: - Main Content
@@ -81,6 +84,13 @@ struct ContentView: View {
         .toolbar {
             // Note: NavigationSplitView automatically provides a sidebar toggle button
             // so we don't need to add our own
+
+            // Hugo server controls (only when a site is loaded)
+            if siteViewModel.site != nil {
+                ToolbarItem(placement: .automatic) {
+                    ServerControlView(siteViewModel: siteViewModel)
+                }
+            }
 
             if siteViewModel.isLoading || siteViewModel.isLoadingFile {
                 ToolbarItem {
@@ -149,26 +159,54 @@ struct ContentView: View {
 
         case .preview:
             // Full-width preview only (markdown only)
-            if let contentFile = node.contentFile {
-                PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
+            if node.contentFile != nil {
+                previewPanel(for: node)
             } else {
                 FileViewerRouter(node: node, siteViewModel: siteViewModel)
             }
 
         case .split:
             // Side-by-side editor and preview (markdown only)
-            if let contentFile = node.contentFile {
+            if node.contentFile != nil {
                 HSplitView {
                     FileViewerRouter(node: node, siteViewModel: siteViewModel)
                         .frame(minWidth: AppConstants.Content.panelMinWidth)
 
-                    PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
+                    previewPanel(for: node)
                         .frame(minWidth: AppConstants.Content.panelMinWidth)
                 }
             } else {
                 FileViewerRouter(node: node, siteViewModel: siteViewModel)
             }
         }
+    }
+
+    /// Returns the appropriate preview panel based on Hugo server state
+    @ViewBuilder
+    private func previewPanel(for node: FileNode) -> some View {
+        if siteViewModel.useLivePreview && siteViewModel.isHugoServerRunning {
+            // Use live preview from Hugo server
+            LivePreviewPanel(
+                siteViewModel: siteViewModel,
+                currentFilePath: relativeFilePath(for: node)
+            )
+        } else if let contentFile = node.contentFile {
+            // Use markdown preview
+            PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
+        }
+    }
+
+    /// Get relative file path from site root
+    private func relativeFilePath(for node: FileNode) -> String? {
+        guard let siteRoot = siteViewModel.site?.rootURL else { return nil }
+        let nodePath = node.url.path
+        let rootPath = siteRoot.path
+        guard nodePath.hasPrefix(rootPath) else { return nil }
+        var relativePath = String(nodePath.dropFirst(rootPath.count))
+        if relativePath.hasPrefix("/") {
+            relativePath = String(relativePath.dropFirst())
+        }
+        return relativePath
     }
 
     // MARK: - Empty States

@@ -4,12 +4,12 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 
 ![Screenshot of Victor in action](Docs/Victor-screenshot.png?raw=true "An example of Victor in use")
 
-**Last Updated**: January 5, 2026
+**Last Updated**: January 13, 2026
 **Build Status**: Clean build, no errors, no warnings
 **Code Quality**: All critical and high-priority issues fixed; macOS best practices reviewed
-**Test Coverage**: 121 tests covering config and frontmatter parsing
+**Test Coverage**: 166 tests covering config, frontmatter, data files, and archetypes
 **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based auto-save
-**Codebase**: 60 Swift files, ~14,590 lines of code
+**Codebase**: 78 Swift files, ~20,000 lines of code
 
 ## Features
 
@@ -109,6 +109,37 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 - Folder-specific browsing (shows only assets in selected folder)
 - Support for images (PNG, JPG, GIF, SVG, WebP), PDFs, and other file types
 
+### Data & Archetypes Management
+
+- **Data File Editor** for files in `data/` directory:
+  - **Form View**: Dynamic field editing supporting dictionaries, arrays, and nested structures
+  - **Raw View**: Direct text editing with format preservation
+  - Supports YAML, TOML, and JSON formats
+  - Context menu: "New Data File..." to create new data files
+
+- **Archetype Manager**:
+  - Load content templates from `archetypes/` directory
+  - **New Content dialog** (⇧⌘N) for creating content from archetypes
+  - Variable substitution (title, date, etc.) during content creation
+  - Context menu: "New Content from Archetype..."
+
+- **Translation Editor** for `i18n/` files:
+  - Key-value editing interface
+  - Plural form support for internationalization
+  - Context menu: "New Translation File..."
+
+### Template Editing
+
+- **Template Editor** for files in `layouts/` and `themes/` directories:
+  - Go template syntax highlighting (`{{ }}`, keywords, variables, strings)
+  - Metadata panel showing blocks, partials, functions, and variables used
+  - Support for all template types (base, single, list, partial, shortcode, taxonomy, home)
+
+- **Template Browser**:
+  - Navigate template hierarchy with type/directory/inheritance views
+  - Theme template support with theme name badges
+  - Opens when clicking `layouts/` or `themes/` directories
+
 ### Multi-File Viewing & Editing
 
 Victor intelligently routes files to the appropriate viewer based on file type:
@@ -119,8 +150,9 @@ Victor intelligently routes files to the appropriate viewer based on file type:
 | **Images** (.png, .jpg, .gif, .svg, .webp) | Image viewer with zoom/pan controls |
 | **Hugo Config** (hugo.toml/yaml/json) | GUI form editor + raw text editing |
 | **Code Files** (HTML, CSS, JS, TS, Go) | Syntax-aware text editor |
-| **Data Files** (YAML, TOML, JSON in data/) | Text editor |
-| **Templates** (HTML in layouts/ or themes/) | Text editor |
+| **Data Files** (YAML, TOML, JSON in data/) | GUI form editor with dynamic fields |
+| **Translation Files** (i18n/*.yaml/json/toml) | Key-value editor with plural support |
+| **Templates** (HTML in layouts/ or themes/) | Template editor with Go syntax highlighting |
 | **Other Files** | Open in default macOS application |
 
 ### Navigation
@@ -253,12 +285,15 @@ xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
 
 ```
 Victor/
-├── Models/              # Data models (12 files)
+├── Models/              # Data models (14 files)
 │   ├── HugoSite.swift
 │   ├── HugoSiteStructure.swift
 │   ├── HugoConfig.swift
 │   ├── ContentFile.swift
 │   ├── TextFile.swift
+│   ├── DataFile.swift
+│   ├── Archetype.swift
+│   ├── Template.swift
 │   ├── Asset.swift
 │   ├── FileNode.swift
 │   ├── FileType.swift
@@ -269,7 +304,7 @@ Victor/
 │   ├── SiteViewModel.swift
 │   ├── EditorViewModel.swift
 │   └── TextEditorViewModel.swift
-├── Views/               # ~38 files
+├── Views/               # ~48 files
 │   ├── MainWindow/      # Main app layout
 │   │   ├── ContentView.swift
 │   │   ├── SidebarView.swift
@@ -290,6 +325,18 @@ Victor/
 │   │   └── Tabs/                # Frontmatter tab views
 │   ├── ConfigEditor/
 │   │   └── ConfigEditorView.swift
+│   ├── DataEditor/
+│   │   ├── DataFileEditorView.swift
+│   │   └── NewDataFileView.swift
+│   ├── NewContent/
+│   │   └── NewContentView.swift
+│   ├── TranslationEditor/
+│   │   ├── TranslationEditorView.swift
+│   │   └── NewTranslationFileView.swift
+│   ├── TemplateEditor/
+│   │   ├── TemplateEditorView.swift
+│   │   ├── TemplateMetadataPanel.swift
+│   │   └── TemplateBrowserView.swift
 │   ├── AssetBrowser/
 │   │   ├── AssetBrowserView.swift
 │   │   └── AssetDetailPanel.swift
@@ -310,10 +357,13 @@ Victor/
 │   │   └── PreferencesView.swift
 │   └── Animations/
 │       └── AnimationModifiers.swift
-├── Services/            # 7 files
+├── Services/            # 9 files
 │   ├── FileSystemService.swift
 │   ├── FrontmatterParser.swift
 │   ├── HugoConfigParser.swift
+│   ├── DataFileParser.swift
+│   ├── ArchetypeManager.swift
+│   ├── TemplateParser.swift
 │   ├── AssetService.swift
 │   ├── MarkdownRenderer.swift
 │   ├── AutoSaveService.swift
@@ -322,9 +372,12 @@ Victor/
 └── Resources/
     └── preview-styles.css
 
-VictorTests/             # 2 files
+VictorTests/             # 5 files
 ├── HugoConfigParserTests.swift   # Hugo config parsing tests (61 tests)
-└── FrontmatterParserTests.swift  # Frontmatter parsing tests (60 tests)
+├── FrontmatterParserTests.swift  # Frontmatter parsing tests (60 tests)
+├── DataFileParserTests.swift     # Data file parsing tests (22 tests)
+├── ArchetypeManagerTests.swift   # Archetype processing tests (23 tests)
+└── FileStatusMetadataTests.swift # File status metadata tests
 ```
 
 ## Dependencies
@@ -362,6 +415,8 @@ xcodebuild test -project Victor.xcodeproj -scheme Victor -only-testing:VictorTes
 |------------|-------|-------------|
 | HugoConfigParserTests | 61 | Hugo config parsing and serialization (TOML, YAML, JSON) |
 | FrontmatterParserTests | 60 | Frontmatter parsing for markdown files |
+| DataFileParserTests | 22 | Data file parsing and serialization |
+| ArchetypeManagerTests | 23 | Archetype loading and template processing |
 
 **HugoConfigParserTests** covers:
 - Round-trip serialization for all formats (TOML, YAML, JSON)
@@ -380,6 +435,18 @@ xcodebuild test -project Victor.xcodeproj -scheme Victor -only-testing:VictorTes
 - Round-trip serialization
 - Error handling and edge cases
 
+**DataFileParserTests** covers:
+- Parsing YAML, TOML, and JSON data files
+- Nested dictionary and array structures
+- Round-trip serialization
+- Error handling for malformed input
+
+**ArchetypeManagerTests** covers:
+- Loading archetypes from directory
+- Variable substitution (title, date, etc.)
+- Default archetype handling
+- Content generation from templates
+
 ## Future Enhancements
 
 ### Planned Features
@@ -389,11 +456,9 @@ xcodebuild test -project Victor.xcodeproj -scheme Victor -only-testing:VictorTes
 - **Git integration** for version control (status, commit, push)
 - **Hugo server integration** for true live preview via `hugo server`
 - **Multi-file tabs** for editing multiple files simultaneously
-- **Data files management** (GUI for editing `data/` directory YAML/TOML/JSON)
-- **Archetype management** (create content from templates)
-- **Template editing** with Hugo syntax support for `layouts/` and `themes/`
 - **Search & replace** across multiple files
 - **Custom themes** and color schemes for the editor
+- **VoiceOver improvements** for enhanced accessibility
 
 ### Completed Features (Previously Planned)
 
@@ -402,6 +467,10 @@ xcodebuild test -project Victor.xcodeproj -scheme Victor -only-testing:VictorTes
 ✅ Multi-file type support (view/edit images, code files, data files)
 ✅ File type detection and routing
 ✅ Asset browser with thumbnails
+✅ Data files management (GUI for editing `data/` directory)
+✅ Archetype management (create content from templates)
+✅ Template editing with Go syntax highlighting
+✅ Translation file editor for i18n
 
 ## Hugo Site Structure
 
@@ -468,7 +537,7 @@ Contributions welcome for:
 - UI/UX enhancements
 - Documentation improvements
 - Future enhancements (file watching, Git integration, syntax highlighting, Hugo server integration)
-- Additional Hugo-specific features (archetypes, data files GUI, template editing)
+- Accessibility improvements (VoiceOver, keyboard navigation)
 - Expanding test coverage (ViewModels, Services, integration tests)
 - Performance optimizations
 

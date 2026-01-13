@@ -126,6 +126,25 @@ class SiteViewModel {
     /// Focus mode active state (not persisted - always starts inactive)
     var isFocusModeActive: Bool = false
 
+    // MARK: - Hugo Server State
+
+    /// Current Hugo development server status
+    var hugoServerStatus: HugoServerStatus = .stopped
+
+    /// Whether the Hugo server is currently running
+    var isHugoServerRunning: Bool {
+        hugoServerStatus.isRunning
+    }
+
+    /// Build errors from the Hugo server
+    var hugoBuildErrors: [HugoBuildError] = []
+
+    /// Server URL when running
+    var hugoServerURL: URL?
+
+    /// Whether to use live preview (Hugo server) instead of markdown preview
+    var useLivePreview: Bool = false
+
     /// Loading state (for site loading)
     var isLoading = false
 
@@ -566,6 +585,15 @@ class SiteViewModel {
 
     /// Close current site
     func closeSite() {
+        // Stop Hugo server if running
+        Task {
+            await HugoServerService.shared.stop()
+        }
+        hugoServerStatus = .stopped
+        hugoBuildErrors = []
+        hugoServerURL = nil
+        useLivePreview = false
+
         if let url = site?.rootURL {
             fileSystemService.stopAccessing(url: url)
             // Clear theme CSS cache for this site
@@ -1341,5 +1369,69 @@ class SiteViewModel {
             errorMessage = "Failed to create folder: \(error.localizedDescription)"
             Logger.shared.error("Error creating folder", error: error)
         }
+    }
+
+    // MARK: - Hugo Server Control
+
+    /// Set up observers for Hugo server state changes
+    func setupHugoServerObservers() {
+        Task {
+            await HugoServerService.shared.setOnStatusChange { @MainActor [weak self] newStatus in
+                self?.hugoServerStatus = newStatus
+                // Auto-enable live preview when server starts running
+                if newStatus.isRunning {
+                    self?.useLivePreview = true
+                }
+            }
+
+            await HugoServerService.shared.setOnBuildErrorsChange { @MainActor [weak self] errors in
+                self?.hugoBuildErrors = errors
+            }
+
+            // Get initial state
+            let initialStatus = await HugoServerService.shared.status
+            let initialErrors = await HugoServerService.shared.buildErrors
+            let initialURL = await HugoServerService.shared.serverURL
+
+            hugoServerStatus = initialStatus
+            hugoBuildErrors = initialErrors
+            hugoServerURL = initialURL
+            if initialStatus.isRunning {
+                useLivePreview = true
+            }
+        }
+    }
+
+    /// Start the Hugo development server
+    func startHugoServer() async throws {
+        guard let siteURL = site?.rootURL else {
+            throw HugoServerError.notRunning
+        }
+        try await HugoServerService.shared.start(siteURL: siteURL)
+        hugoServerURL = await HugoServerService.shared.serverURL
+    }
+
+    /// Stop the Hugo development server
+    func stopHugoServer() async {
+        await HugoServerService.shared.stop()
+        hugoServerURL = nil
+    }
+
+    /// Toggle the Hugo server state
+    func toggleHugoServer() async {
+        if isHugoServerRunning {
+            await stopHugoServer()
+        } else {
+            do {
+                try await startHugoServer()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Toggle between live preview and markdown preview
+    func toggleLivePreview() {
+        useLivePreview.toggle()
     }
 }

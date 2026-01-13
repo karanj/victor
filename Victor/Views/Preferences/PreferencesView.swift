@@ -15,6 +15,16 @@ struct PreferencesView: View {
     @AppStorage("badgeColorScheduled") private var scheduledColorHex = Color.BadgeColorKey.scheduled.defaultHex
     @AppStorage("badgeColorExpired") private var expiredColorHex = Color.BadgeColorKey.expired.defaultHex
 
+    // Hugo server preferences
+    @AppStorage("hugoServerPort") private var serverPort = 1313
+    @AppStorage("hugoServerBuildDrafts") private var buildDrafts = true
+    @AppStorage("hugoServerBuildFuture") private var buildFuture = true
+    @AppStorage("hugoServerBuildExpired") private var buildExpired = false
+
+    // Hugo version (loaded on appear)
+    @State private var hugoVersion: String = "Checking..."
+    @State private var isHugoInstalled: Bool = false
+
     /// Binding to convert hex string to Color for ColorPicker
     private var draftColor: Binding<Color> {
         Binding(
@@ -85,9 +95,29 @@ struct PreferencesView: View {
                 .tabItem {
                     Label("Appearance", systemImage: "paintpalette")
                 }
+
+            // Server tab - Hugo server settings
+            serverTab
+                .tabItem {
+                    Label("Server", systemImage: "server.rack")
+                }
         }
         .frame(minWidth: 400, idealWidth: 450, maxWidth: 550,
-               minHeight: 280, idealHeight: 320, maxHeight: 400)
+               minHeight: 350, idealHeight: 400, maxHeight: 500)
+        .onAppear {
+            checkHugoInstallation()
+        }
+    }
+
+    private func checkHugoInstallation() {
+        Task {
+            isHugoInstalled = await HugoServerService.shared.isHugoInstalled()
+            if let version = await HugoServerService.shared.getHugoVersion() {
+                hugoVersion = version
+            } else {
+                hugoVersion = "Not installed"
+            }
+        }
     }
 
     // MARK: - General Tab
@@ -162,6 +192,74 @@ struct PreferencesView: View {
                 Text("Badge Colors")
             } footer: {
                 Text("Colors for content status badges in the sidebar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    // MARK: - Server Tab
+
+    private var serverTab: some View {
+        Form {
+            Section {
+                HStack {
+                    Text("Hugo:")
+                    Spacer()
+                    if isHugoInstalled {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("Installed")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                        Text("Not found")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if isHugoInstalled {
+                    HStack {
+                        Text("Version:")
+                        Spacer()
+                        Text(hugoVersion)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                } else {
+                    Link("Install Hugo", destination: URL(string: "https://gohugo.io/installation/")!)
+                        .font(.callout)
+                }
+            } header: {
+                Text("Hugo Installation")
+            }
+
+            Section {
+                HStack {
+                    Text("Default Port:")
+                    Spacer()
+                    TextField("Port", value: $serverPort, format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                Toggle("Build drafts", isOn: $buildDrafts)
+                    .toggleStyle(.checkbox)
+
+                Toggle("Build future posts", isOn: $buildFuture)
+                    .toggleStyle(.checkbox)
+
+                Toggle("Build expired posts", isOn: $buildExpired)
+                    .toggleStyle(.checkbox)
+            } header: {
+                Text("Server Defaults")
+            } footer: {
+                Text("These settings are used when starting the Hugo development server.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
