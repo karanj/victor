@@ -102,6 +102,13 @@ class EditorViewModel {
     /// Note: Preview sync is automatic since editableContent is a computed property
     /// that reads/writes directly to siteViewModel.currentEditingContent
     func handleContentChange() {
+        // CRITICAL: Guard against spurious onChange triggers after file switch
+        // If this EditorViewModel's file is no longer selected, ignore the change
+        // This prevents false "unsaved changes" indicators when switching files
+        guard fileNode.id == siteViewModel.selectedNode?.id else {
+            return
+        }
+
         // Update file status in sidebar
         if hasUnsavedChanges {
             siteViewModel.markFileModified(fileNode.id)
@@ -128,14 +135,16 @@ class EditorViewModel {
         isSaving = true
         showSavedIndicator = false
 
-        let fullContent = buildFullContent()
+        // Capture content value before async operations
+        let markdownToSave = editableContent
+        let fullContent = buildFullContent(markdownContent: markdownToSave)
         let success = await siteViewModel.saveFile(node: fileNode, content: fullContent)
 
         isSaving = false
 
         if success {
-            // Update the content file's markdown content
-            contentFile.markdownContent = editableContent
+            // Update the content file's markdown content with captured value
+            contentFile.markdownContent = markdownToSave
 
             // Snapshot the frontmatter state after successful save
             lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
@@ -170,44 +179,65 @@ class EditorViewModel {
     // MARK: - Private Methods
 
     /// Build full file content by combining frontmatter and markdown
-    private func buildFullContent() -> String {
+    /// IMPORTANT: Reads directly from captured values, not computed properties
+    /// to avoid race conditions when files are switched mid-save
+    private func buildFullContent(markdownContent: String) -> String {
         if let frontmatter = contentFile.frontmatter {
             let serialized = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
-            return serialized + "\n" + editableContent
+            return serialized + "\n" + markdownContent
         } else {
-            return editableContent
+            return markdownContent
         }
     }
 
     /// Schedule auto-save with conflict detection
     private func scheduleAutoSave() {
-        let fullContent = buildFullContent()
+        // CRITICAL: Capture all values NOW before any async operations
+        // This prevents race conditions if the user switches files before auto-save completes
+        let markdownToSave = editableContent  // Read once and capture
+        let fullContent = buildFullContent(markdownContent: markdownToSave)
+        let nodeID = fileNode.id  // Capture node ID to validate later
+        let nodeURL = fileNode.url  // Capture URL (shouldn't change, but be safe)
 
         // Cancel any pending auto-save task before scheduling a new one
         autoSaveTask?.cancel()
 
         autoSaveTask = Task {
             await AutoSaveService.shared.scheduleAutoSave(
-                fileURL: fileNode.url,
+                fileURL: nodeURL,
                 content: fullContent,
                 lastModified: contentFile.lastModified,
                 onConflict: { @MainActor [weak self] in
                     guard let self = self else { return .cancel }
+                    // Only show conflict alert if this is still the selected file
+                    guard nodeID == self.siteViewModel.selectedNode?.id else {
+                        return .cancel  // Silently cancel if file switched
+                    }
                     // Cancel auto-save and show alert
                     self.showConflictAlert = true
                     return .cancel
                 },
                 onSuccess: { @MainActor [weak self] newModificationDate in
                     guard let self = self else { return }
+
+                    // CRITICAL: Only update state if this is still the current file
+                    // If user switched files, this EditorViewModel is stale and shouldn't modify anything
+                    guard nodeID == self.siteViewModel.selectedNode?.id else {
+                        // File was switched - don't update UI or modify state
+                        // The save to disk was successful, but UI updates are for the old file
+                        return
+                    }
+
                     // Update modification date
                     self.contentFile.lastModified = newModificationDate
-                    self.contentFile.markdownContent = self.editableContent
+                    // Use the captured markdown content, not editableContent
+                    self.contentFile.markdownContent = markdownToSave
 
                     // Snapshot the frontmatter state after successful auto-save
                     self.lastSavedFrontmatter = self.contentFile.frontmatter?.snapshot()
 
                     // Update file status in sidebar
-                    self.siteViewModel.markFileSaved(self.fileNode.id)
+                    self.siteViewModel.markFileSaved(nodeID)
 
                     // Show saved indicator briefly
                     self.showSavedIndicator = true
@@ -218,6 +248,10 @@ class EditorViewModel {
                 },
                 onError: { @MainActor [weak self] error in
                     guard let self = self else { return }
+                    // Only show error if this is still the selected file
+                    guard nodeID == self.siteViewModel.selectedNode?.id else {
+                        return  // Silently ignore errors for old files
+                    }
                     // Show error in site view model (unless it's a user cancellation)
                     if !(error is AutoSaveError) {
                         self.siteViewModel.errorMessage = error.localizedDescription
