@@ -141,6 +141,9 @@ class SiteViewModel {
     /// Trigger to focus search field
     var shouldFocusSearch = false
 
+    /// Whether global search panel is presented
+    var isGlobalSearchPresented = false
+
     /// Recently opened files (for Quick Open)
     var recentFiles: [FileNode] = []
 
@@ -543,7 +546,7 @@ class SiteViewModel {
     }
 
     /// Find a node by URL
-    private func findNode(url: URL) -> FileNode? {
+    func findNode(url: URL) -> FileNode? {
         for rootNode in fileNodes {
             if let found = rootNode.findNode(url: url) {
                 return found

@@ -156,6 +156,7 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 | Cmd+G | Find next |
 | Cmd+Shift+G | Find previous |
 | Cmd+Option+F | Find and replace |
+| Cmd+Shift+F | Find in files (global search) |
 | Cmd+B | Bold formatting |
 | Cmd+I | Italic formatting |
 | Cmd+K | Insert link |

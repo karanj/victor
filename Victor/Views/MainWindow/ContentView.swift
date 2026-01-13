@@ -25,6 +25,9 @@ struct ContentView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.slow), value: siteViewModel.isFocusModeActive)
+        .sheet(isPresented: $siteViewModel.isGlobalSearchPresented) {
+            GlobalSearchView(siteViewModel: siteViewModel)
+        }
     }
 
     // MARK: - Main Content

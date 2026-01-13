@@ -118,6 +118,18 @@ enum AppConstants {
 
     // MARK: - UserDefaults Keys
 
+    /// Global search settings
+    enum GlobalSearch {
+        /// Maximum matches to show per file (for performance)
+        static let maxResultsPerFile = 100
+        /// Debounce interval for live search
+        static let debounceInterval: TimeInterval = 0.3
+        /// Width of search panel
+        static let panelWidth: CGFloat = 700
+        /// Height of search panel
+        static let panelHeight: CGFloat = 500
+    }
+
     /// Centralized UserDefaults keys to avoid string literal duplication
     enum UserDefaultsKeys {
         static let hugoSiteBookmark = "hugoSiteBookmark"

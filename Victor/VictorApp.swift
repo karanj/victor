@@ -169,6 +169,12 @@ struct VictorApp: App {
                 }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(siteViewModel.site == nil)
+
+                Button("Find in Files...") {
+                    siteViewModel.isGlobalSearchPresented = true
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(siteViewModel.site == nil)
             }
 
             // View menu - Layout modes
