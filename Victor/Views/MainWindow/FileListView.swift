@@ -275,7 +275,8 @@ struct ContentStatusBadge: View {
     private var foregroundColor: Color {
         switch status {
         case .draft, .scheduled, .expired:
-            return .white
+            // Use contrast-aware text color based on badge background luminance
+            return status.badgeColor.contrastingTextColor
         case .published:
             return .clear
         }

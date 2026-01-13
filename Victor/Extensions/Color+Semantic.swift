@@ -1,6 +1,38 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Color Luminance & Contrast
+
+extension Color {
+    /// Calculate relative luminance using WCAG formula
+    /// Returns value between 0 (black) and 1 (white)
+    var luminance: Double {
+        guard let components = NSColor(self).usingColorSpace(.sRGB) else {
+            return 0.5
+        }
+
+        // Convert sRGB to linear RGB
+        func linearize(_ value: CGFloat) -> Double {
+            let v = Double(value)
+            return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+
+        let r = linearize(components.redComponent)
+        let g = linearize(components.greenComponent)
+        let b = linearize(components.blueComponent)
+
+        // WCAG relative luminance formula
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    /// Returns white or black depending on which provides better contrast
+    var contrastingTextColor: Color {
+        // Use white text for dark backgrounds, black for light
+        // Threshold of 0.5 provides good results for most colors
+        luminance < 0.5 ? .white : .black
+    }
+}
+
 // MARK: - Hex Color Conversion
 
 extension Color {
