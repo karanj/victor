@@ -150,8 +150,12 @@ Create a native macOS app that feels better than editing Hugo sites in VS Code o
 |----------|--------|
 | Cmd+O | Open Hugo site folder |
 | Cmd+S | Save current file |
-| Cmd+F | Focus search field |
-| Esc | Clear search field |
+| Cmd+P | Focus search field |
+| Esc | Clear search field / Dismiss find bar |
+| Cmd+F | Find in file |
+| Cmd+G | Find next |
+| Cmd+Shift+G | Find previous |
+| Cmd+Option+F | Find and replace |
 | Cmd+B | Bold formatting |
 | Cmd+I | Italic formatting |
 | Cmd+K | Insert link |

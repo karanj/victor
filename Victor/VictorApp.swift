@@ -97,6 +97,9 @@ struct VictorApp: App {
         }
         .defaultSize(width: AppConstants.Window.defaultWidth, height: AppConstants.Window.defaultHeight)
         .commands {
+            // Standard text editing commands (includes Edit > Find menu)
+            TextEditingCommands()
+
             // File menu commands
             CommandGroup(replacing: .newItem) {
                 Button("Open Hugo Site...") {
@@ -164,7 +167,7 @@ struct VictorApp: App {
                 Button("Search Files") {
                     siteViewModel.shouldFocusSearch = true
                 }
-                .keyboardShortcut("f", modifiers: .command)
+                .keyboardShortcut("p", modifiers: .command)
                 .disabled(siteViewModel.site == nil)
             }
 
