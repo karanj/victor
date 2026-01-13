@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01B90D1C125D875E5D0A551D /* CustomFieldEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 044151EAFFD0111E4BB58878 /* CustomFieldEditor.swift */; };
+		0C48FDDED0826BFF60FF17D1 /* SearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77E7BEA998F133DD83D5A5B /* SearchService.swift */; };
 		0D3B061D0E213B081F3F6161 /* FrontmatterParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4677CA9101F20BE0B2C8D145 /* FrontmatterParser.swift */; };
 		1088CADE1E07095438ADF02C /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85515707B9420ED7D9F3724D /* PreferencesView.swift */; };
 		11594468086A0FB770000A8B /* VictorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */; };
@@ -19,6 +20,7 @@
 		192653214297E2D2B27353F6 /* TemplateBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CF09C9E3E72F6EEBFC8E75 /* TemplateBrowserView.swift */; };
 		1AB800034AD6B46009B0CF37 /* TranslationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE3B3FDD8FB3F3B4F879F11 /* TranslationEditorView.swift */; };
 		1C03AF9B620F1639386046F1 /* Archetype.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DDA15AF4B156F54C8752CCD /* Archetype.swift */; };
+		1F4223BCDF34F90372E3CEFF /* SearchResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B2626CEE130D9177FC25EF6 /* SearchResult.swift */; };
 		27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */; };
 		281A23A15B2B0AAC8668F4CC /* MenuEntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B70F82D5687B1A912977787 /* MenuEntryEditor.swift */; };
 		2FCC48CCD498DB32C3C792AE /* FrontmatterParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */; };
@@ -44,6 +46,7 @@
 		649E87B52E9E159C8DF5E117 /* AssetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1EEC2183F119D72ACAE837 /* AssetService.swift */; };
 		6AB4A8EF38CEF3BB2109E0F3 /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D5DFBC7BB7EE3AA4800B5F9 /* TabBarView.swift */; };
 		6B4B70AA10B0C39CB1AB8B0C /* NewTranslationFileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA440D6CB6066809274DD1F /* NewTranslationFileView.swift */; };
+		6BA3D7B859EB7124F5793347 /* GlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80306ED9FED110CE14E82D2 /* GlobalSearchView.swift */; };
 		6EC06E16839B86FBA265A864 /* Template.swift in Sources */ = {isa = PBXBuildFile; fileRef = B77359CF942B864CCDB1D4BF /* Template.swift */; };
 		71156DCD5C11099B7DD81EE6 /* AssetDetailPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E71FA51E291417520E104548 /* AssetDetailPanel.swift */; };
 		75539CC1FFB95CC787AFC758 /* FrontmatterBottomPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9853E3C0E35EC9D2CEBEC4D5 /* FrontmatterBottomPanel.swift */; };
@@ -125,6 +128,7 @@
 		1FFA71491ABB3262F49DAA8F /* AssetBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetBrowserView.swift; sourceTree = "<group>"; };
 		20942866D9502CCA93571D19 /* TextFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFile.swift; sourceTree = "<group>"; };
 		27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcodeCardView.swift; sourceTree = "<group>"; };
+		2B2626CEE130D9177FC25EF6 /* SearchResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResult.swift; sourceTree = "<group>"; };
 		2B70F82D5687B1A912977787 /* MenuEntryEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuEntryEditor.swift; sourceTree = "<group>"; };
 		2BA9C7BE480C560AAF1EEE82 /* FrontmatterEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterEditorView.swift; sourceTree = "<group>"; };
 		2CAC2609C5C9E175A47C8BD2 /* HugoSite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoSite.swift; sourceTree = "<group>"; };
@@ -167,6 +171,7 @@
 		A3EC761DE9530FB84BB6756B /* FileStatusMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStatusMetadata.swift; sourceTree = "<group>"; };
 		A3F46E0A71220B160B3FDD02 /* AutoSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveService.swift; sourceTree = "<group>"; };
 		A70CEA56165BC5AE8129FC85 /* EditorStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorStatusBar.swift; sourceTree = "<group>"; };
+		A80306ED9FED110CE14E82D2 /* GlobalSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalSearchView.swift; sourceTree = "<group>"; };
 		AA94411ADE4D941B623452C5 /* SiteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteViewModel.swift; sourceTree = "<group>"; };
 		AAE3B3FDD8FB3F3B4F879F11 /* TranslationEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationEditorView.swift; sourceTree = "<group>"; };
 		AB27DF426185C0D87A1F7EFF /* FrontmatterTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterTypes.swift; sourceTree = "<group>"; };
@@ -195,6 +200,7 @@
 		E47231FACC5F28F3FB428392 /* FileSystemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemService.swift; sourceTree = "<group>"; };
 		E48282E0D260FE4E514D9777 /* DataFileParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFileParser.swift; sourceTree = "<group>"; };
 		E71FA51E291417520E104548 /* AssetDetailPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetDetailPanel.swift; sourceTree = "<group>"; };
+		E77E7BEA998F133DD83D5A5B /* SearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchService.swift; sourceTree = "<group>"; };
 		EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoConfigParserTests.swift; sourceTree = "<group>"; };
 		ECFE88CA8C8E2F13D02BAC38 /* MetadataSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSection.swift; sourceTree = "<group>"; };
 		ED03CD64BCDC16ACEBF130BD /* TextEditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditorViewModel.swift; sourceTree = "<group>"; };
@@ -257,6 +263,7 @@
 				BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */,
 				9102466F776A1B376AC8C5E4 /* Logger.swift */,
 				3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */,
+				E77E7BEA998F133DD83D5A5B /* SearchService.swift */,
 				A37F1713A34DDE77DA310697 /* SyntaxHighlighter.swift */,
 				3DDFE1122F73DA5BCF708843 /* TemplateParser.swift */,
 			);
@@ -321,10 +328,19 @@
 				8CF18C11530F31087472421D /* HugoShortcode.swift */,
 				2CAC2609C5C9E175A47C8BD2 /* HugoSite.swift */,
 				C7C29CB2FE5672D265C73C51 /* HugoSiteStructure.swift */,
+				2B2626CEE130D9177FC25EF6 /* SearchResult.swift */,
 				B77359CF942B864CCDB1D4BF /* Template.swift */,
 				20942866D9502CCA93571D19 /* TextFile.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		5BE74E0B2F34FA891493BBFE /* GlobalSearch */ = {
+			isa = PBXGroup;
+			children = (
+				A80306ED9FED110CE14E82D2 /* GlobalSearchView.swift */,
+			);
+			path = GlobalSearch;
 			sourceTree = "<group>";
 		};
 		6DD3A35B0CF216CC7E5429EB /* TemplateEditor */ = {
@@ -503,6 +519,7 @@
 				8A781F7A6B8C109E45877C18 /* DataEditor */,
 				B240D648A1A9764B85FE7F58 /* Editor */,
 				173C852BC2D631EF4761BB3A /* FocusMode */,
+				5BE74E0B2F34FA891493BBFE /* GlobalSearch */,
 				C92B2508B84E482A2B91EF55 /* Inspector */,
 				7682DE18DB8FF777B046436C /* MainWindow */,
 				20890C3977F09F5D75D74C20 /* NewContent */,
@@ -680,6 +697,7 @@
 				D6DE0F087D565ED5E1E45B08 /* FrontmatterEditorView.swift in Sources */,
 				0D3B061D0E213B081F3F6161 /* FrontmatterParser.swift in Sources */,
 				54DD741D23FA651B168E4207 /* FrontmatterTypes.swift in Sources */,
+				6BA3D7B859EB7124F5793347 /* GlobalSearchView.swift in Sources */,
 				35B52DF7CCC9B4AAA2349319 /* HelpTooltip.swift in Sources */,
 				46AD3C5EB1472BD20E20CDD7 /* HugoConfig.swift in Sources */,
 				C92F0586E16024CD0B3929A8 /* HugoConfigParser.swift in Sources */,
@@ -701,6 +719,8 @@
 				D6DD6E852E061238FCBDF0CF /* PreviewWebView.swift in Sources */,
 				C7C16AAEBEB1B6427E7E004B /* PublishingTab.swift in Sources */,
 				BA894FADE169193B513F4318 /* SEOTab.swift in Sources */,
+				1F4223BCDF34F90372E3CEFF /* SearchResult.swift in Sources */,
+				0C48FDDED0826BFF60FF17D1 /* SearchService.swift in Sources */,
 				27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */,
 				B618E4399B0A3A3F9A00F5BD /* ShortcodeFormView.swift in Sources */,
 				88DEA8E44C4B844481ACE462 /* ShortcodePickerView.swift in Sources */,
