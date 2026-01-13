@@ -2,6 +2,8 @@
 
 A native macOS app built with SwiftUI that provides a sophisticated editing experience for Hugo static sites.
 
+![Screenshot of Victor in action](Docs/Victor-screenshot.png?raw=true "An example of Victor in use")
+
 **Last Updated**: January 5, 2026
 **Build Status**: Clean build, no errors, no warnings
 **Code Quality**: All critical and high-priority issues fixed; macOS best practices reviewed
