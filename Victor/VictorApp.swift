@@ -1,6 +1,21 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Find Panel Helper
+
+/// Helper to trigger NSTextView's native find panel from SwiftUI menu commands
+enum FindPanelHelper {
+    /// Perform a find panel action on the current first responder
+    static func performAction(_ action: NSFindPanelAction) {
+        // Create a menu item with the action tag (NSTextView uses sender.tag)
+        let menuItem = NSMenuItem()
+        menuItem.tag = Int(action.rawValue)
+
+        // Send the action through the responder chain
+        NSApp.sendAction(#selector(NSTextView.performFindPanelAction(_:)), to: nil, from: menuItem)
+    }
+}
+
 // MARK: - App Delegate for Quit Confirmation
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -97,8 +112,33 @@ struct VictorApp: App {
         }
         .defaultSize(width: AppConstants.Window.defaultWidth, height: AppConstants.Window.defaultHeight)
         .commands {
-            // Standard text editing commands (includes Edit > Find menu)
-            TextEditingCommands()
+            // Find menu commands - route to NSTextView's native find bar
+            CommandGroup(replacing: .textEditing) {
+                Button("Find...") {
+                    FindPanelHelper.performAction(.showFindPanel)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+
+                Button("Find and Replace...") {
+                    FindPanelHelper.performAction(.replace)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+
+                Button("Find Next") {
+                    FindPanelHelper.performAction(.next)
+                }
+                .keyboardShortcut("g", modifiers: .command)
+
+                Button("Find Previous") {
+                    FindPanelHelper.performAction(.previous)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+
+                Button("Use Selection for Find") {
+                    FindPanelHelper.performAction(.setFindString)
+                }
+                .keyboardShortcut("e", modifiers: .command)
+            }
 
             // File menu commands
             CommandGroup(replacing: .newItem) {
