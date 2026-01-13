@@ -8,6 +8,8 @@ struct PreviewPanel: View {
 
     @State private var renderedHTML: String = ""
     @State private var debounceTask: Task<Void, Never>?
+    @State private var themeCSS: String?
+    @State private var lastLoadedTheme: String?
 
     /// Get the current content to display
     private var currentContent: String {
@@ -19,12 +21,20 @@ struct PreviewPanel: View {
         contentFile.frontmatter?.title
     }
 
+    /// Current theme name from Hugo config
+    private var currentTheme: String? {
+        siteViewModel.hugoConfig?.theme
+    }
+
     var body: some View {
         PreviewWebView(html: renderedHTML)
             .navigationTitle(previewTitle ?? contentFile.fileName)
             .onAppear {
-                // Always render current content when view appears (e.g., switching to Preview tab)
-                updatePreview(content: currentContent)
+                // Load theme CSS and render content when view appears
+                Task {
+                    await loadThemeCSSIfNeeded()
+                    updatePreview(content: currentContent)
+                }
             }
             .onChange(of: siteViewModel.currentEditingContent) { _, newContent in
                 // Only do live updates if enabled (for split view performance)
@@ -47,14 +57,39 @@ struct PreviewPanel: View {
                 debounceTask?.cancel()
                 updatePreview(content: currentContent)
             }
+            .onChange(of: currentTheme) { _, _ in
+                // Theme changed in config, reload theme CSS
+                Task {
+                    await loadThemeCSSIfNeeded()
+                    updatePreview(content: currentContent)
+                }
+            }
             .onDisappear {
                 // Cancel pending debounce task when view disappears
                 debounceTask?.cancel()
             }
     }
 
+    /// Load theme CSS from Hugo theme directory if theme has changed
+    private func loadThemeCSSIfNeeded() async {
+        let theme = currentTheme
+
+        // Skip if theme hasn't changed
+        guard theme != lastLoadedTheme else { return }
+
+        lastLoadedTheme = theme
+        themeCSS = await ThemeCSSService.shared.loadThemeCSS(
+            themeName: theme,
+            siteRootURL: siteViewModel.site?.rootURL
+        )
+    }
+
     private func updatePreview(content: String) {
-        renderedHTML = MarkdownRenderer.shared.renderOrError(markdown: content, title: previewTitle)
+        renderedHTML = MarkdownRenderer.shared.renderOrError(
+            markdown: content,
+            title: previewTitle,
+            themeCSS: themeCSS
+        )
     }
 }
 

@@ -568,6 +568,10 @@ class SiteViewModel {
     func closeSite() {
         if let url = site?.rootURL {
             fileSystemService.stopAccessing(url: url)
+            // Clear theme CSS cache for this site
+            Task {
+                await ThemeCSSService.shared.clearCache(for: url)
+            }
         }
         site = nil
         fileNodes = []

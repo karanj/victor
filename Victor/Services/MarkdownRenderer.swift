@@ -15,7 +15,8 @@ class MarkdownRenderer {
     /// - Parameters:
     ///   - markdown: The markdown content (may include frontmatter)
     ///   - title: Optional title from frontmatter to render as h1 heading
-    func render(markdown: String, title: String? = nil) -> Result<String, RenderError> {
+    ///   - themeCSS: Optional CSS from Hugo theme (loaded via ThemeCSSService)
+    func render(markdown: String, title: String? = nil, themeCSS: String? = nil) -> Result<String, RenderError> {
         do {
             // Strip frontmatter before rendering
             let markdownWithoutFrontmatter = stripFrontmatter(from: markdown)
@@ -25,7 +26,7 @@ class MarkdownRenderer {
             let htmlBody = try down.toHTML()
 
             // Wrap in full HTML document with CSS, including title if provided
-            let fullHTML = wrapInHTMLTemplate(htmlBody: htmlBody, title: title)
+            let fullHTML = wrapInHTMLTemplate(htmlBody: htmlBody, title: title, themeCSS: themeCSS)
 
             return .success(fullHTML)
         } catch {
@@ -47,8 +48,9 @@ class MarkdownRenderer {
     /// - Parameters:
     ///   - markdown: The markdown content (may include frontmatter)
     ///   - title: Optional title from frontmatter to render as h1 heading
-    func renderOrError(markdown: String, title: String? = nil) -> String {
-        switch render(markdown: markdown, title: title) {
+    ///   - themeCSS: Optional CSS from Hugo theme (loaded via ThemeCSSService)
+    func renderOrError(markdown: String, title: String? = nil, themeCSS: String? = nil) -> String {
+        switch render(markdown: markdown, title: title, themeCSS: themeCSS) {
         case .success(let html):
             return html
         case .failure(let error):
@@ -59,8 +61,12 @@ class MarkdownRenderer {
     // MARK: - HTML Templates
 
     /// Wrap HTML body in full document with CSS
-    /// Note: See GitHub issue #1 for planned Hugo theme CSS integration
-    private func wrapInHTMLTemplate(htmlBody: String, title: String? = nil) -> String {
+    /// Supports optional Hugo theme CSS which is injected after default styles (CSS cascade: later rules win)
+    /// - Parameters:
+    ///   - htmlBody: The rendered HTML body content
+    ///   - title: Optional title for the document
+    ///   - themeCSS: Optional CSS from Hugo theme (injected last to override defaults)
+    private func wrapInHTMLTemplate(htmlBody: String, title: String? = nil, themeCSS: String? = nil) -> String {
         // Build title heading if provided
         let titleHTML: String
         if let title = title, !title.isEmpty {
@@ -74,6 +80,20 @@ class MarkdownRenderer {
             titleHTML = ""
         }
 
+        // Build CSS: default styles first, then theme CSS (later rules take precedence in CSS cascade)
+        let css: String
+        if let themeCSS = themeCSS {
+            css = """
+            /* === Default Styles (base styling) === */
+            \(githubStyleCSS)
+
+            /* === Hugo Theme CSS (overrides defaults) === */
+            \(themeCSS)
+            """
+        } else {
+            css = githubStyleCSS
+        }
+
         return """
         <!DOCTYPE html>
         <html>
@@ -82,7 +102,7 @@ class MarkdownRenderer {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>\(title ?? "Preview")</title>
             <style>
-                \(githubStyleCSS)
+                \(css)
             </style>
         </head>
         <body>
