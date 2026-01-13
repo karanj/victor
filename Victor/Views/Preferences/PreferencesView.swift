@@ -73,6 +73,26 @@ struct PreferencesView: View {
     }
 
     var body: some View {
+        TabView {
+            // General tab - Editor and Auto-Save settings
+            generalTab
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+
+            // Appearance tab - Badge colors
+            appearanceTab
+                .tabItem {
+                    Label("Appearance", systemImage: "paintpalette")
+                }
+        }
+        .frame(minWidth: 400, idealWidth: 450, maxWidth: 550,
+               minHeight: 280, idealHeight: 320, maxHeight: 400)
+    }
+
+    // MARK: - General Tab
+
+    private var generalTab: some View {
         Form {
             Section {
                 Picker("Font:", selection: validatedFontName) {
@@ -118,7 +138,15 @@ struct PreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .formStyle(.grouped)
+        .animation(.easeInOut(duration: 0.2), value: isAutoSaveEnabled)
+    }
 
+    // MARK: - Appearance Tab
+
+    private var appearanceTab: some View {
+        Form {
             Section {
                 ColorPicker("Draft:", selection: draftColor, supportsOpacity: false)
                 ColorPicker("Scheduled:", selection: scheduledColor, supportsOpacity: false)
@@ -139,9 +167,6 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 350, idealWidth: 400, maxWidth: 500,
-               minHeight: 350, idealHeight: 420, maxHeight: 500)
-        .animation(.easeInOut(duration: 0.2), value: isAutoSaveEnabled)
     }
 }
 
