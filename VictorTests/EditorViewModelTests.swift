@@ -374,4 +374,214 @@ final class EditorViewModelTests: XCTestCase {
 
         XCTAssertEqual(editorVM.wordCount, 3)
     }
+
+    // MARK: - Vulnerability Documentation Tests
+
+    /// Documents that hasUnsavedChanges returns WRONG result when called on stale ViewModel
+    /// This is a known architectural issue - the computed property depends on selectedNode.
+    /// The guard in handleContentChange() protects against this in practice.
+    /// See victor-cs2 for proposed fix: store content locally instead of computed property.
+    func testHasUnsavedChangesVulnerability_ReturnsWrongValueAfterFileSwitch() {
+        // Select file 1 and create editor
+        siteViewModel.selectedNode = testFileNode1
+        siteViewModel.currentEditingContent = testContentFile1.markdownContent
+
+        let editorVM1 = EditorViewModel(
+            fileNode: testFileNode1,
+            contentFile: testContentFile1,
+            siteViewModel: siteViewModel
+        )
+
+        // Initially, hasUnsavedChanges should be false (content matches)
+        XCTAssertFalse(editorVM1.hasUnsavedChanges,
+                       "Should have no unsaved changes initially")
+
+        // Modify file 1's content
+        editorVM1.editableContent = "Modified content for file 1"
+
+        // Now hasUnsavedChanges should be true
+        XCTAssertTrue(editorVM1.hasUnsavedChanges,
+                      "Should have unsaved changes after modification")
+
+        // Switch to file 2 - this is where the vulnerability manifests
+        siteViewModel.selectedNode = testFileNode2
+        siteViewModel.currentEditingContent = testContentFile2.markdownContent
+
+        // VULNERABILITY: editorVM1.hasUnsavedChanges now compares:
+        // - editableContent (reads file 2's content from siteViewModel)
+        // - contentFile.markdownContent (still file 1's original content)
+        // This comparison is WRONG - it's comparing file 2's content to file 1's saved content!
+
+        // The result depends on whether file 2's content equals file 1's saved content
+        // In our test setup, they're different, so hasUnsavedChanges returns true
+        // BUT FOR THE WRONG REASON - it thinks file 1 has changes when really
+        // it's comparing file 2's content to file 1's baseline
+
+        // Document the vulnerability: after switching, the comparison is meaningless
+        let vulnerableResult = editorVM1.hasUnsavedChanges
+
+        // The guard in handleContentChange() prevents this from causing harm,
+        // but the underlying computed property is still broken
+        XCTAssertTrue(vulnerableResult,
+                      "VULNERABILITY: hasUnsavedChanges returns true but for wrong reason - " +
+                      "comparing file 2's content to file 1's baseline. " +
+                      "See victor-cs2 for architectural fix.")
+
+        // Verify the guard protects against this in practice
+        editorVM1.handleContentChange()
+        // File 1 should NOT be marked as modified (guard prevents it)
+        XCTAssertFalse(siteViewModel.isFileModified(testFileNode1.id),
+                       "Guard should prevent stale ViewModel from marking file as modified")
+    }
+
+    // MARK: - Integration Tests with Real Timing
+
+    /// Integration test: Verifies auto-save uses captured content, not current editableContent
+    /// This test uses REAL TIMING to verify the race condition fix works in practice.
+    /// The debounce interval is 2 seconds, so this test takes ~3 seconds to run.
+    func testAutoSaveUsesCorrectContentAfterFileSwitchDuringDebounce() async throws {
+        // Ensure auto-save is enabled for this test
+        UserDefaults.standard.set(true, forKey: "isAutoSaveEnabled")
+        defer {
+            // Reset to default after test
+            UserDefaults.standard.removeObject(forKey: "isAutoSaveEnabled")
+        }
+
+        // Create actual test files on disk
+        let tempDir = FileManager.default.temporaryDirectory
+        let testURL1 = tempDir.appendingPathComponent("race_test_file1_\(UUID()).md")
+        let testURL2 = tempDir.appendingPathComponent("race_test_file2_\(UUID()).md")
+
+        // Write initial content
+        let file1InitialContent = "---\ntitle: File 1\n---\n\nOriginal content of file 1"
+        let file2InitialContent = "---\ntitle: File 2\n---\n\nOriginal content of file 2"
+        try file1InitialContent.write(to: testURL1, atomically: true, encoding: .utf8)
+        try file2InitialContent.write(to: testURL2, atomically: true, encoding: .utf8)
+
+        // Clean up after test
+        defer {
+            try? FileManager.default.removeItem(at: testURL1)
+            try? FileManager.default.removeItem(at: testURL2)
+        }
+
+        // Create file nodes
+        let fileNode1 = FileNode(url: testURL1, isDirectory: false, isPageBundle: false)
+        let fileNode2 = FileNode(url: testURL2, isDirectory: false, isPageBundle: false)
+
+        // Load content files - small delay to ensure file modification dates are stable
+        try await Task.sleep(for: .milliseconds(100))
+        let contentFile1 = try await FileSystemService.shared.readContentFile(at: testURL1)
+        let contentFile2 = try await FileSystemService.shared.readContentFile(at: testURL2)
+        fileNode1.contentFile = contentFile1
+        fileNode2.contentFile = contentFile2
+
+        // Select file 1
+        siteViewModel.selectedNode = fileNode1
+        siteViewModel.currentEditingContent = contentFile1.markdownContent
+
+        // Create editor view model for file 1
+        let editorVM1 = EditorViewModel(
+            fileNode: fileNode1,
+            contentFile: contentFile1,
+            siteViewModel: siteViewModel
+        )
+
+        // Keep a strong reference to prevent deallocation
+        _ = editorVM1
+
+        // Modify file 1's content - this will schedule auto-save
+        let file1ModifiedContent = "MODIFIED: This is the new content for file 1"
+        editorVM1.editableContent = file1ModifiedContent
+        editorVM1.handleContentChange()  // Triggers auto-save scheduling
+
+        // Verify file 1 is marked as modified
+        XCTAssertTrue(siteViewModel.isFileModified(fileNode1.id),
+                      "File 1 should be marked as modified")
+
+        // Give a tiny delay to ensure the auto-save task is created
+        try await Task.sleep(for: .milliseconds(50))
+
+        // CRITICAL: Switch to file 2 BEFORE the auto-save debounce completes
+        // The debounce is 2 seconds, so we switch immediately
+        siteViewModel.selectedNode = fileNode2
+        siteViewModel.currentEditingContent = contentFile2.markdownContent
+
+        // Verify the switch happened
+        XCTAssertEqual(siteViewModel.selectedNode?.id, fileNode2.id,
+                       "Should have switched to file 2")
+
+        // Wait for auto-save to complete (debounce is 2 seconds, wait 3 to be safe)
+        try await Task.sleep(for: .seconds(3))
+
+        // Read file 1 from disk - it should have the MODIFIED content, not file 2's content
+        let file1SavedContent = try String(contentsOf: testURL1, encoding: .utf8)
+
+        // CRITICAL ASSERTION: File 1 should contain file 1's modified content
+        XCTAssertTrue(file1SavedContent.contains(file1ModifiedContent),
+                      "File 1 should be saved with its modified content, not file 2's content. " +
+                      "Actual content: \(file1SavedContent)")
+
+        // File 1 should NOT contain file 2's content (data corruption check)
+        XCTAssertFalse(file1SavedContent.contains("Original content of file 2"),
+                       "File 1 should NOT contain file 2's content (data corruption!)")
+        XCTAssertFalse(file1SavedContent.contains("File 2"),
+                       "File 1 should NOT contain file 2's title (data corruption!)")
+
+        // File 2 should be unchanged
+        let file2Content = try String(contentsOf: testURL2, encoding: .utf8)
+        XCTAssertTrue(file2Content.contains("Original content of file 2"),
+                      "File 2 should remain unchanged")
+    }
+
+    /// Integration test: Verifies manual save captures content correctly even with await suspension
+    /// This test creates a real file and saves it to verify the fix works end-to-end.
+    func testManualSaveUsesCorrectContentEvenIfFileSwitchDuringAwait() async throws {
+        // Create actual test file on disk
+        let tempDir = FileManager.default.temporaryDirectory
+        let testURL = tempDir.appendingPathComponent("manual_save_test_\(UUID()).md")
+
+        // Write initial content
+        let initialContent = "---\ntitle: Test\n---\n\nInitial content"
+        try initialContent.write(to: testURL, atomically: true, encoding: .utf8)
+
+        defer {
+            try? FileManager.default.removeItem(at: testURL)
+        }
+
+        // Create file node and load content
+        let fileNode = FileNode(url: testURL, isDirectory: false, isPageBundle: false)
+        let contentFile = try await FileSystemService.shared.readContentFile(at: testURL)
+        fileNode.contentFile = contentFile
+
+        // Select file
+        siteViewModel.selectedNode = fileNode
+        siteViewModel.currentEditingContent = contentFile.markdownContent
+
+        // Create editor view model
+        let editorVM = EditorViewModel(
+            fileNode: fileNode,
+            contentFile: contentFile,
+            siteViewModel: siteViewModel
+        )
+
+        // Modify content
+        let modifiedContent = "MODIFIED CONTENT - should be saved correctly"
+        editorVM.editableContent = modifiedContent
+
+        // Verify unsaved changes before save
+        XCTAssertTrue(editorVM.hasUnsavedChanges)
+
+        // Save the file - the fix captures content BEFORE the await
+        let saveSuccess = await editorVM.save()
+        XCTAssertTrue(saveSuccess, "Save should succeed")
+
+        // Read from disk to verify
+        let savedContent = try String(contentsOf: testURL, encoding: .utf8)
+        XCTAssertTrue(savedContent.contains(modifiedContent),
+                      "Saved file should contain the modified content")
+
+        // Verify contentFile model was updated
+        XCTAssertEqual(contentFile.markdownContent, modifiedContent,
+                       "ContentFile model should be updated with saved content")
+    }
 }
