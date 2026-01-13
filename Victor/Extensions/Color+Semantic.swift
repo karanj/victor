@@ -1,19 +1,98 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Hex Color Conversion
+
+extension Color {
+    /// Initialize Color from hex string (e.g., "#FF5500" or "FF5500")
+    init?(hex: String) {
+        var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+
+        guard hexSanitized.count == 6,
+              let rgb = UInt64(hexSanitized, radix: 16) else {
+            return nil
+        }
+
+        let r = Double((rgb & 0xFF0000) >> 16) / 255.0
+        let g = Double((rgb & 0x00FF00) >> 8) / 255.0
+        let b = Double(rgb & 0x0000FF) / 255.0
+
+        self.init(red: r, green: g, blue: b)
+    }
+
+    /// Convert Color to hex string
+    var hexString: String {
+        guard let components = NSColor(self).usingColorSpace(.sRGB) else {
+            return "#000000"
+        }
+        let r = Int(components.redComponent * 255)
+        let g = Int(components.greenComponent * 255)
+        let b = Int(components.blueComponent * 255)
+        return String(format: "#%02X%02X%02X", r, g, b)
+    }
+}
+
+// MARK: - Badge Color Keys
+
+extension Color {
+    /// UserDefaults keys for customizable badge colors
+    enum BadgeColorKey: String {
+        case draft = "badgeColorDraft"
+        case scheduled = "badgeColorScheduled"
+        case expired = "badgeColorExpired"
+
+        /// Default color for this badge type
+        var defaultColor: Color {
+            switch self {
+            case .draft: return Color(nsColor: .systemOrange)
+            case .scheduled: return Color(nsColor: .systemBlue)
+            case .expired: return Color(nsColor: .systemGray)
+            }
+        }
+
+        /// Default hex value for this badge type
+        var defaultHex: String {
+            defaultColor.hexString
+        }
+    }
+}
 
 // MARK: - Semantic Badge Colors
 
 extension Color {
-    /// Colors for content status badges
+    /// Colors for content status badges (customizable via Preferences)
     enum Badge {
         /// Draft content badge color
-        static let draft = Color(nsColor: .systemOrange)
+        static var draft: Color {
+            if let hex = UserDefaults.standard.string(forKey: BadgeColorKey.draft.rawValue),
+               let color = Color(hex: hex) {
+                return color
+            }
+            return BadgeColorKey.draft.defaultColor
+        }
+
         /// Scheduled content badge color
-        static let scheduled = Color(nsColor: .systemBlue)
+        static var scheduled: Color {
+            if let hex = UserDefaults.standard.string(forKey: BadgeColorKey.scheduled.rawValue),
+               let color = Color(hex: hex) {
+                return color
+            }
+            return BadgeColorKey.scheduled.defaultColor
+        }
+
         /// Expired content badge color
-        static let expired = Color(nsColor: .systemGray)
-        /// Page bundle badge color
+        static var expired: Color {
+            if let hex = UserDefaults.standard.string(forKey: BadgeColorKey.expired.rawValue),
+               let color = Color(hex: hex) {
+                return color
+            }
+            return BadgeColorKey.expired.defaultColor
+        }
+
+        /// Page bundle badge color (not customizable)
         static let pageBundle = Color(nsColor: .systemPurple)
-        /// Config file badge color
+        /// Config file badge color (not customizable)
         static let config = Color(nsColor: .systemOrange)
     }
 

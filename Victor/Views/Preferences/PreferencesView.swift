@@ -10,6 +10,33 @@ struct PreferencesView: View {
     @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = true
     @AppStorage("autoSaveDelay") private var autoSaveDelay = 2.0
 
+    // Badge color preferences (stored as hex strings)
+    @AppStorage("badgeColorDraft") private var draftColorHex = Color.BadgeColorKey.draft.defaultHex
+    @AppStorage("badgeColorScheduled") private var scheduledColorHex = Color.BadgeColorKey.scheduled.defaultHex
+    @AppStorage("badgeColorExpired") private var expiredColorHex = Color.BadgeColorKey.expired.defaultHex
+
+    /// Binding to convert hex string to Color for ColorPicker
+    private var draftColor: Binding<Color> {
+        Binding(
+            get: { Color(hex: draftColorHex) ?? Color.BadgeColorKey.draft.defaultColor },
+            set: { draftColorHex = $0.hexString }
+        )
+    }
+
+    private var scheduledColor: Binding<Color> {
+        Binding(
+            get: { Color(hex: scheduledColorHex) ?? Color.BadgeColorKey.scheduled.defaultColor },
+            set: { scheduledColorHex = $0.hexString }
+        )
+    }
+
+    private var expiredColor: Binding<Color> {
+        Binding(
+            get: { Color(hex: expiredColorHex) ?? Color.BadgeColorKey.expired.defaultColor },
+            set: { expiredColorHex = $0.hexString }
+        )
+    }
+
     /// Available font sizes
     private let fontSizes: [Double] = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24]
 
@@ -91,10 +118,29 @@ struct PreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                ColorPicker("Draft:", selection: draftColor, supportsOpacity: false)
+                ColorPicker("Scheduled:", selection: scheduledColor, supportsOpacity: false)
+                ColorPicker("Expired:", selection: expiredColor, supportsOpacity: false)
+
+                Button("Reset to Defaults") {
+                    draftColorHex = Color.BadgeColorKey.draft.defaultHex
+                    scheduledColorHex = Color.BadgeColorKey.scheduled.defaultHex
+                    expiredColorHex = Color.BadgeColorKey.expired.defaultHex
+                }
+                .buttonStyle(.link)
+            } header: {
+                Text("Badge Colors")
+            } footer: {
+                Text("Colors for content status badges in the sidebar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(minWidth: 350, idealWidth: 400, maxWidth: 500,
-               minHeight: 250, idealHeight: 300, maxHeight: 400)
+               minHeight: 350, idealHeight: 420, maxHeight: 500)
         .animation(.easeInOut(duration: 0.2), value: isAutoSaveEnabled)
     }
 }
