@@ -28,8 +28,15 @@ class EditorViewModel {
     var cursorLine: Int = 1
     var cursorColumn: Int = 1
 
-    // Track last saved frontmatter state for change detection
-    private var lastSavedFrontmatter: FrontmatterSnapshot?
+    // Track last saved frontmatter version for lightweight change detection
+    // Using version counter is O(1) compared to O(n) snapshot comparison
+    private var lastSavedFrontmatterVersion: Int = 0
+
+    // Cached word/character counts to avoid recomputation on every render
+    // These are invalidated when content changes
+    private var cachedWordCount: Int = 0
+    private var cachedCharacterCount: Int = 0
+    private var lastCountedContentHash: Int = 0
 
     // Track pending auto-save task for cleanup on file switch
     private var autoSaveTask: Task<Void, Never>?
@@ -40,20 +47,13 @@ class EditorViewModel {
         // Check if markdown content has changed
         let contentChanged = editableContent != contentFile.markdownContent
 
-        // Check if frontmatter has changed
+        // Check if frontmatter has changed using lightweight version counter
+        // This is O(1) compared to the previous O(n) snapshot comparison
         let frontmatterChanged: Bool = {
             guard let currentFrontmatter = contentFile.frontmatter else {
-                // No frontmatter now - changed only if we had one before
-                return lastSavedFrontmatter != nil
+                return false
             }
-
-            guard let lastSaved = lastSavedFrontmatter else {
-                // We have frontmatter now but didn't before - it's changed
-                return true
-            }
-
-            // Compare current state with last saved snapshot
-            return currentFrontmatter.snapshot() != lastSaved
+            return currentFrontmatter.version != lastSavedFrontmatterVersion
         }()
 
         return contentChanged || frontmatterChanged
@@ -63,17 +63,32 @@ class EditorViewModel {
         contentFile.frontmatter?.title ?? "No title"
     }
 
-    /// Word count for the current document
+    /// Word count for the current document (cached for performance)
     var wordCount: Int {
+        updateCountCacheIfNeeded()
+        return cachedWordCount
+    }
+
+    /// Character count for the current document (cached for performance)
+    var characterCount: Int {
+        updateCountCacheIfNeeded()
+        return cachedCharacterCount
+    }
+
+    /// Update the cached word/character counts if the content has changed
+    /// Uses hash comparison to avoid expensive recomputation on every access
+    private func updateCountCacheIfNeeded() {
+        let currentHash = editableContent.hashValue
+        guard currentHash != lastCountedContentHash else { return }
+
+        // Content changed, recompute counts
+        lastCountedContentHash = currentHash
+        cachedCharacterCount = editableContent.count
+
         let words = editableContent
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
-        return words.count
-    }
-
-    /// Character count for the current document
-    var characterCount: Int {
-        editableContent.count
+        cachedWordCount = words.count
     }
 
     // MARK: - Initialization
@@ -85,8 +100,8 @@ class EditorViewModel {
         // Note: editableContent is now a computed property that reads/writes
         // siteViewModel.currentEditingContent directly, which is already set
         // by SiteViewModel.selectNode() when the file is selected.
-        // Snapshot initial frontmatter state
-        self.lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
+        // Record initial frontmatter version
+        self.lastSavedFrontmatterVersion = contentFile.frontmatter?.version ?? 0
     }
 
     // MARK: - Public Methods
@@ -94,8 +109,8 @@ class EditorViewModel {
     /// Update editable content when the underlying file changes
     func updateContent(from newMarkdown: String) {
         editableContent = newMarkdown
-        // Also update frontmatter snapshot when content is externally updated
-        lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
+        // Also update frontmatter version when content is externally updated
+        lastSavedFrontmatterVersion = contentFile.frontmatter?.version ?? 0
     }
 
     /// Handle content changes for file status tracking and auto-save
@@ -146,8 +161,8 @@ class EditorViewModel {
             // Update the content file's markdown content with captured value
             contentFile.markdownContent = markdownToSave
 
-            // Snapshot the frontmatter state after successful save
-            lastSavedFrontmatter = contentFile.frontmatter?.snapshot()
+            // Record frontmatter version after successful save
+            lastSavedFrontmatterVersion = contentFile.frontmatter?.version ?? 0
 
             // Update file status in sidebar
             siteViewModel.markFileSaved(fileNode.id)
@@ -233,8 +248,8 @@ class EditorViewModel {
                     // Use the captured markdown content, not editableContent
                     self.contentFile.markdownContent = markdownToSave
 
-                    // Snapshot the frontmatter state after successful auto-save
-                    self.lastSavedFrontmatter = self.contentFile.frontmatter?.snapshot()
+                    // Record frontmatter version after successful auto-save
+                    self.lastSavedFrontmatterVersion = self.contentFile.frontmatter?.version ?? 0
 
                     // Update file status in sidebar
                     self.siteViewModel.markFileSaved(nodeID)

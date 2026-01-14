@@ -58,10 +58,17 @@ struct PublishingTab: View {
             FormFieldWithHelp(label: "Aliases", help: "Old URLs that redirect to this page") {
                 TagInputView(tags: Binding(
                     get: { frontmatter.aliases ?? [] },
-                    set: { frontmatter.aliases = $0.isEmpty ? nil : $0 }
+                    set: { frontmatter.aliases = $0.isEmpty ? nil : $0; frontmatter.markChanged() }
                 ), placeholder: "Add alias (e.g., /old-path)")
             }
         }
+        // Change detection for frontmatter edits
+        .onChange(of: frontmatter.publishDate) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.expiryDate) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.lastmod) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.weight) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.slug) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.url) { _, _ in frontmatter.markChanged() }
     }
 }
 

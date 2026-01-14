@@ -26,6 +26,17 @@ class Frontmatter {
     /// Detected format
     var format: FrontmatterFormat
 
+    /// Version counter for lightweight change detection
+    /// Increments when any field is modified via the form editor
+    /// This provides O(1) change detection instead of O(n) field comparison
+    private(set) var version: Int = 0
+
+    /// Increment the version counter to signal a change
+    /// Call this after modifying frontmatter fields
+    func markChanged() {
+        version += 1
+    }
+
     // MARK: - Essential Fields
 
     /// Page title

@@ -110,6 +110,13 @@ struct MetadataSection: View {
                 }
             }
         }
+        // Change detection for frontmatter edits in the inspector
+        .onChange(of: frontmatter.title) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.date) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.isDraft) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.description) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.tags) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.categories) { _, _ in frontmatter.markChanged() }
     }
 }
 

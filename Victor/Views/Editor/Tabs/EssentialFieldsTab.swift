@@ -10,7 +10,7 @@ struct EssentialFieldsTab: View {
             FormFieldWithHelp(label: "Title", help: "The main title of your page") {
                 TextField("Post title", text: Binding(
                     get: { frontmatter.title ?? "" },
-                    set: { frontmatter.title = $0.isEmpty ? nil : $0 }
+                    set: { frontmatter.title = $0.isEmpty ? nil : $0; frontmatter.markChanged() }
                 ))
             }
 
@@ -20,12 +20,13 @@ struct EssentialFieldsTab: View {
                 help: "The date associated with this content",
                 date: $frontmatter.date
             )
+            .onChange(of: frontmatter.date) { _, _ in frontmatter.markChanged() }
 
             // Draft Status
             FormFieldWithHelp(label: "Draft", help: "Draft pages aren't published to your site") {
                 Toggle("Mark as draft", isOn: Binding(
                     get: { frontmatter.isDraft ?? false },
-                    set: { frontmatter.isDraft = $0 }
+                    set: { frontmatter.isDraft = $0; frontmatter.markChanged() }
                 ))
                 .toggleStyle(.checkbox)
             }
@@ -39,12 +40,13 @@ struct EssentialFieldsTab: View {
                 maxLength: 160,
                 height: 60
             )
+            .onChange(of: frontmatter.description) { _, _ in frontmatter.markChanged() }
 
             // Tags
             FormFieldWithHelp(label: "Tags", help: "Tags help categorize and discover your content") {
                 TagInputView(tags: Binding(
                     get: { frontmatter.tags ?? [] },
-                    set: { frontmatter.tags = $0.isEmpty ? nil : $0 }
+                    set: { frontmatter.tags = $0.isEmpty ? nil : $0; frontmatter.markChanged() }
                 ))
             }
 
@@ -52,7 +54,7 @@ struct EssentialFieldsTab: View {
             FormFieldWithHelp(label: "Categories", help: "Broader classification than tags") {
                 TagInputView(tags: Binding(
                     get: { frontmatter.categories ?? [] },
-                    set: { frontmatter.categories = $0.isEmpty ? nil : $0 }
+                    set: { frontmatter.categories = $0.isEmpty ? nil : $0; frontmatter.markChanged() }
                 ))
             }
         }

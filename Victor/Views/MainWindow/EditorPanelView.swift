@@ -145,8 +145,9 @@ struct EditorPanelView: View {
         .onChange(of: viewModel.editableContent) { _, _ in
             viewModel.handleContentChange()
         }
-        // Handle frontmatter changes (consolidated observer using snapshot for change detection)
-        .onChange(of: contentFile.frontmatter?.snapshot()) { _, _ in
+        // Handle frontmatter changes using lightweight version counter
+        // This avoids expensive snapshot creation/comparison on every render cycle
+        .onChange(of: contentFile.frontmatter?.version) { _, _ in
             viewModel.handleContentChange()
         }
         .alert("File Modified Externally", isPresented: $viewModel.showConflictAlert) {

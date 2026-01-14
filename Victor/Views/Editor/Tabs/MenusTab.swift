@@ -118,12 +118,14 @@ struct MenusTab: View {
         guard !frontmatter.menus.contains(where: { $0.menuName == trimmedName }) else { return }
 
         frontmatter.menus.append(MenuEntry(menuName: trimmedName))
+        frontmatter.markChanged()
         showAddMenu = false
         newMenuName = ""
     }
 
     private func removeMenu(at index: Int) {
         frontmatter.menus.remove(at: index)
+        frontmatter.markChanged()
     }
 }
 

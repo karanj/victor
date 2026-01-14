@@ -16,6 +16,21 @@ final class HighlightingTextView: NSTextView {
     /// Callback to show the shortcode picker (called from context menu)
     var onShowShortcodePicker: (() -> Void)?
 
+    /// Track if a redraw is already pending to avoid excessive needsDisplay calls
+    private var redrawPending = false
+
+    /// Schedule a coalesced redraw on the next run loop iteration
+    /// This prevents multiple needsDisplay calls from causing redundant redraws
+    private func scheduleRedrawIfNeeded() {
+        guard highlightCurrentLine, !redrawPending else { return }
+        redrawPending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.redrawPending = false
+            self.needsDisplay = true
+        }
+    }
+
     // MARK: - Drag and Drop
 
     override func awakeFromNib() {
@@ -266,14 +281,17 @@ final class HighlightingTextView: NSTextView {
 
     override func setSelectedRange(_ charRange: NSRange) {
         super.setSelectedRange(charRange)
-        // Redraw to update highlight position
-        needsDisplay = true
+        // Schedule coalesced redraw to update highlight position
+        scheduleRedrawIfNeeded()
     }
 
     override func setSelectedRange(_ charRange: NSRange, affinity: NSSelectionAffinity, stillSelecting stillSelectingFlag: Bool) {
         super.setSelectedRange(charRange, affinity: affinity, stillSelecting: stillSelectingFlag)
-        // Redraw to update highlight position
-        needsDisplay = true
+        // Schedule coalesced redraw to update highlight position
+        // Skip during active selection (stillSelecting=true) to avoid constant redraws while dragging
+        if !stillSelectingFlag {
+            scheduleRedrawIfNeeded()
+        }
     }
 }
 
@@ -427,21 +445,19 @@ struct EditorTextView: NSViewRepresentable {
         }
 
         // Only update if text has changed (avoid cursor jumping)
-        if textView.string != text {
+        // Use count comparison first as a cheap early-out before expensive string comparison
+        let currentString = textView.string
+        if currentString.count != text.count || currentString != text {
             // Save cursor position
             let selectedRange = textView.selectedRange()
 
             // Update text
             textView.string = text
 
-            // Force layout and display to ensure text is visible immediately
-            // This fixes the issue where text doesn't appear until clicking
-            if let layoutManager = textView.layoutManager,
-               let textContainer = textView.textContainer {
-                // Ensure glyphs are generated and laid out
-                layoutManager.ensureLayout(for: textContainer)
-            }
-            textView.needsDisplay = true
+            // Note: Removed forced ensureLayout() call - it was causing performance issues.
+            // The layout manager will automatically lay out text when needed for display.
+            // The original workaround for text not appearing was fixed in makeNSView with
+            // the DispatchQueue.main.async ensureLayout call on initial creation.
 
             // Restore cursor position if still valid
             if selectedRange.location <= text.count {

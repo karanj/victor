@@ -43,7 +43,9 @@ struct AdvancedTab: View {
             // MARK: - Custom Parameters Section
             SectionHeader("Custom Parameters", help: "Additional parameters accessible in templates via .Params")
 
-            CustomFieldEditor(fields: $frontmatter.params)
+            CustomFieldEditor(fields: $frontmatter.params) {
+                frontmatter.markChanged()
+            }
 
             // MARK: - Other Custom Fields Section
             if !frontmatter.customFields.isEmpty {
@@ -76,6 +78,7 @@ struct AdvancedTab: View {
                         set: {
                             ensureBuildExists()
                             frontmatter.build?.list = $0
+                            frontmatter.markChanged()
                         }
                     )) {
                         ForEach(BuildOptions.ListOption.allCases, id: \.self) { option in
@@ -93,6 +96,7 @@ struct AdvancedTab: View {
                         set: {
                             ensureBuildExists()
                             frontmatter.build?.render = $0
+                            frontmatter.markChanged()
                         }
                     )) {
                         ForEach(BuildOptions.RenderOption.allCases, id: \.self) { option in
@@ -111,6 +115,7 @@ struct AdvancedTab: View {
                     set: {
                         ensureBuildExists()
                         frontmatter.build?.publishResources = $0
+                        frontmatter.markChanged()
                     }
                 ))
                 .toggleStyle(.checkbox)
@@ -125,6 +130,7 @@ struct AdvancedTab: View {
                     get: { frontmatter.outputs != nil },
                     set: { isOn in
                         frontmatter.outputs = isOn ? ["html"] : nil
+                        frontmatter.markChanged()
                     }
                 ))
                 .toggleStyle(.checkbox)
@@ -159,7 +165,7 @@ struct AdvancedTab: View {
             FormFieldWithHelp(label: "Headless", help: "Create headless bundle (resources without a page)") {
                 Toggle("Headless bundle", isOn: Binding(
                     get: { frontmatter.headless ?? false },
-                    set: { frontmatter.headless = $0 ? $0 : nil }
+                    set: { frontmatter.headless = $0 ? $0 : nil; frontmatter.markChanged() }
                 ))
                 .toggleStyle(.checkbox)
             }
@@ -168,7 +174,7 @@ struct AdvancedTab: View {
             FormFieldWithHelp(label: "CJK Language", help: "Content uses CJK (affects word count)") {
                 Toggle("CJK content", isOn: Binding(
                     get: { frontmatter.isCJKLanguage ?? false },
-                    set: { frontmatter.isCJKLanguage = $0 ? $0 : nil }
+                    set: { frontmatter.isCJKLanguage = $0 ? $0 : nil; frontmatter.markChanged() }
                 ))
                 .toggleStyle(.checkbox)
             }
@@ -189,6 +195,11 @@ struct AdvancedTab: View {
                 placeholder: "markdown"
             )
         }
+        // Change detection for text fields that use direct bindings
+        .onChange(of: frontmatter.type) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.layout) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.translationKey) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.markup) { _, _ in frontmatter.markChanged() }
     }
 
     private func ensureBuildExists() {
@@ -207,6 +218,7 @@ struct AdvancedTab: View {
             outputs.removeAll { $0 == format }
         }
         frontmatter.outputs = outputs.isEmpty ? nil : outputs
+        frontmatter.markChanged()
     }
 }
 

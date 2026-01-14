@@ -3,6 +3,8 @@ import SwiftUI
 /// Editor for custom frontmatter fields (params and customFields)
 struct CustomFieldEditor: View {
     @Binding var fields: [String: Any]
+    /// Optional callback when fields are modified
+    var onFieldsChanged: (() -> Void)?
     @State private var showAddField = false
     @State private var newFieldKey = ""
     @State private var newFieldValue = ""
@@ -199,11 +201,13 @@ struct CustomFieldEditor: View {
         guard !key.isEmpty else { return }
 
         fields[key] = newFieldType.convert(newFieldValue)
+        onFieldsChanged?()
         resetAddForm()
     }
 
     private func deleteField(key: String) {
         fields.removeValue(forKey: key)
+        onFieldsChanged?()
     }
 
     private func resetAddForm() {

@@ -37,6 +37,8 @@ struct FrontmatterEditorView: View {
                     .padding()
             }
         }
+        // Change detection is handled by individual field tabs that call frontmatter.markChanged()
+        // See EssentialFieldsTab, PublishingTab, etc. for implementation
     }
 
     private var tabBar: some View {

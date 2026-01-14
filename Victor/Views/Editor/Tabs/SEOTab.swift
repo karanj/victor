@@ -13,7 +13,7 @@ struct SEOTab: View {
             FormFieldWithHelp(label: "Keywords", help: "Keywords for search engines") {
                 TagInputView(tags: Binding(
                     get: { frontmatter.keywords ?? [] },
-                    set: { frontmatter.keywords = $0.isEmpty ? nil : $0 }
+                    set: { frontmatter.keywords = $0.isEmpty ? nil : $0; frontmatter.markChanged() }
                 ), placeholder: "Add keyword")
             }
 
@@ -48,6 +48,7 @@ struct SEOTab: View {
                     set: { newValue in
                         ensureSitemapExists()
                         frontmatter.sitemap?.changefreq = newValue
+                        frontmatter.markChanged()
                     }
                 )) {
                     Text("Not set").tag(Optional<SitemapConfig.ChangeFreq>.none)
@@ -71,6 +72,7 @@ struct SEOTab: View {
                         set: { isOn in
                             ensureSitemapExists()
                             frontmatter.sitemap?.priority = isOn ? 0.5 : nil
+                            frontmatter.markChanged()
                         }
                     ))
                     .toggleStyle(.checkbox)
@@ -82,6 +84,7 @@ struct SEOTab: View {
                             set: {
                                 ensureSitemapExists()
                                 frontmatter.sitemap?.priority = $0
+                                frontmatter.markChanged()
                             }
                         ), in: 0...1, step: 0.1)
                         .frame(width: 150)
@@ -110,11 +113,15 @@ struct SEOTab: View {
                     set: {
                         ensureSitemapExists()
                         frontmatter.sitemap?.disable = $0
+                        frontmatter.markChanged()
                     }
                 ))
                 .toggleStyle(.checkbox)
             }
         }
+        // Change detection for frontmatter edits
+        .onChange(of: frontmatter.summary) { _, _ in frontmatter.markChanged() }
+        .onChange(of: frontmatter.linkTitle) { _, _ in frontmatter.markChanged() }
     }
 
     private func ensureSitemapExists() {

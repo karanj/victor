@@ -239,6 +239,9 @@ struct FrontmatterBottomPanel: View {
         frontmatter.params = parsedFrontmatter.params
         frontmatter.customFields = parsedFrontmatter.customFields
 
+        // Mark as changed since we've updated from raw text
+        frontmatter.markChanged()
+
         // Clear any previous errors
         parseError = nil
     }
