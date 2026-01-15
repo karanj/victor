@@ -1,24 +1,45 @@
 # Victor - macOS Hugo CMS
 
-A native macOS app built with SwiftUI that provides a sophisticated editing experience for Hugo static sites.
-
-![Victor logo](Docs/icon_256x256.png?raw=true)
+A native macOS app built with SwiftUI that provides a sophisticated editing experience for [Hugo](https://gohugo.io/) static sites.
 
 ![Screenshot of Victor in action](Docs/Victor-screenshot.png?raw=true "An example of Victor in use")
 
-**Last Updated**: January 13, 2026
+<p align="center" width="100%">
+    <img src="https://github.com/karanj/victor/blob/main/Docs/icon_256x256.png?raw=true">
+</p>
+
+## Quick summary
+
+**Last Updated**: January 15, 2026
+
 **Build Status**: Clean build, no errors, no warnings
+
 **Code Quality**: All critical and high-priority issues fixed; macOS best practices reviewed
-**Test Coverage**: 166 tests covering config, frontmatter, data files, and archetypes
+
+**Test Coverage**: 200+ tests covering config, frontmatter, data files, and archetypes
+
 **Architecture**: MVVM with @Observable, security-scoped bookmarks, actor-based auto-save
-**Codebase**: 78 Swift files, ~20,000 lines of code
+
+**Codebase**: 99 Swift files, ~29,000 lines of code
+
+## Why does this exist?
+
+I built this for myself having migrated a couple of websites from Wordpress but missing the CMS aspect of Wordpress.
+
+I tried out various CMSes which worked with Hugo, but didn't like any of them. I really wanted a native app on my Mac to do the primary writing.
+
+I spun up Claude Code and threw my ideas at it, doing testing on my own sites ([Bit Stories](https://bitstories.net/) and [Lean Pursuit](https://leanpursuit.com/)).
+
+Victor is somewhat opinionated and suited to the way I think. I didn't want WYSIWYG because I did want to see the raw markdown, but I also want to see lightweight previews, and have shortcuts to inserting Hugo's many shortcodes, etc. The rest kind of flowed on from there.
+
+I make no warranties here that it won't break your site. Rely on git as a way to undo any mess-ups that Victor might make.
 
 ## Features
 
 ### Site Content Management
 
 - Open and browse full Hugo sites (content, config, static, assets, layouts, data, themes)
-- **19 file types** with type-specific icons, colors, and Hugo role detection
+- 19 file types supported with type-specific icons, colors, and Hugo role detection
 - Hierarchical file tree navigation with expand/collapse
 - File search (recursive through folders)
 - Security-scoped bookmarks for persistent folder access
@@ -110,6 +131,11 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 - **Drag-and-drop** insertion into markdown editor
 - Folder-specific browsing (shows only assets in selected folder)
 - Support for images (PNG, JPG, GIF, SVG, WebP), PDFs, and other file types
+
+### Hugo Server live preview 
+
+- Run Hugo builds within the app and preview your content live
+- Server log viewer
 
 ### Data & Archetypes Management
 
@@ -538,7 +564,7 @@ Contributions welcome for:
 - Bug fixes and real-world testing
 - UI/UX enhancements
 - Documentation improvements
-- Future enhancements (file watching, Git integration, syntax highlighting, Hugo server integration)
+- Future enhancements (file watching, Git integration, syntax highlighting)
 - Accessibility improvements (VoiceOver, keyboard navigation)
 - Expanding test coverage (ViewModels, Services, integration tests)
 - Performance optimizations
@@ -551,10 +577,13 @@ Contributions welcome for:
 
 Built with:
 
-- SwiftUI (Apple)
+- SwiftUI
 - Down by John Nguyen
 - Yams by JP Simard
 - TOMLKit by LebJe
+- Claude Code
+
+And many thanks to the [Hugo](https://gohugo.io/) team. This wouldn't be possible without their open work.
 
 ---
 
