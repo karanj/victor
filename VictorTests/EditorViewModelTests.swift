@@ -317,62 +317,63 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertFalse(editorVM.hasUnsavedChanges)
     }
 
-    // MARK: - Word and Character Count Tests
+    // MARK: - DocumentStats Tests (moved from EditorViewModel to InspectorPanel)
 
-    /// Test word count calculation
-    func testWordCountCalculation() {
-        siteViewModel.selectedNode = testFileNode1
-        siteViewModel.currentEditingContent = "Hello world this is a test"
-
-        let editorVM = EditorViewModel(
-            fileNode: testFileNode1,
-            contentFile: testContentFile1,
-            siteViewModel: siteViewModel
-        )
-
-        XCTAssertEqual(editorVM.wordCount, 6)
+    /// Test word count calculation via DocumentStats
+    func testDocumentStatsWordCount() {
+        let stats = DocumentStats.compute(from: "Hello world this is a test")
+        XCTAssertEqual(stats.wordCount, 6)
     }
 
-    /// Test character count calculation
-    func testCharacterCountCalculation() {
-        siteViewModel.selectedNode = testFileNode1
-        siteViewModel.currentEditingContent = "Hello world"
-
-        let editorVM = EditorViewModel(
-            fileNode: testFileNode1,
-            contentFile: testContentFile1,
-            siteViewModel: siteViewModel
-        )
-
-        XCTAssertEqual(editorVM.characterCount, 11)
+    /// Test character count calculation via DocumentStats
+    func testDocumentStatsCharacterCount() {
+        let stats = DocumentStats.compute(from: "Hello world")
+        XCTAssertEqual(stats.characterCount, 11)
     }
 
-    /// Test word count with empty content
-    func testWordCountWithEmptyContent() {
-        siteViewModel.selectedNode = testFileNode1
-        siteViewModel.currentEditingContent = ""
-
-        let editorVM = EditorViewModel(
-            fileNode: testFileNode1,
-            contentFile: testContentFile1,
-            siteViewModel: siteViewModel
-        )
-
-        XCTAssertEqual(editorVM.wordCount, 0)
+    /// Test word count with empty content via DocumentStats
+    func testDocumentStatsWordCountEmpty() {
+        let stats = DocumentStats.compute(from: "")
+        XCTAssertEqual(stats.wordCount, 0)
     }
 
-    /// Test word count ignores multiple spaces
-    func testWordCountIgnoresMultipleSpaces() {
-        siteViewModel.selectedNode = testFileNode1
-        siteViewModel.currentEditingContent = "Hello    world    test"
+    /// Test word count ignores multiple spaces via DocumentStats
+    func testDocumentStatsWordCountIgnoresMultipleSpaces() {
+        let stats = DocumentStats.compute(from: "Hello    world    test")
+        XCTAssertEqual(stats.wordCount, 3)
+    }
 
-        let editorVM = EditorViewModel(
-            fileNode: testFileNode1,
-            contentFile: testContentFile1,
-            siteViewModel: siteViewModel
-        )
+    /// Test paragraph count via DocumentStats
+    func testDocumentStatsParagraphCount() {
+        let content = """
+        First paragraph here.
 
-        XCTAssertEqual(editorVM.wordCount, 3)
+        Second paragraph here.
+
+        Third paragraph.
+        """
+        let stats = DocumentStats.compute(from: content)
+        XCTAssertEqual(stats.paragraphCount, 3)
+    }
+
+    /// Test sentence count via DocumentStats
+    func testDocumentStatsSentenceCount() {
+        let content = "Hello world. This is a test! Is it working?"
+        let stats = DocumentStats.compute(from: content)
+        XCTAssertEqual(stats.sentenceCount, 3)
+    }
+
+    /// Test reading time via DocumentStats
+    func testDocumentStatsReadingTime() {
+        // 200 words should be ~1 min (200 WPM)
+        let words = Array(repeating: "word", count: 200).joined(separator: " ")
+        let stats = DocumentStats.compute(from: words)
+        XCTAssertEqual(stats.readingTime, "~1 min")
+
+        // 400 words should be ~2 mins
+        let moreWords = Array(repeating: "word", count: 400).joined(separator: " ")
+        let stats2 = DocumentStats.compute(from: moreWords)
+        XCTAssertEqual(stats2.readingTime, "~2 mins")
     }
 
     // MARK: - Vulnerability Documentation Tests

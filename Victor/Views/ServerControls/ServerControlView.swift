@@ -12,6 +12,9 @@ struct ServerControlView: View {
     @State private var showingError = false
     @State private var errorTitle = ""
     @State private var errorMessage = ""
+    
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         HStack(spacing: 12) {
@@ -27,6 +30,7 @@ struct ServerControlView: View {
             // Open in Browser button (shown when running)
             if serverStatus.isRunning {
                 openBrowserButton
+                showServerLogButton
             }
 
             // Configuration button
@@ -105,6 +109,15 @@ struct ServerControlView: View {
         }
         .help("Open site in default browser")
     }
+    
+    private var showServerLogButton: some View {
+        Button {
+            showServerLogView()
+        } label: {
+            Label("Server Logs", systemImage: "waveform.path.ecg.text")
+        }
+        .help("Open Server Logs")
+    }
 
     // MARK: - Configuration Button
 
@@ -161,6 +174,7 @@ struct ServerControlView: View {
         if serverStatus.isRunning {
             // Stop the server
             await HugoServerService.shared.stop()
+            dismissWindow(id: "server-logs")
         } else {
             // Start the server
             do {
@@ -177,6 +191,10 @@ struct ServerControlView: View {
             guard let url = serverURL else { return }
             NSWorkspace.shared.open(url)
         }
+    }
+    // TODO: Fix this so it shows the server log in a separate window
+    private func showServerLogView() {
+        openWindow(id: "server-logs")
     }
 
     private func setupServerCallbacks() {

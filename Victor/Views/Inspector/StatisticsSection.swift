@@ -1,20 +1,65 @@
 import SwiftUI
 
+/// Cached document statistics for the inspector panel
+/// Computed asynchronously and debounced to avoid performance impact during typing
+struct DocumentStats: Equatable {
+    var wordCount: Int = 0
+    var characterCount: Int = 0
+    var paragraphCount: Int = 0
+    var sentenceCount: Int = 0
+
+    /// Words per minute for reading time estimate
+    private static let wordsPerMinute = 200
+
+    var readingTime: String {
+        let minutes = max(1, wordCount / Self.wordsPerMinute)
+        if minutes == 1 {
+            return "~1 min"
+        } else {
+            return "~\(minutes) mins"
+        }
+    }
+
+    /// Compute statistics from content string
+    /// This is intentionally a static method to be called off the main actor if needed
+    static func compute(from content: String) -> DocumentStats {
+        var stats = DocumentStats()
+
+        stats.characterCount = content.count
+
+        stats.wordCount = content
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .count
+
+        stats.paragraphCount = content
+            .components(separatedBy: "\n\n")
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .count
+
+        // Simple sentence counting (ends with . ! ?)
+        let pattern = "[.!?]"
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let range = NSRange(content.startIndex..., in: content)
+            stats.sentenceCount = regex.numberOfMatches(in: content, range: range)
+        }
+
+        return stats
+    }
+}
+
 /// Statistics section for the inspector panel
 /// Shows word count, character count, reading time, and file dates
 struct StatisticsSection: View {
-    let content: String
+    let stats: DocumentStats
     let contentFile: ContentFile
-
-    /// Words per minute for reading time estimate
-    private let wordsPerMinute = 200
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Word and character counts
-            StatRow(label: "Words", value: "\(wordCount)")
-            StatRow(label: "Characters", value: "\(characterCount)")
-            StatRow(label: "Reading time", value: readingTime)
+            StatRow(label: "Words", value: "\(stats.wordCount)")
+            StatRow(label: "Characters", value: "\(stats.characterCount)")
+            StatRow(label: "Reading time", value: stats.readingTime)
 
             Divider()
                 .padding(.vertical, 4)
@@ -30,53 +75,14 @@ struct StatisticsSection: View {
                 StatRow(label: "Format", value: frontmatter.format.displayName)
             }
 
-            if let paragraphs = paragraphCount, paragraphs > 0 {
-                StatRow(label: "Paragraphs", value: "\(paragraphs)")
+            if stats.paragraphCount > 0 {
+                StatRow(label: "Paragraphs", value: "\(stats.paragraphCount)")
             }
 
-            if let sentences = sentenceCount, sentences > 0 {
-                StatRow(label: "Sentences", value: "\(sentences)")
+            if stats.sentenceCount > 0 {
+                StatRow(label: "Sentences", value: "\(stats.sentenceCount)")
             }
         }
-    }
-
-    // MARK: - Computed Properties
-
-    private var wordCount: Int {
-        content
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .count
-    }
-
-    private var characterCount: Int {
-        content.count
-    }
-
-    private var readingTime: String {
-        let minutes = max(1, wordCount / wordsPerMinute)
-        if minutes == 1 {
-            return "~1 min"
-        } else {
-            return "~\(minutes) mins"
-        }
-    }
-
-    private var paragraphCount: Int? {
-        let paragraphs = content
-            .components(separatedBy: "\n\n")
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .count
-        return paragraphs > 0 ? paragraphs : nil
-    }
-
-    private var sentenceCount: Int? {
-        // Simple sentence counting (ends with . ! ?)
-        let pattern = "[.!?]"
-        let regex = try? NSRegularExpression(pattern: pattern)
-        let range = NSRange(content.startIndex..., in: content)
-        let count = regex?.numberOfMatches(in: content, range: range) ?? 0
-        return count > 0 ? count : nil
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -136,7 +142,9 @@ extension FrontmatterFormat {
         markdownContent: sampleContent
     )
 
-    StatisticsSection(content: sampleContent, contentFile: contentFile)
+    let stats = DocumentStats.compute(from: sampleContent)
+
+    StatisticsSection(stats: stats, contentFile: contentFile)
         .padding()
         .frame(width: 260)
 }

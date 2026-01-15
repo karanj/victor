@@ -104,7 +104,7 @@ struct VictorApp: App {
 
     // Editor preferences (using @AppStorage for sync with Preferences window)
     @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
-    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = true
+    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = false
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -283,6 +283,10 @@ struct VictorApp: App {
         // Preferences window (Cmd+,)
         Settings {
             PreferencesView()
+        }
+        
+        Window("Server Logs",id: "server-logs") {
+            ServerLogView()
         }
     }
 }

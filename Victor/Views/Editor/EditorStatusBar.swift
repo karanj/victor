@@ -1,24 +1,13 @@
 import SwiftUI
 
-/// Status bar showing document statistics and cursor position
+/// Status bar showing cursor position
+/// Note: Word/character counts removed for performance - they're in the inspector panel instead
 struct EditorStatusBar: View {
-    let wordCount: Int
-    let characterCount: Int
     let cursorLine: Int
     let cursorColumn: Int
 
     var body: some View {
         HStack(spacing: 0) {
-            // Word count
-            Text("\(wordCount) \(wordCount == 1 ? "word" : "words")")
-
-            separator
-
-            // Character count
-            Text("\(formattedCharacterCount) \(characterCount == 1 ? "character" : "characters")")
-
-            separator
-
             // Cursor position
             Text("Line \(cursorLine), Col \(cursorColumn)")
 
@@ -33,19 +22,6 @@ struct EditorStatusBar: View {
             Divider()
         }
     }
-
-    /// Separator between status items
-    private var separator: some View {
-        Text(" \u{2022} ")
-            .foregroundStyle(.tertiary)
-    }
-
-    /// Format character count with thousands separator
-    private var formattedCharacterCount: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: characterCount)) ?? "\(characterCount)"
-    }
 }
 
 // MARK: - Preview
@@ -57,8 +33,6 @@ struct EditorStatusBar: View {
             .background(Color(nsColor: .textBackgroundColor))
 
         EditorStatusBar(
-            wordCount: 234,
-            characterCount: 1456,
             cursorLine: 42,
             cursorColumn: 15
         )

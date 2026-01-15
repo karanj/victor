@@ -26,17 +26,17 @@ struct ServerConfigPopover: View {
                 HStack {
                     Text("Port:")
                         .frame(width: 120, alignment: .leading)
-
-                    TextField("Port", value: $config.port, format: .number)
+                    
+                    Spacer()
+                    
+                    TextField("", value: $config.port,
+                              format: .number.grouping(.never),
+                              prompt: Text("(1024-65535)"))
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
+                        .frame(width: 200)
                         .onChange(of: config.port) { _, _ in
                             hasChanges = true
                         }
-
-                    Text("(1024-65535)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 Divider()

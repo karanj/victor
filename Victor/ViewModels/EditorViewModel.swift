@@ -32,11 +32,6 @@ class EditorViewModel {
     // Using version counter is O(1) compared to O(n) snapshot comparison
     private var lastSavedFrontmatterVersion: Int = 0
 
-    // Cached word/character counts to avoid recomputation on every render
-    // These are invalidated when content changes
-    private var cachedWordCount: Int = 0
-    private var cachedCharacterCount: Int = 0
-    private var lastCountedContentHash: Int = 0
 
     // Track pending auto-save task for cleanup on file switch
     private var autoSaveTask: Task<Void, Never>?
@@ -61,34 +56,6 @@ class EditorViewModel {
 
     var navigationTitle: String {
         contentFile.frontmatter?.title ?? "No title"
-    }
-
-    /// Word count for the current document (cached for performance)
-    var wordCount: Int {
-        updateCountCacheIfNeeded()
-        return cachedWordCount
-    }
-
-    /// Character count for the current document (cached for performance)
-    var characterCount: Int {
-        updateCountCacheIfNeeded()
-        return cachedCharacterCount
-    }
-
-    /// Update the cached word/character counts if the content has changed
-    /// Uses hash comparison to avoid expensive recomputation on every access
-    private func updateCountCacheIfNeeded() {
-        let currentHash = editableContent.hashValue
-        guard currentHash != lastCountedContentHash else { return }
-
-        // Content changed, recompute counts
-        lastCountedContentHash = currentHash
-        cachedCharacterCount = editableContent.count
-
-        let words = editableContent
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-        cachedWordCount = words.count
     }
 
     // MARK: - Initialization

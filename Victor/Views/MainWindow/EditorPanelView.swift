@@ -77,10 +77,8 @@ struct EditorPanelView: View {
             )
             .opacity(contentOpacity)
 
-            // Status bar with word count, character count, and cursor position
+            // Status bar with cursor position
             EditorStatusBar(
-                wordCount: viewModel.wordCount,
-                characterCount: viewModel.characterCount,
                 cursorLine: viewModel.cursorLine,
                 cursorColumn: viewModel.cursorColumn
             )

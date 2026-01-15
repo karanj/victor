@@ -7,7 +7,7 @@ struct PreferencesView: View {
     @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
     @AppStorage("editorFontSize") private var editorFontSize = 13.0
     @AppStorage("editorFontName") private var editorFontName = "SF Mono"
-    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = true
+    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = false
     @AppStorage("autoSaveDelay") private var autoSaveDelay = 2.0
 
     // Badge color preferences (stored as hex strings)
@@ -17,8 +17,8 @@ struct PreferencesView: View {
 
     // Hugo server preferences
     @AppStorage("hugoServerPort") private var serverPort = 1313
-    @AppStorage("hugoServerBuildDrafts") private var buildDrafts = true
-    @AppStorage("hugoServerBuildFuture") private var buildFuture = true
+    @AppStorage("hugoServerBuildDrafts") private var buildDrafts = false
+    @AppStorage("hugoServerBuildFuture") private var buildFuture = false
     @AppStorage("hugoServerBuildExpired") private var buildExpired = false
 
     // Hugo version (loaded on appear)
@@ -242,9 +242,11 @@ struct PreferencesView: View {
                 HStack {
                     Text("Default Port:")
                     Spacer()
-                    TextField("Port", value: $serverPort, format: .number)
+                    TextField("", value: $serverPort,
+                              format: .number.grouping(.never),
+                              prompt: Text("(1024-65535)"))
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 80)
+                        .frame(width: 200)
                         .multilineTextAlignment(.trailing)
                 }
 
