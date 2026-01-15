@@ -2,7 +2,7 @@
 
 A native macOS app built with SwiftUI that provides a sophisticated editing experience for Hugo static sites.
 
-![Victor logo](Docs/Victor-logo.svg?raw=true)
+![Victor logo](Docs/icon_256x256.png?raw=true)
 
 ![Screenshot of Victor in action](Docs/Victor-screenshot.png?raw=true "An example of Victor in use")
 
