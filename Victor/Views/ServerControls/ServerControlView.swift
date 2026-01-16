@@ -12,6 +12,9 @@ struct ServerControlView: View {
     @State private var showingError = false
     @State private var errorTitle = ""
     @State private var errorMessage = ""
+
+    /// Tracks whether we've auto-shown the errors popover this server session
+    @State private var hasAutoShownErrorsThisSession = false
     
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
@@ -51,6 +54,19 @@ struct ServerControlView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .onChange(of: serverStatus) { oldStatus, newStatus in
+            // Reset auto-show flag when server stops
+            if !newStatus.isRunning {
+                hasAutoShownErrorsThisSession = false
+            }
+        }
+        .onChange(of: buildErrors) { _, newErrors in
+            // Auto-show popover on first errors after server start
+            if serverStatus.isRunning && !newErrors.isEmpty && !hasAutoShownErrorsThisSession {
+                hasAutoShownErrorsThisSession = true
+                isErrorsPopoverPresented = true
+            }
         }
     }
 
@@ -136,12 +152,16 @@ struct ServerControlView: View {
 
     // MARK: - Error Badge
 
+    private var hasActualErrors: Bool {
+        buildErrors.contains { $0.level == .error }
+    }
+
     private var errorBadge: some View {
         Button {
             isErrorsPopoverPresented.toggle()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "exclamationmark.triangle.fill")
+                Image(systemName: hasActualErrors ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.white)
 
@@ -153,13 +173,22 @@ struct ServerControlView: View {
             .padding(.vertical, 2)
             .background(
                 Capsule()
-                    .fill(.red)
+                    .fill(hasActualErrors ? .red : .orange)
             )
         }
         .buttonStyle(.plain)
-        .help("Click to view \(buildErrors.count) build error\(buildErrors.count == 1 ? "" : "s")")
+        .help("Click to view \(buildErrors.count) build \(hasActualErrors ? "error" : "warning")\(buildErrors.count == 1 ? "" : "s")")
         .popover(isPresented: $isErrorsPopoverPresented) {
-            ErrorsPopoverView(errors: buildErrors)
+            BuildIssuesPopover(
+                errors: buildErrors,
+                onFileClick: { filePath in
+                    // TODO: Navigate to file in editor
+                    Logger.shared.info("[ServerControl] File clicked: \(filePath)")
+                },
+                onDismiss: {
+                    isErrorsPopoverPresented = false
+                }
+            )
         }
     }
 
@@ -238,89 +267,6 @@ struct ServerControlView: View {
         errorTitle = title
         errorMessage = message
         showingError = true
-    }
-}
-
-// MARK: - Errors Popover View
-
-/// Popover view showing build error details
-private struct ErrorsPopoverView: View {
-    let errors: [HugoBuildError]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                Text("Build Errors (\(errors.count))")
-                    .font(.headline)
-                Spacer()
-            }
-            .padding()
-            .background(Color(nsColor: .windowBackgroundColor))
-
-            Divider()
-
-            // Error list
-            if errors.isEmpty {
-                Text("No errors")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding()
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(errors) { error in
-                            ErrorRowView(error: error)
-                        }
-                    }
-                    .padding()
-                }
-            }
-        }
-        .frame(width: 450, height: 300)
-    }
-}
-
-/// Row view for a single build error
-private struct ErrorRowView: View {
-    let error: HugoBuildError
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                // Level icon
-                Image(systemName: error.level == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(error.level == .error ? .red : .orange)
-                    .font(.system(size: 12))
-
-                // File path if available
-                if let filePath = error.clickableFilePath {
-                    Text(filePath)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.blue)
-                }
-
-                Spacer()
-
-                // Timestamp
-                Text(error.timestamp, style: .time)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            // Error message
-            Text(error.message)
-                .font(.system(size: 12))
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-        }
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
     }
 }
 
