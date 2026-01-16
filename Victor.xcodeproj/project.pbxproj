@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -34,6 +34,7 @@
 		3F171CECAC9DE9E69C206642 /* Highlightr in Frameworks */ = {isa = PBXBuildFile; productRef = C690ED29A7B61276BCA08FBB /* Highlightr */; };
 		401723A9BF52E565758A4A9A /* SiteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA94411ADE4D941B623452C5 /* SiteViewModel.swift */; };
 		405335F179D0CCFF442DCD7D /* ArchetypeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7C05C4033AD36F669C7AF0 /* ArchetypeManager.swift */; };
+		410A9C358E244257FA6A2C30 /* BuildIssuesPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C218E9EF99008C56DDA666 /* BuildIssuesPopover.swift */; };
 		46AD3C5EB1472BD20E20CDD7 /* HugoConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C10280F6580C58FDF7E32AB /* HugoConfig.swift */; };
 		477348AC4CA59FF3081989AB /* FolderContentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA087B8214B1972274BA6F5E /* FolderContentsView.swift */; };
 		4BD67639E270CB34BE47E5D5 /* TemplateParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDFE1122F73DA5BCF708843 /* TemplateParser.swift */; };
@@ -104,7 +105,6 @@
 		E377D5F95770FB4C8F91C393 /* UnsupportedFilePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CA5AFA43CB94F384AF612A6 /* UnsupportedFilePanel.swift */; };
 		E3B5107BD7EFEFB06B8D9508 /* EditorStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70CEA56165BC5AE8129FC85 /* EditorStatusBar.swift */; };
 		E4C2149B5C19701E0A86D985 /* TOMLKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70DFCF636C30F4A8932AD0 /* TOMLKit */; };
-		E78653973EC1F19F6815AEAE /* BuildErrorOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F533F90B2C9F829C160F9E /* BuildErrorOverlay.swift */; };
 		E81AFDDFD1D71A5CC2BA765E /* DataFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075B5E6FDA9BACC7F43D546D /* DataFile.swift */; };
 		EC1BD4CC341FA9A3BEB90C1A /* HugoServerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C0108DFAD1F31F18931BF56 /* HugoServerService.swift */; };
 		ED43D85DDC635D16CB2366E5 /* preview-styles.css in Resources */ = {isa = PBXBuildFile; fileRef = D03696993E969C4B2AEFF0AC /* preview-styles.css */; };
@@ -170,6 +170,7 @@
 		71CD8718559B4D36EDAAD857 /* ContentPathAutocompleteField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPathAutocompleteField.swift; sourceTree = "<group>"; };
 		75B232752B56CDA179C8F4AC /* LivePreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePreviewPanel.swift; sourceTree = "<group>"; };
 		7895D7CEE7F9900B99CFA87B /* FileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileListView.swift; sourceTree = "<group>"; };
+		80C218E9EF99008C56DDA666 /* BuildIssuesPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildIssuesPopover.swift; sourceTree = "<group>"; };
 		815EA918C4B3B850A863AC39 /* FileViewerRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileViewerRouter.swift; sourceTree = "<group>"; };
 		827E1E006B609681AC20B551 /* FileStatusMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStatusMetadataTests.swift; sourceTree = "<group>"; };
 		83C6A730A22D17CDD281C5A4 /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
@@ -197,7 +198,6 @@
 		B1B94D70C8953FB652EA5AB4 /* StatisticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsSection.swift; sourceTree = "<group>"; };
 		B77359CF942B864CCDB1D4BF /* Template.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Template.swift; sourceTree = "<group>"; };
 		B7788DB7550B1240381DEFEC /* EditorTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextView.swift; sourceTree = "<group>"; };
-		B7F533F90B2C9F829C160F9E /* BuildErrorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildErrorOverlay.swift; sourceTree = "<group>"; };
 		BA087B8214B1972274BA6F5E /* FolderContentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderContentsView.swift; sourceTree = "<group>"; };
 		BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoConfigParser.swift; sourceTree = "<group>"; };
 		BB264C657F8176E886525790 /* ContentFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentFile.swift; sourceTree = "<group>"; };
@@ -323,6 +323,14 @@
 				F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */,
 			);
 			path = Victor;
+			sourceTree = "<group>";
+		};
+		391E21AD2D0B3E73E0887572 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				80C218E9EF99008C56DDA666 /* BuildIssuesPopover.swift */,
+			);
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		411393E7B25F1C0ED37D9C79 = {
@@ -519,7 +527,6 @@
 		CC3C4B92ED23870AB560ED7C /* Preview */ = {
 			isa = PBXGroup;
 			children = (
-				B7F533F90B2C9F829C160F9E /* BuildErrorOverlay.swift */,
 				75B232752B56CDA179C8F4AC /* LivePreviewPanel.swift */,
 				D3B404F98684163BC1F29FB3 /* PreviewWebView.swift */,
 			);
@@ -563,6 +570,7 @@
 				0B5A01BE8DDE89A7B36C0734 /* Preferences */,
 				CC3C4B92ED23870AB560ED7C /* Preview */,
 				B91E8507E570481FFC8B44E4 /* ServerControls */,
+				391E21AD2D0B3E73E0887572 /* Shared */,
 				6DD3A35B0CF216CC7E5429EB /* TemplateEditor */,
 				EBF06DFA526941FBC0C9E831 /* TranslationEditor */,
 				DB8C67C5894CABF926B69474 /* Viewers */,
@@ -669,6 +677,7 @@
 				DC1398A0762D3C7987D0CEBC /* XCRemoteSwiftPackageReference "TOMLKit" */,
 				1EFA41719CE1ADAB8DD3C8D9 /* XCRemoteSwiftPackageReference "Yams" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -706,8 +715,8 @@
 				649E87B52E9E159C8DF5E117 /* AssetService.swift in Sources */,
 				875B7EAB08612406B3AE857F /* AutoSaveService.swift in Sources */,
 				9AD72BC7D7D317FBFE58951B /* BreadcrumbBar.swift in Sources */,
-				E78653973EC1F19F6815AEAE /* BuildErrorOverlay.swift in Sources */,
 				72C2864A24843A192E10AC53 /* BuildErrorParser.swift in Sources */,
+				410A9C358E244257FA6A2C30 /* BuildIssuesPopover.swift in Sources */,
 				847D37150BC90348A016A39F /* Color+Semantic.swift in Sources */,
 				FCFFCC21FFC297D199295FAF /* ConfigEditorView.swift in Sources */,
 				8BE81DB3CDE05B087E53A566 /* ContentFile.swift in Sources */,
@@ -837,7 +846,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = Victor/Victor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -940,7 +948,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = Victor/Victor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;

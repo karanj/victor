@@ -8,15 +8,13 @@ struct LivePreviewPanel: View {
     let currentFilePath: String?
 
     @State private var status: HugoServerStatus = .stopped
-    @State private var buildErrors: [HugoBuildError] = []
     @State private var serverURL: URL?
-    @State private var showErrorOverlay: Bool = false
     @State private var canGoBack: Bool = false
     @State private var canGoForward: Bool = false
     @State private var currentURL: String = ""
 
     var body: some View {
-        ZStack {
+        Group {
             if status.isRunning, let url = serverURL {
                 VStack(spacing: 0) {
                     // Navigation toolbar
@@ -38,39 +36,11 @@ struct LivePreviewPanel: View {
                 // Server not running placeholder
                 serverNotRunningPlaceholder
             }
-
-            // Build error overlay
-            if showErrorOverlay && !buildErrors.isEmpty {
-                BuildErrorOverlay(
-                    errors: buildErrors,
-                    onDismiss: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showErrorOverlay = false
-                        }
-                    },
-                    onFileClick: { filePath in
-                        // TODO: Navigate to file in editor
-                        Logger.shared.info("[LivePreview] File clicked: \(filePath)")
-                    }
-                )
-                .transition(.opacity)
-            }
         }
         .onAppear {
             setupServerStateObservers()
             Task {
                 await refreshServerState()
-            }
-        }
-        .onChange(of: buildErrors) { _, newErrors in
-            if !newErrors.isEmpty && !showErrorOverlay {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showErrorOverlay = true
-                }
-            } else if newErrors.isEmpty && showErrorOverlay {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showErrorOverlay = false
-                }
             }
         }
     }
@@ -194,21 +164,15 @@ struct LivePreviewPanel: View {
             await HugoServerService.shared.setOnStatusChange { @MainActor newStatus in
                 status = newStatus
             }
-
-            await HugoServerService.shared.setOnBuildErrorsChange { @MainActor newErrors in
-                buildErrors = newErrors
-            }
         }
     }
 
     private func refreshServerState() async {
         let currentStatus = await HugoServerService.shared.status
-        let currentErrors = await HugoServerService.shared.buildErrors
         let currentServerURL = await HugoServerService.shared.serverURL
 
         await MainActor.run {
             status = currentStatus
-            buildErrors = currentErrors
             serverURL = currentServerURL
         }
     }
