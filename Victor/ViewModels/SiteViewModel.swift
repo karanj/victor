@@ -78,6 +78,18 @@ class SiteViewModel {
         }
     }
 
+    /// Get edited content for a specific file by ID (regardless of which file is selected)
+    /// Used by EditorViewModel to retrieve content for its specific file
+    func getEditedContent(for nodeID: UUID) -> String? {
+        return editedContentByFile[nodeID]
+    }
+
+    /// Set edited content for a specific file by ID (regardless of which file is selected)
+    /// Used by EditorViewModel to update content for its specific file
+    func setEditedContent(_ content: String, for nodeID: UUID) {
+        editedContentByFile[nodeID] = content
+    }
+
     /// Live preview enabled state (controls real-time updates in split view)
     var isLivePreviewEnabled: Bool = true
 

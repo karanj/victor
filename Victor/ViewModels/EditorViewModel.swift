@@ -13,11 +13,18 @@ class EditorViewModel {
 
     // MARK: - State
 
-    /// Editable content - computed property that reads/writes directly to SiteViewModel
-    /// This eliminates state duplication between EditorViewModel and SiteViewModel
+    /// Local content storage - doesn't depend on selectedNode
+    /// This eliminates the race condition class where stale EditorViewModels could read/write wrong file's content
+    private var localContent: String
+
+    /// Editable content - reads from local storage and syncs back to SiteViewModel
     var editableContent: String {
-        get { siteViewModel.currentEditingContent }
-        set { siteViewModel.currentEditingContent = newValue }
+        get { localContent }
+        set {
+            localContent = newValue
+            // Sync back to per-file storage in SiteViewModel
+            siteViewModel.setEditedContent(newValue, for: fileNode.id)
+        }
     }
 
     var isSaving = false
@@ -40,7 +47,9 @@ class EditorViewModel {
 
     var hasUnsavedChanges: Bool {
         // Check if markdown content has changed
-        let contentChanged = editableContent != contentFile.markdownContent
+        // Using localContent directly (not editableContent) ensures this works correctly
+        // even after file switch - no dependency on selectedNode
+        let contentChanged = localContent != contentFile.markdownContent
 
         // Check if frontmatter has changed using lightweight version counter
         // This is O(1) compared to the previous O(n) snapshot comparison
@@ -64,9 +73,12 @@ class EditorViewModel {
         self.fileNode = fileNode
         self.contentFile = contentFile
         self.siteViewModel = siteViewModel
-        // Note: editableContent is now a computed property that reads/writes
-        // siteViewModel.currentEditingContent directly, which is already set
-        // by SiteViewModel.selectNode() when the file is selected.
+
+        // Initialize local content from per-file storage if it exists (preserves unsaved edits),
+        // otherwise fall back to the saved content from the file
+        self.localContent = siteViewModel.getEditedContent(for: fileNode.id)
+                         ?? contentFile.markdownContent
+
         // Record initial frontmatter version
         self.lastSavedFrontmatterVersion = contentFile.frontmatter?.version ?? 0
     }
@@ -75,14 +87,15 @@ class EditorViewModel {
 
     /// Update editable content when the underlying file changes
     func updateContent(from newMarkdown: String) {
-        editableContent = newMarkdown
+        localContent = newMarkdown
+        // Sync to SiteViewModel per-file storage
+        siteViewModel.setEditedContent(newMarkdown, for: fileNode.id)
         // Also update frontmatter version when content is externally updated
         lastSavedFrontmatterVersion = contentFile.frontmatter?.version ?? 0
     }
 
     /// Handle content changes for file status tracking and auto-save
-    /// Note: Preview sync is automatic since editableContent is a computed property
-    /// that reads/writes directly to siteViewModel.currentEditingContent
+    /// Preview sync happens through setEditedContent which updates SiteViewModel's per-file storage
     func handleContentChange() {
         // CRITICAL: Guard against spurious onChange triggers after file switch
         // If this EditorViewModel's file is no longer selected, ignore the change

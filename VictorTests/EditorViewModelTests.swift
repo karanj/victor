@@ -202,7 +202,9 @@ final class EditorViewModelTests: XCTestCase {
 
     // MARK: - Computed Property Safety Tests
 
-    /// Test that editableContent computed property returns correct file's content
+    /// Test that editableContent returns correct file's content (FIXED in victor-cs2)
+    /// After refactor: EditorViewModel uses local storage, so editableContent
+    /// returns the correct file's content regardless of which file is selected
     func testEditableContentReflectsCurrentlySelectedFile() {
         // Select file 1
         siteViewModel.selectedNode = testFileNode1
@@ -221,10 +223,10 @@ final class EditorViewModelTests: XCTestCase {
         siteViewModel.selectedNode = testFileNode2
         siteViewModel.currentEditingContent = testContentFile2.markdownContent
 
-        // The OLD editor VM's computed property now returns file 2's content (!)
-        // This is the root cause of the bug - computed properties depend on global state
-        XCTAssertEqual(editorVM1.editableContent, testContentFile2.markdownContent,
-                       "Computed property returns wrong file's content after switch (expected behavior showing the bug)")
+        // FIXED: editorVM1 now uses local storage, so it returns file 1's content
+        // (not file 2's content like before the fix)
+        XCTAssertEqual(editorVM1.editableContent, testContentFile1.markdownContent,
+                       "After victor-cs2 fix: EditorViewModel returns its own file's content, not the selected file's content")
 
         // Create new editor VM for file 2
         let editorVM2 = EditorViewModel(
@@ -376,12 +378,11 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertEqual(stats2.readingTime, "~2 mins")
     }
 
-    // MARK: - Vulnerability Documentation Tests
+    // MARK: - Vulnerability Fix Documentation Tests
 
-    /// Documents that hasUnsavedChanges returns WRONG result when called on stale ViewModel
-    /// This is a known architectural issue - the computed property depends on selectedNode.
-    /// The guard in handleContentChange() protects against this in practice.
-    /// See victor-cs2 for proposed fix: store content locally instead of computed property.
+    /// Documents that hasUnsavedChanges now returns CORRECT result after file switch (FIXED in victor-cs2)
+    /// The fix: EditorViewModel uses local content storage instead of computed property
+    /// that depends on selectedNode. This eliminates the race condition class entirely.
     func testHasUnsavedChangesVulnerability_ReturnsWrongValueAfterFileSwitch() {
         // Select file 1 and create editor
         siteViewModel.selectedNode = testFileNode1
@@ -404,35 +405,153 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertTrue(editorVM1.hasUnsavedChanges,
                       "Should have unsaved changes after modification")
 
-        // Switch to file 2 - this is where the vulnerability manifests
+        // Switch to file 2
         siteViewModel.selectedNode = testFileNode2
         siteViewModel.currentEditingContent = testContentFile2.markdownContent
 
-        // VULNERABILITY: editorVM1.hasUnsavedChanges now compares:
-        // - editableContent (reads file 2's content from siteViewModel)
-        // - contentFile.markdownContent (still file 1's original content)
-        // This comparison is WRONG - it's comparing file 2's content to file 1's saved content!
+        // FIXED (victor-cs2): editorVM1.hasUnsavedChanges now correctly compares:
+        // - localContent (file 1's modified content, stored locally)
+        // - contentFile.markdownContent (file 1's original saved content)
+        // This comparison is NOW CORRECT - it compares file 1's content to file 1's baseline
 
-        // The result depends on whether file 2's content equals file 1's saved content
-        // In our test setup, they're different, so hasUnsavedChanges returns true
-        // BUT FOR THE WRONG REASON - it thinks file 1 has changes when really
-        // it's comparing file 2's content to file 1's baseline
+        let result = editorVM1.hasUnsavedChanges
 
-        // Document the vulnerability: after switching, the comparison is meaningless
-        let vulnerableResult = editorVM1.hasUnsavedChanges
+        // FIXED: hasUnsavedChanges returns true FOR THE CORRECT REASON
+        // File 1 genuinely has unsaved changes ("Modified content for file 1" vs original)
+        XCTAssertTrue(result,
+                      "FIXED: hasUnsavedChanges correctly reports file 1 has unsaved changes, " +
+                      "using local content storage instead of computed property")
 
-        // The guard in handleContentChange() prevents this from causing harm,
-        // but the underlying computed property is still broken
-        XCTAssertTrue(vulnerableResult,
-                      "VULNERABILITY: hasUnsavedChanges returns true but for wrong reason - " +
-                      "comparing file 2's content to file 1's baseline. " +
-                      "See victor-cs2 for architectural fix.")
-
-        // Verify the guard protects against this in practice
+        // The guard in handleContentChange() is still present for defense-in-depth
         editorVM1.handleContentChange()
-        // File 1 should NOT be marked as modified (guard prevents it)
+        // File 1 should NOT be marked as modified by a stale ViewModel (guard still works)
         XCTAssertFalse(siteViewModel.isFileModified(testFileNode1.id),
                        "Guard should prevent stale ViewModel from marking file as modified")
+    }
+
+    // MARK: - Local Content Storage Tests (for victor-cs2 refactor)
+
+    /// Test that SiteViewModel provides getEditedContent(for:) method
+    /// This method allows EditorViewModel to retrieve content for a specific file by ID
+    func testSiteViewModelGetEditedContentForSpecificFile() {
+        // Select file 1 and set content
+        siteViewModel.selectedNode = testFileNode1
+        siteViewModel.currentEditingContent = "Content for file 1"
+
+        // Switch to file 2 and set different content
+        siteViewModel.selectedNode = testFileNode2
+        siteViewModel.currentEditingContent = "Content for file 2"
+
+        // getEditedContent should return the correct content for each file ID
+        // regardless of which file is currently selected
+        XCTAssertEqual(siteViewModel.getEditedContent(for: testFileNode1.id), "Content for file 1",
+                       "Should return file 1's content even when file 2 is selected")
+        XCTAssertEqual(siteViewModel.getEditedContent(for: testFileNode2.id), "Content for file 2",
+                       "Should return file 2's content")
+    }
+
+    /// Test that SiteViewModel provides setEditedContent(_:for:) method
+    /// This method allows EditorViewModel to update content for a specific file by ID
+    func testSiteViewModelSetEditedContentForSpecificFile() {
+        // Select file 1
+        siteViewModel.selectedNode = testFileNode1
+        siteViewModel.currentEditingContent = testContentFile1.markdownContent
+
+        // Switch to file 2
+        siteViewModel.selectedNode = testFileNode2
+        siteViewModel.currentEditingContent = testContentFile2.markdownContent
+
+        // Use setEditedContent to update file 1's content while file 2 is selected
+        siteViewModel.setEditedContent("Updated content for file 1", for: testFileNode1.id)
+
+        // Switch back to file 1 and verify the content was updated
+        siteViewModel.selectedNode = testFileNode1
+        XCTAssertEqual(siteViewModel.currentEditingContent, "Updated content for file 1",
+                       "setEditedContent should update per-file storage correctly")
+
+        // File 2 should be unchanged
+        siteViewModel.selectedNode = testFileNode2
+        XCTAssertEqual(siteViewModel.currentEditingContent, testContentFile2.markdownContent,
+                       "File 2's content should be unchanged")
+    }
+
+    /// Test that EditorViewModel with local storage maintains correct content after file switch
+    /// After victor-cs2 refactor, editableContent should NOT depend on selectedNode
+    func testEditorViewModelLocalStorageMaintainsContentAfterFileSwitch() {
+        // Select file 1 and create editor
+        siteViewModel.selectedNode = testFileNode1
+        siteViewModel.currentEditingContent = testContentFile1.markdownContent
+
+        let editorVM1 = EditorViewModel(
+            fileNode: testFileNode1,
+            contentFile: testContentFile1,
+            siteViewModel: siteViewModel
+        )
+
+        // Modify file 1's content
+        let file1ModifiedContent = "Modified content for file 1"
+        editorVM1.editableContent = file1ModifiedContent
+
+        // Verify initial content
+        XCTAssertEqual(editorVM1.editableContent, file1ModifiedContent,
+                       "Editor should have modified content")
+
+        // Switch to file 2 (this is where the old bug manifested)
+        siteViewModel.selectedNode = testFileNode2
+        siteViewModel.currentEditingContent = testContentFile2.markdownContent
+
+        // AFTER REFACTOR: editorVM1.editableContent should STILL return file 1's content
+        // because it uses local storage, not the computed property based on selectedNode
+        XCTAssertEqual(editorVM1.editableContent, file1ModifiedContent,
+                       "After refactor: EditorViewModel should return its own file's content, " +
+                       "not the currently selected file's content")
+    }
+
+    /// Test that hasUnsavedChanges works correctly after file switch (post-refactor)
+    /// This is the FIXED version of testHasUnsavedChangesVulnerability_ReturnsWrongValueAfterFileSwitch
+    func testHasUnsavedChangesWorksCorrectlyAfterFileSwitch() {
+        // Select file 1 and create editor
+        siteViewModel.selectedNode = testFileNode1
+        siteViewModel.currentEditingContent = testContentFile1.markdownContent
+
+        let editorVM1 = EditorViewModel(
+            fileNode: testFileNode1,
+            contentFile: testContentFile1,
+            siteViewModel: siteViewModel
+        )
+
+        // Initially, hasUnsavedChanges should be false (content matches)
+        XCTAssertFalse(editorVM1.hasUnsavedChanges,
+                       "Should have no unsaved changes initially")
+
+        // Modify file 1's content
+        editorVM1.editableContent = "Modified content for file 1"
+
+        // Now hasUnsavedChanges should be true
+        XCTAssertTrue(editorVM1.hasUnsavedChanges,
+                      "Should have unsaved changes after modification")
+
+        // Switch to file 2
+        siteViewModel.selectedNode = testFileNode2
+        siteViewModel.currentEditingContent = testContentFile2.markdownContent
+
+        // AFTER REFACTOR: hasUnsavedChanges should STILL be true because it compares
+        // the EditorViewModel's local content against its own contentFile.markdownContent
+        // It should NOT be affected by which file is currently selected
+        XCTAssertTrue(editorVM1.hasUnsavedChanges,
+                      "After refactor: hasUnsavedChanges should correctly detect unsaved changes " +
+                      "regardless of which file is currently selected")
+
+        // Create editor for file 2
+        let editorVM2 = EditorViewModel(
+            fileNode: testFileNode2,
+            contentFile: testContentFile2,
+            siteViewModel: siteViewModel
+        )
+
+        // File 2's editor should not have unsaved changes (content matches saved)
+        XCTAssertFalse(editorVM2.hasUnsavedChanges,
+                       "File 2's editor should have no unsaved changes")
     }
 
     // MARK: - Integration Tests with Real Timing
