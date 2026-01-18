@@ -17,6 +17,116 @@ class Archetype: Identifiable, Hashable {
     /// The detected frontmatter format
     var frontmatterFormat: FrontmatterFormat
 
+    // MARK: - Editing State
+
+    /// Original frontmatter content (for change tracking)
+    @ObservationIgnored var originalFrontmatterContent: String
+
+    /// Original body template content (for change tracking)
+    @ObservationIgnored var originalBodyTemplate: String
+
+    /// Whether this archetype has unsaved changes
+    var hasUnsavedChanges: Bool {
+        frontmatterContent != originalFrontmatterContent ||
+        bodyTemplate != originalBodyTemplate
+    }
+
+    /// Raw combined content for unified editing
+    var rawContent: String {
+        get {
+            let delimiter = frontmatterFormat.delimiter
+            return "\(delimiter)\n\(frontmatterContent)\n\(delimiter)\n\n\(bodyTemplate)"
+        }
+        set {
+            // Parse the raw content back into frontmatter and body
+            let parsed = Self.parseRawContent(newValue)
+            frontmatterContent = parsed.frontmatter
+            bodyTemplate = parsed.body
+            if let format = parsed.format {
+                frontmatterFormat = format
+            }
+        }
+    }
+
+    /// Parse raw content into frontmatter and body components
+    private static func parseRawContent(_ content: String) -> (frontmatter: String, body: String, format: FrontmatterFormat?) {
+        let lines = content.components(separatedBy: "\n")
+        guard !lines.isEmpty else {
+            return ("", content, nil)
+        }
+
+        // Detect frontmatter format from first line
+        let firstLine = lines[0].trimmingCharacters(in: .whitespaces)
+        var format: FrontmatterFormat?
+        var delimiter: String
+
+        if firstLine == "---" {
+            format = .yaml
+            delimiter = "---"
+        } else if firstLine == "+++" {
+            format = .toml
+            delimiter = "+++"
+        } else if firstLine == "{" {
+            // JSON frontmatter
+            format = .json
+            delimiter = "{"
+        } else {
+            // No frontmatter detected
+            return ("", content, nil)
+        }
+
+        // Handle JSON separately
+        if format == .json {
+            // Find matching closing brace
+            var braceCount = 0
+            var endIndex = 0
+            for (index, line) in lines.enumerated() {
+                for char in line {
+                    if char == "{" { braceCount += 1 }
+                    if char == "}" { braceCount -= 1 }
+                }
+                if braceCount == 0 {
+                    endIndex = index
+                    break
+                }
+            }
+            let frontmatter = lines[0...endIndex].joined(separator: "\n")
+            let body = lines.dropFirst(endIndex + 1).joined(separator: "\n").trimmingCharacters(in: .newlines)
+            return (frontmatter, body, format)
+        }
+
+        // Find closing delimiter for YAML/TOML
+        var frontmatterLines: [String] = []
+        var bodyLines: [String] = []
+        var foundClosing = false
+
+        for (index, line) in lines.enumerated() {
+            if index == 0 { continue } // Skip opening delimiter
+
+            if line.trimmingCharacters(in: .whitespaces) == delimiter && !foundClosing {
+                foundClosing = true
+                continue
+            }
+
+            if foundClosing {
+                bodyLines.append(line)
+            } else {
+                frontmatterLines.append(line)
+            }
+        }
+
+        let frontmatter = frontmatterLines.joined(separator: "\n")
+        let body = bodyLines.joined(separator: "\n").trimmingCharacters(in: .newlines)
+
+        return (frontmatter, body, format)
+    }
+
+    /// Mark the current state as saved (reset original values)
+    func markAsSaved() {
+        originalFrontmatterContent = frontmatterContent
+        originalBodyTemplate = bodyTemplate
+    }
+
     /// File name without extension
     var name: String {
         url.deletingPathExtension().lastPathComponent
@@ -51,6 +161,8 @@ class Archetype: Identifiable, Hashable {
         self.frontmatterContent = frontmatterContent
         self.bodyTemplate = bodyTemplate
         self.frontmatterFormat = frontmatterFormat
+        self.originalFrontmatterContent = frontmatterContent
+        self.originalBodyTemplate = bodyTemplate
     }
 
     // MARK: - Template Processing
@@ -92,7 +204,7 @@ class Archetype: Identifiable, Hashable {
 
         // Build the full content
         let delimiter = frontmatterFormat.delimiter
-        return "\(delimiter)\n\(processedFrontmatter)\(delimiter)\n\n\(processedBody)"
+        return "\(delimiter)\n\(processedFrontmatter)\n\(delimiter)\n\n\(processedBody)"
     }
 
     // MARK: - Hashable & Equatable

@@ -243,6 +243,34 @@ class SiteViewModel {
     /// URL of the last failed template load
     var failedTemplateURL: URL?
 
+    /// Per-file storage for archetypes - preserves unsaved edits when switching
+    private var loadedArchetypes: [URL: Archetype] = [:]
+
+    /// Currently loaded archetype (computed from per-file storage based on selected node)
+    var currentArchetype: Archetype? {
+        get {
+            guard let url = selectedNode?.url else { return nil }
+            return loadedArchetypes[url]
+        }
+        set {
+            guard let url = selectedNode?.url else { return }
+            if let file = newValue {
+                loadedArchetypes[url] = file
+            } else {
+                loadedArchetypes.removeValue(forKey: url)
+            }
+        }
+    }
+
+    /// Whether an archetype is currently loading
+    var isLoadingArchetype = false
+
+    /// Error from last archetype load attempt
+    var archetypeLoadError: String?
+
+    /// URL of the last failed archetype load
+    var failedArchetypeURL: URL?
+
     /// Maximum number of ContentFiles to keep cached in memory
     /// Files beyond this limit will have their contentFile released
     private let maxCachedContentFiles = 20
@@ -621,6 +649,7 @@ class SiteViewModel {
         editedContentByFile.removeAll()  // Clear all per-file markdown edits
         loadedDataFiles.removeAll()      // Clear all loaded data files
         loadedTemplates.removeAll()      // Clear all loaded templates
+        loadedArchetypes.removeAll()     // Clear all loaded archetypes
         hugoConfig = nil                 // Clear loaded Hugo config
         recentFiles = []
         contentCacheOrder = []
@@ -849,6 +878,9 @@ class SiteViewModel {
             if let template = loadedTemplates[node.url], template.hasUnsavedChanges {
                 return true
             }
+            if let archetype = loadedArchetypes[node.url], archetype.hasUnsavedChanges {
+                return true
+            }
         }
 
         return false
@@ -878,6 +910,10 @@ class SiteViewModel {
         }
         // Check templates
         if loadedTemplates.values.contains(where: { $0.hasUnsavedChanges }) {
+            return true
+        }
+        // Check archetypes
+        if loadedArchetypes.values.contains(where: { $0.hasUnsavedChanges }) {
             return true
         }
         return false
@@ -932,6 +968,17 @@ class SiteViewModel {
                 Logger.shared.info("Saved template: \(template.fileName)")
             } catch {
                 Logger.shared.error("Failed to save template \(template.fileName)", error: error)
+            }
+        }
+
+        // Save archetypes with unsaved changes
+        for (_, archetype) in loadedArchetypes where archetype.hasUnsavedChanges {
+            do {
+                try archetype.rawContent.write(to: archetype.url, atomically: true, encoding: .utf8)
+                archetype.markAsSaved()
+                Logger.shared.info("Saved archetype: \(archetype.fileName)")
+            } catch {
+                Logger.shared.error("Failed to save archetype \(archetype.fileName)", error: error)
             }
         }
     }
@@ -1215,6 +1262,132 @@ class SiteViewModel {
         } catch {
             errorMessage = "Failed to save template: \(error.localizedDescription)"
             Logger.shared.error("Error saving template", error: error)
+        }
+    }
+
+    // MARK: - Archetype Management
+
+    /// Load an archetype file from URL (for files in archetypes/ directory)
+    /// Only loads from disk if not already in memory (preserves unsaved edits)
+    func loadArchetype(from url: URL) async {
+        // If already loaded, don't reload (preserves unsaved edits)
+        if loadedArchetypes[url] != nil {
+            isLoadingArchetype = false
+            return
+        }
+
+        // Clear previous error state
+        archetypeLoadError = nil
+        failedArchetypeURL = nil
+        isLoadingArchetype = true
+
+        do {
+            let archetype = try await parseArchetype(at: url)
+            loadedArchetypes[url] = archetype
+            Logger.shared.info("Loaded archetype: \(url.lastPathComponent)")
+        } catch {
+            archetypeLoadError = error.localizedDescription
+            failedArchetypeURL = url
+            errorMessage = "Failed to load archetype: \(error.localizedDescription)"
+            Logger.shared.error("Error loading archetype", error: error)
+        }
+        isLoadingArchetype = false
+    }
+
+    /// Parse an archetype file from disk
+    private func parseArchetype(at url: URL) async throws -> Archetype {
+        let content = try await Task.detached {
+            try String(contentsOf: url, encoding: .utf8)
+        }.value
+
+        // Parse frontmatter and body from the content
+        let lines = content.components(separatedBy: "\n")
+        guard !lines.isEmpty else {
+            return Archetype(url: url, frontmatterContent: "", bodyTemplate: content, frontmatterFormat: .yaml)
+        }
+
+        // Detect frontmatter format from first line
+        let firstLine = lines[0].trimmingCharacters(in: .whitespaces)
+        var format: FrontmatterFormat
+        var delimiter: String
+
+        if firstLine == "---" {
+            format = .yaml
+            delimiter = "---"
+        } else if firstLine == "+++" {
+            format = .toml
+            delimiter = "+++"
+        } else if firstLine.hasPrefix("{") {
+            // JSON frontmatter - parse differently
+            format = .json
+            return try parseJSONArchetype(url: url, content: content, lines: lines)
+        } else {
+            // No frontmatter detected - treat entire file as body
+            return Archetype(url: url, frontmatterContent: "", bodyTemplate: content, frontmatterFormat: .yaml)
+        }
+
+        // Find closing delimiter for YAML/TOML
+        var frontmatterLines: [String] = []
+        var bodyLines: [String] = []
+        var foundClosing = false
+
+        for (index, line) in lines.enumerated() {
+            if index == 0 { continue } // Skip opening delimiter
+
+            if line.trimmingCharacters(in: .whitespaces) == delimiter && !foundClosing {
+                foundClosing = true
+                continue
+            }
+
+            if foundClosing {
+                bodyLines.append(line)
+            } else {
+                frontmatterLines.append(line)
+            }
+        }
+
+        let frontmatter = frontmatterLines.joined(separator: "\n")
+        let body = bodyLines.joined(separator: "\n").trimmingCharacters(in: .newlines)
+
+        return Archetype(url: url, frontmatterContent: frontmatter, bodyTemplate: body, frontmatterFormat: format)
+    }
+
+    /// Parse JSON frontmatter archetype
+    private func parseJSONArchetype(url: URL, content: String, lines: [String]) throws -> Archetype {
+        var braceCount = 0
+        var endIndex = 0
+
+        for (index, line) in lines.enumerated() {
+            for char in line {
+                if char == "{" { braceCount += 1 }
+                if char == "}" { braceCount -= 1 }
+            }
+            if braceCount == 0 {
+                endIndex = index
+                break
+            }
+        }
+
+        let frontmatter = lines[0...endIndex].joined(separator: "\n")
+        let body = lines.dropFirst(endIndex + 1).joined(separator: "\n").trimmingCharacters(in: .newlines)
+
+        return Archetype(url: url, frontmatterContent: frontmatter, bodyTemplate: body, frontmatterFormat: .json)
+    }
+
+    /// Save the current archetype
+    func saveArchetype() async {
+        guard let archetype = currentArchetype else {
+            errorMessage = "No archetype to save"
+            return
+        }
+
+        do {
+            try archetype.rawContent.write(to: archetype.url, atomically: true, encoding: .utf8)
+            archetype.markAsSaved()
+            Logger.shared.info("Saved archetype: \(archetype.fileName)")
+        } catch {
+            errorMessage = "Failed to save archetype: \(error.localizedDescription)"
+            Logger.shared.error("Error saving archetype", error: error)
         }
     }
 

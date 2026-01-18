@@ -13,7 +13,6 @@ enum FrontmatterFormat: String, CaseIterable {
         case .json: return ""
         }
     }
-
 }
 
 /// Represents Hugo frontmatter metadata - Enhanced version

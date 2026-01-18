@@ -306,6 +306,7 @@ struct FolderContextMenu: View {
     @Binding var showNewContentSheet: Bool
     @Binding var showNewDataFileSheet: Bool
     @Binding var showNewTranslationSheet: Bool
+    @Binding var showNewArchetypeSheet: Bool
 
     /// Check if this folder is within content/ directory
     private var isInContentDirectory: Bool {
@@ -320,6 +321,11 @@ struct FolderContextMenu: View {
     /// Check if this folder is within i18n/ directory
     private var isInI18nDirectory: Bool {
         node.hugoRole == .i18n || isDescendantOf(role: .i18n)
+    }
+
+    /// Check if this folder is within archetypes/ directory
+    private var isInArchetypesDirectory: Bool {
+        node.hugoRole == .archetypes || isDescendantOf(role: .archetypes)
     }
 
     private func isDescendantOf(role: HugoRole) -> Bool {
@@ -369,8 +375,17 @@ struct FolderContextMenu: View {
             }
         }
 
+        // Archetypes directory: New Archetype
+        if isInArchetypesDirectory {
+            Button {
+                showNewArchetypeSheet = true
+            } label: {
+                Label("New Archetype...", systemImage: "doc.text.fill.viewfinder")
+            }
+        }
+
         // Generic folder operations (always shown)
-        if !isInContentDirectory && !isInDataDirectory && !isInI18nDirectory {
+        if !isInContentDirectory && !isInDataDirectory && !isInI18nDirectory && !isInArchetypesDirectory {
             Button {
                 Task {
                     await siteViewModel.createMarkdownFile(in: node)
@@ -413,6 +428,7 @@ struct FolderRowWithSheets: View {
     @State private var showNewContentSheet = false
     @State private var showNewDataFileSheet = false
     @State private var showNewTranslationSheet = false
+    @State private var showNewArchetypeSheet = false
 
     var body: some View {
         FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
@@ -422,7 +438,8 @@ struct FolderRowWithSheets: View {
                     siteViewModel: siteViewModel,
                     showNewContentSheet: $showNewContentSheet,
                     showNewDataFileSheet: $showNewDataFileSheet,
-                    showNewTranslationSheet: $showNewTranslationSheet
+                    showNewTranslationSheet: $showNewTranslationSheet,
+                    showNewArchetypeSheet: $showNewArchetypeSheet
                 )
             }
             .sheet(isPresented: $showNewContentSheet) {
@@ -456,6 +473,19 @@ struct FolderRowWithSheets: View {
             }
             .sheet(isPresented: $showNewTranslationSheet) {
                 NewTranslationFileView(
+                    targetDirectory: node.url,
+                    onCreated: { fileURL in
+                        Task {
+                            await siteViewModel.reloadSite()
+                            if let newNode = findNodeByURL(fileURL) {
+                                siteViewModel.selectNode(newNode)
+                            }
+                        }
+                    }
+                )
+            }
+            .sheet(isPresented: $showNewArchetypeSheet) {
+                NewArchetypeView(
                     targetDirectory: node.url,
                     onCreated: { fileURL in
                         Task {

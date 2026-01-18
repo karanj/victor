@@ -33,6 +33,9 @@ struct FileViewerRouter: View {
             } else if node.isTemplateFile {
                 // Template files in layouts/ or themes/ get the template editor
                 templateEditorContent
+            } else if node.isArchetypeFile {
+                // Archetype files in archetypes/ get the archetype editor
+                archetypeEditorContent
             } else {
                 switch node.fileType {
                 case .markdown:
@@ -312,6 +315,62 @@ struct FileViewerRouter: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .task {
                 await siteViewModel.loadTemplate(from: node.url)
+            }
+        }
+    }
+
+    /// Archetype editor content - shows loading, editor, or fallback
+    @ViewBuilder
+    private var archetypeEditorContent: some View {
+        if siteViewModel.isLoadingArchetype {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading archetype...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let archetype = siteViewModel.currentArchetype, archetype.url == node.url {
+            ArchetypeEditorView(archetype: archetype, onSave: {
+                await siteViewModel.saveArchetype()
+            })
+        } else if let error = siteViewModel.archetypeLoadError, siteViewModel.failedArchetypeURL == node.url {
+            // Show error state - don't retry
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text("Failed to load archetype")
+                    .font(.headline)
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button("Retry") {
+                    Task {
+                        await siteViewModel.loadArchetype(from: node.url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.top)
+
+                Button("Open in Default App") {
+                    NSWorkspace.shared.open(node.url)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            // Archetype not loaded yet - trigger load
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Loading archetype...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task {
+                await siteViewModel.loadArchetype(from: node.url)
             }
         }
     }

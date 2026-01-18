@@ -23,6 +23,7 @@
 		1F4223BCDF34F90372E3CEFF /* SearchResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B2626CEE130D9177FC25EF6 /* SearchResult.swift */; };
 		27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */; };
 		281A23A15B2B0AAC8668F4CC /* MenuEntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B70F82D5687B1A912977787 /* MenuEntryEditor.swift */; };
+		2A7824AEA7B4DD8C29FF143C /* NewArchetypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24D962843741FD00216E0E92 /* NewArchetypeView.swift */; };
 		2FCC48CCD498DB32C3C792AE /* FrontmatterParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */; };
 		300C54B2B9F453BF45D16635 /* EditorViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D5B5E71B8E3101729B548D /* EditorViewModelTests.swift */; };
 		33E672AB082D3ED5838ED7F4 /* HugoShortcode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF18C11530F31087472421D /* HugoShortcode.swift */; };
@@ -44,6 +45,7 @@
 		54DD741D23FA651B168E4207 /* FrontmatterTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB27DF426185C0D87A1F7EFF /* FrontmatterTypes.swift */; };
 		55A113AC62BA638DAE1B7364 /* NewContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 157CD29C2C9636AAA8659EE7 /* NewContentView.swift */; };
 		5CCCC09802CFB3E38A4C362A /* FileStatusMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 827E1E006B609681AC20B551 /* FileStatusMetadataTests.swift */; };
+		5FA0613635E3C4FD42AD7FA1 /* ArchetypeHelpPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B04686F1B2A4BE3E83A91681 /* ArchetypeHelpPanel.swift */; };
 		6008D83CAD3DF3AA788953C7 /* TextViewerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE52B265C87D31563EAC15B9 /* TextViewerPanel.swift */; };
 		649E87B52E9E159C8DF5E117 /* AssetService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1EEC2183F119D72ACAE837 /* AssetService.swift */; };
 		6AB4A8EF38CEF3BB2109E0F3 /* TabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D5DFBC7BB7EE3AA4800B5F9 /* TabBarView.swift */; };
@@ -100,6 +102,7 @@
 		D96E02E3E4B1BD9606D2BDA0 /* MetadataSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFE88CA8C8E2F13D02BAC38 /* MetadataSection.swift */; };
 		DAE3A9BCBFDF5E4B5529B05E /* PreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A60C1F2652073E3CDEEA5BD /* PreviewPanel.swift */; };
 		DAFAC8E35FDC6F5486D4707F /* InspectorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1267DA7632633B7AFFC1B175 /* InspectorPanel.swift */; };
+		DCC531C5769F741A8ED78A1A /* ArchetypeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41DC5F2604341A22ACFE3D6C /* ArchetypeEditorView.swift */; };
 		DD891B78440979B155AD97EC /* DataFileParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA78287241B161C53327133 /* DataFileParserTests.swift */; };
 		DE7FF0C3E88EE0A7DF0023CA /* EssentialFieldsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F71B5CB356171D3521AB28 /* EssentialFieldsTab.swift */; };
 		E377D5F95770FB4C8F91C393 /* UnsupportedFilePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CA5AFA43CB94F384AF612A6 /* UnsupportedFilePanel.swift */; };
@@ -138,6 +141,7 @@
 		1CA5AFA43CB94F384AF612A6 /* UnsupportedFilePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedFilePanel.swift; sourceTree = "<group>"; };
 		1FFA71491ABB3262F49DAA8F /* AssetBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetBrowserView.swift; sourceTree = "<group>"; };
 		20942866D9502CCA93571D19 /* TextFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFile.swift; sourceTree = "<group>"; };
+		24D962843741FD00216E0E92 /* NewArchetypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewArchetypeView.swift; sourceTree = "<group>"; };
 		27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcodeCardView.swift; sourceTree = "<group>"; };
 		2B2626CEE130D9177FC25EF6 /* SearchResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResult.swift; sourceTree = "<group>"; };
 		2B70F82D5687B1A912977787 /* MenuEntryEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuEntryEditor.swift; sourceTree = "<group>"; };
@@ -154,6 +158,7 @@
 		3CA78287241B161C53327133 /* DataFileParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFileParserTests.swift; sourceTree = "<group>"; };
 		3DDFE1122F73DA5BCF708843 /* TemplateParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateParser.swift; sourceTree = "<group>"; };
 		3F51F8DDFBFAE5CBCAE2AC50 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
+		41DC5F2604341A22ACFE3D6C /* ArchetypeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchetypeEditorView.swift; sourceTree = "<group>"; };
 		42CF09C9E3E72F6EEBFC8E75 /* TemplateBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplateBrowserView.swift; sourceTree = "<group>"; };
 		4677CA9101F20BE0B2C8D145 /* FrontmatterParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterParser.swift; sourceTree = "<group>"; };
 		475F31600F73E13C6DF64214 /* TextEditorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditorPanel.swift; sourceTree = "<group>"; };
@@ -195,6 +200,7 @@
 		ABD4827B74BCFB4B98565639 /* FileType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileType.swift; sourceTree = "<group>"; };
 		ABDB8DE15392A0FC66617993 /* AnimationModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationModifiers.swift; sourceTree = "<group>"; };
 		B02617FD00E936195C79E3DF /* ServerConfigPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerConfigPopover.swift; sourceTree = "<group>"; };
+		B04686F1B2A4BE3E83A91681 /* ArchetypeHelpPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchetypeHelpPanel.swift; sourceTree = "<group>"; };
 		B1B94D70C8953FB652EA5AB4 /* StatisticsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsSection.swift; sourceTree = "<group>"; };
 		B77359CF942B864CCDB1D4BF /* Template.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Template.swift; sourceTree = "<group>"; };
 		B7788DB7550B1240381DEFEC /* EditorTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextView.swift; sourceTree = "<group>"; };
@@ -269,6 +275,16 @@
 				333D3CD4F0CCA5F20CEF7E7A /* FocusModeView.swift */,
 			);
 			path = FocusMode;
+			sourceTree = "<group>";
+		};
+		1872C7B908304D4FA559A4A2 /* ArchetypeEditor */ = {
+			isa = PBXGroup;
+			children = (
+				41DC5F2604341A22ACFE3D6C /* ArchetypeEditorView.swift */,
+				B04686F1B2A4BE3E83A91681 /* ArchetypeHelpPanel.swift */,
+				24D962843741FD00216E0E92 /* NewArchetypeView.swift */,
+			);
+			path = ArchetypeEditor;
 			sourceTree = "<group>";
 		};
 		195E255F08938A000B13B197 /* Services */ = {
@@ -557,6 +573,7 @@
 			isa = PBXGroup;
 			children = (
 				A4B0F1274A4EE5643D06EF27 /* Animations */,
+				1872C7B908304D4FA559A4A2 /* ArchetypeEditor */,
 				8E04AF2A99620401E7EF3CAC /* AssetBrowser */,
 				1DB8711FCE166EF6708355DA /* Components */,
 				78354C1FC2E8C7A1927B6AD8 /* ConfigEditor */,
@@ -708,6 +725,8 @@
 				7D47EFAD0DBC116C75839334 /* AnimationModifiers.swift in Sources */,
 				FA9870EBF3AEABAADAC7CAF7 /* AppConstants.swift in Sources */,
 				1C03AF9B620F1639386046F1 /* Archetype.swift in Sources */,
+				DCC531C5769F741A8ED78A1A /* ArchetypeEditorView.swift in Sources */,
+				5FA0613635E3C4FD42AD7FA1 /* ArchetypeHelpPanel.swift in Sources */,
 				405335F179D0CCFF442DCD7D /* ArchetypeManager.swift in Sources */,
 				EDB40E79FEFDAFC7CC96ABAD /* Asset.swift in Sources */,
 				99B42CCA87549C603EA7D61A /* AssetBrowserView.swift in Sources */,
@@ -761,6 +780,7 @@
 				281A23A15B2B0AAC8668F4CC /* MenuEntryEditor.swift in Sources */,
 				ACCFC7D5781CAF89BC72599D /* MenusTab.swift in Sources */,
 				D96E02E3E4B1BD9606D2BDA0 /* MetadataSection.swift in Sources */,
+				2A7824AEA7B4DD8C29FF143C /* NewArchetypeView.swift in Sources */,
 				55A113AC62BA638DAE1B7364 /* NewContentView.swift in Sources */,
 				3791F1469EA4823E360E3956 /* NewDataFileView.swift in Sources */,
 				6B4B70AA10B0C39CB1AB8B0C /* NewTranslationFileView.swift in Sources */,

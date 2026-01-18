@@ -106,6 +106,25 @@ class FileNode: Identifiable, Hashable {
         return false
     }
 
+    /// Whether this is an archetype file (markdown in archetypes/ directory)
+    var isArchetypeFile: Bool {
+        guard !isDirectory else { return false }
+        guard fileType == .markdown else { return false }
+        return isInArchetypesDirectory
+    }
+
+    /// Check if this node is within the archetypes/ directory
+    private var isInArchetypesDirectory: Bool {
+        var current: FileNode? = parent
+        while let node = current {
+            if node.hugoRole == .archetypes {
+                return true
+            }
+            current = node.parent
+        }
+        return false
+    }
+
     /// Associated content file (only for .md files in content directory)
     var contentFile: ContentFile?
 
