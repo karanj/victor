@@ -207,8 +207,24 @@ actor HugoServerService {
         return await findBinaryViaWhich("hugo")
     }
 
+    /// Allowed directory prefixes for binary paths (security measure)
+    private static let allowedBinaryPrefixes = [
+        "/usr/local/bin/",
+        "/opt/homebrew/bin/",
+        "/usr/bin/",
+        "\(NSHomeDirectory())/go/bin/",
+        "\(NSHomeDirectory())/.local/bin/"
+    ]
+
     /// Find binary path using 'which' command
     private func findBinaryViaWhich(_ binary: String) async -> String? {
+        // Security: Validate binary name contains only safe characters (alphanumeric, hyphens, underscores)
+        let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        guard binary.unicodeScalars.allSatisfy({ allowedCharacters.contains($0) }) else {
+            Logger.shared.warning("[HugoServer] Invalid binary name rejected: \(binary)")
+            return nil
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         process.arguments = [binary]
@@ -225,6 +241,16 @@ actor HugoServerService {
             let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
 
             if let path = output, !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
+                // Security: Validate path is in an allowed directory
+                let isAllowedPath = Self.allowedBinaryPrefixes.contains { prefix in
+                    path.hasPrefix(prefix)
+                }
+
+                guard isAllowedPath else {
+                    Logger.shared.warning("[HugoServer] Binary found in unexpected location, rejecting: \(path)")
+                    return nil
+                }
+
                 return path
             }
         } catch {

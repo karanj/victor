@@ -1036,24 +1036,7 @@ class FrontmatterParser {
 
     /// Add a value to TOML table
     private func addToTOMLTable(key: String, value: Any, table: TOMLTable) {
-        if let stringValue = value as? String {
-            table[key] = stringValue
-        } else if let intValue = value as? Int {
-            table[key] = intValue
-        } else if let doubleValue = value as? Double {
-            table[key] = doubleValue
-        } else if let boolValue = value as? Bool {
-            table[key] = boolValue
-        } else if let arrayValue = value as? [String] {
-            table[key] = arrayValue
-        } else if let dictValue = value as? [String: Any] {
-            let subTable = TOMLTable()
-            for (subKey, subValue) in dictValue {
-                addToTOMLTable(key: subKey, value: subValue, table: subTable)
-            }
-            table[key] = subTable
-        }
-        // Skip other types
+        TOMLHelper.addToTOMLTable(key: key, value: value, table: table)
     }
 
     /// Serialize to JSON format (non-throwing, falls back to rawContent)

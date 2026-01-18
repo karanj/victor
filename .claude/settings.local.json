@@ -32,7 +32,8 @@
       "Bash(bd sync:*)",
       "Bash(gh issue close:*)",
       "Bash(bd reopen:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(bd epic create:*)"
     ]
   }
 }

@@ -7,6 +7,54 @@ class FileSystemService {
 
     private init() {}
 
+    // MARK: - Path Security
+
+    /// Validate that a URL stays within the given site root (prevents path traversal attacks)
+    /// - Parameters:
+    ///   - url: The URL to validate
+    ///   - siteRoot: The root URL of the Hugo site
+    /// - Throws: FileError.accessDenied if the path escapes the site root
+    func validatePathWithinSite(_ url: URL, siteRoot: URL) throws {
+        let canonicalPath = url.standardized.path
+        let canonicalSiteRoot = siteRoot.standardized.path
+
+        // Ensure the path starts with the site root
+        guard canonicalPath.hasPrefix(canonicalSiteRoot) else {
+            Logger.shared.warning("[Security] Path traversal attempt blocked: \(url.path) outside \(siteRoot.path)")
+            throw FileError.accessDenied
+        }
+
+        // Check for symlink attacks - resolve symlinks and verify again
+        let fileManager = FileManager.default
+        if let resolvedPath = try? fileManager.destinationOfSymbolicLink(atPath: canonicalPath) {
+            let resolvedURL = URL(fileURLWithPath: resolvedPath).standardized
+            guard resolvedURL.path.hasPrefix(canonicalSiteRoot) else {
+                Logger.shared.warning("[Security] Symlink traversal attempt blocked: \(resolvedPath) outside \(siteRoot.path)")
+                throw FileError.accessDenied
+            }
+        }
+    }
+
+    /// Check if a filename contains path traversal sequences
+    /// - Parameter name: The filename to check
+    /// - Returns: true if the name is safe, false if it contains traversal sequences
+    private func isSafeFilename(_ name: String) -> Bool {
+        // Reject names containing path separators or traversal patterns
+        let dangerousPatterns = ["/", "\\", "..", "~"]
+        for pattern in dangerousPatterns {
+            if name.contains(pattern) {
+                return false
+            }
+        }
+
+        // Reject empty or whitespace-only names
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+
+        return true
+    }
+
     // MARK: - Folder Selection
 
     /// Present folder selection dialog and return selected URL
@@ -364,6 +412,12 @@ class FileSystemService {
 
     /// Rename a file or folder
     func renameFile(at url: URL, to newName: String) async throws -> URL {
+        // Security: Validate filename doesn't contain path traversal sequences
+        guard isSafeFilename(newName) else {
+            Logger.shared.warning("[Security] Unsafe filename rejected in rename: \(newName)")
+            throw FileError.accessDenied
+        }
+
         let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
 
         // Check if destination already exists
@@ -455,6 +509,12 @@ class FileSystemService {
 
     /// Create a new folder inside the given directory
     func createFolder(in directory: URL, name: String = "New Folder") async throws -> URL {
+        // Security: Validate folder name doesn't contain path traversal sequences
+        guard isSafeFilename(name) else {
+            Logger.shared.warning("[Security] Unsafe folder name rejected: \(name)")
+            throw FileError.accessDenied
+        }
+
         let fileManager = FileManager.default
 
         // Find a unique name for the folder

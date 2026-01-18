@@ -220,6 +220,7 @@ class EditorViewModel {
                     guard nodeID == self.siteViewModel.selectedNode?.id else {
                         // File was switched - don't update UI or modify state
                         // The save to disk was successful, but UI updates are for the old file
+                        Logger.shared.info("[AutoSave] Successfully saved \(nodeURL.lastPathComponent) after file switch")
                         return
                     }
 
@@ -245,7 +246,9 @@ class EditorViewModel {
                     guard let self = self else { return }
                     // Only show error if this is still the selected file
                     guard nodeID == self.siteViewModel.selectedNode?.id else {
-                        return  // Silently ignore errors for old files
+                        // Log the error even though we're not showing it to the user
+                        Logger.shared.warning("[AutoSave] Error saving \(nodeURL.lastPathComponent) after file switch: \(error.localizedDescription)")
+                        return
                     }
                     // Show error in site view model (unless it's a user cancellation)
                     if !(error is AutoSaveError) {
