@@ -114,8 +114,10 @@ enum TOMLHelper {
                 addToTOMLTable(key: subKey, value: subValue, table: subTable)
             }
             table[key] = subTable
+        } else {
+            // Fallback: convert unknown types to string to prevent data loss
+            table[key] = String(describing: value)
         }
-        // Skip other types (incompatible with TOML)
     }
 
 }

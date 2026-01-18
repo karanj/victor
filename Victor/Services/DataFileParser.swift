@@ -69,7 +69,7 @@ class DataFileParser {
     private func parseTOML(_ content: String) throws -> Any {
         // TOML always has a root table (dictionary)
         let table = try TOMLTable(string: content)
-        return convertTOMLToDict(table)
+        return TOMLHelper.convertTOMLToDict(table)
     }
 
     // MARK: - Serialization
@@ -96,8 +96,11 @@ class DataFileParser {
     }
 
     private func serializeToYAML(_ data: Any) throws -> String {
-        // Use width: -1 to prevent line wrapping
-        let output = try Yams.dump(object: data, width: -1, allowUnicode: true)
+        guard let dict = data as? [String: Any] else {
+            throw DataFileError.serializationFailed
+        }
+
+        let output = try SerializationHelper.serializeToYAML(dict)
 
         // Round-trip validation
         _ = try Yams.load(yaml: output)
@@ -106,14 +109,10 @@ class DataFileParser {
     }
 
     private func serializeToJSON(_ data: Any) throws -> String {
-        let jsonData = try JSONSerialization.data(
-            withJSONObject: data,
-            options: [.prettyPrinted, .sortedKeys]
-        )
-        guard let output = String(data: jsonData, encoding: .utf8) else {
+        guard let dict = data as? [String: Any] else {
             throw DataFileError.serializationFailed
         }
-        return output
+        return try SerializationHelper.serializeToJSON(dict)
     }
 
     private func serializeToTOML(_ dictionary: [String: Any]) throws -> String {
@@ -219,53 +218,7 @@ class DataFileParser {
     }
 
     // MARK: - TOML Parsing Helpers
-
-    private func convertTOMLToDict(_ table: TOMLTable) -> [String: Any] {
-        var result: [String: Any] = [:]
-        for key in table.keys {
-            if let converted = convertTOMLValue(table[key]) {
-                result[key] = converted
-            }
-        }
-        return result
-    }
-
-    private func convertTOMLValue(_ value: Any?) -> Any? {
-        guard let value = value else { return nil }
-
-        if let tomlValue = value as? TOMLValue {
-            if let str = tomlValue.string { return str }
-            if let bool = tomlValue.bool { return bool }
-            if let int = tomlValue.int { return Int(int) }
-            if let double = tomlValue.double { return double }
-            if let date = tomlValue.date { return "\(date)" }
-            if let time = tomlValue.time { return "\(time)" }
-            if let dateTime = tomlValue.dateTime { return "\(dateTime)" }
-            if let array = tomlValue.array {
-                return array.compactMap { convertTOMLValue($0) }
-            }
-            if let table = tomlValue.table {
-                return convertTOMLToDict(table)
-            }
-        }
-
-        if let table = value as? TOMLTable {
-            return convertTOMLToDict(table)
-        }
-
-        if let array = value as? [Any] {
-            return array.compactMap { convertTOMLValue($0) }
-        }
-
-        // Native Swift types
-        if let stringValue = value as? String { return stringValue }
-        if let boolValue = value as? Bool { return boolValue }
-        if let intValue = value as? Int { return intValue }
-        if let int64Value = value as? Int64 { return Int(int64Value) }
-        if let doubleValue = value as? Double { return doubleValue }
-
-        return value
-    }
+    // Now using TOMLHelper for conversion
 
     // MARK: - Normalization
 
