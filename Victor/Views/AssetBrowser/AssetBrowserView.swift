@@ -120,11 +120,14 @@ struct AssetBrowserView: View {
                 // View mode
                 Picker("View", selection: $viewMode) {
                     ForEach(AssetViewMode.allCases) { mode in
-                        Image(systemName: mode.icon).tag(mode)
+                        Image(systemName: mode.icon)
+                            .tag(mode)
+                            .accessibilityLabel("\(mode.rawValue) view")
                     }
                 }
                 .pickerStyle(.segmented)
                 .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
+                .accessibilityLabel("View mode")
 
                 Divider().frame(height: 20)
 

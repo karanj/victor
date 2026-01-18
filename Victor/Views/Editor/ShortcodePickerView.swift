@@ -69,10 +69,10 @@ struct ShortcodePickerView: View {
                     onCancel: { dismiss() }
                 )
             } else {
-                ContentUnavailableView(
-                    "Select a Shortcode",
-                    systemImage: "curlybraces",
-                    description: Text("Choose a shortcode from the list to configure and insert it.")
+                EmptyStateView(
+                    icon: "curlybraces",
+                    title: "Select a Shortcode",
+                    message: "Choose a shortcode from the list to configure and insert it."
                 )
             }
         }

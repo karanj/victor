@@ -95,6 +95,8 @@ struct FocusModeTopBar: View {
             }
             .buttonStyle(.plain)
             .help("Exit Focus Mode (Esc)")
+            .accessibilityLabel("Exit Focus Mode")
+            .accessibilityHint("Return to normal editing view")
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 12)

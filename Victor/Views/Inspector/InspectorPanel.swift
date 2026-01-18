@@ -48,10 +48,10 @@ struct InspectorPanel: View {
                     }
                 } else {
                     // No file selected
-                    ContentUnavailableView(
-                        "No File Selected",
-                        systemImage: "doc.text",
-                        description: Text("Select a file to view its metadata")
+                    EmptyStateView(
+                        icon: "doc.text",
+                        title: "No File Selected",
+                        message: "Select a file to view its metadata"
                     )
                     .frame(maxHeight: .infinity)
                 }

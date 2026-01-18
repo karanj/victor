@@ -111,13 +111,11 @@ struct FileViewerRouter: View {
     }
 
     private var directoryPlaceholder: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "folder")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text("Select a file to view")
-                .foregroundStyle(.secondary)
-        }
+        EmptyStateView(
+            icon: "folder",
+            title: "Directory Selected",
+            message: "Select a file to view its contents"
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

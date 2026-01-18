@@ -258,6 +258,7 @@ struct EditorToolbar: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Insert Shortcode (⌘⇧K)")
+                .accessibilityLabel("Insert Shortcode")
                 .popover(isPresented: $showShortcodePicker) {
                     ShortcodePickerView(contentPaths: contentPaths) { shortcodeText in
                         onInsertShortcode(shortcodeText)
@@ -310,6 +311,7 @@ struct ToolbarButton: View {
         }
         .buttonStyle(.bordered)
         .help(help)
+        .accessibilityLabel(label)
     }
 }
 

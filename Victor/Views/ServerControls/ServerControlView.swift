@@ -145,6 +145,8 @@ struct ServerControlView: View {
                 .labelStyle(.iconOnly)
         }
         .help("Server configuration")
+        .accessibilityLabel("Server Settings")
+        .accessibilityHint("Configure Hugo server options")
         .popover(isPresented: $isConfigPopoverPresented) {
             ServerConfigPopover(isPresented: $isConfigPopoverPresented)
         }

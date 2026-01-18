@@ -286,7 +286,7 @@ class FrontmatterParser {
             // Convert TOML table to dictionary for unified parsing
             var dict: [String: Any] = [:]
             for key in table.keys {
-                dict[key] = convertTOMLValue(table[key])
+                dict[key] = TOMLHelper.convertTOMLValue(table[key])
             }
 
             extractAllFields(from: dict, into: frontmatter)
@@ -295,66 +295,6 @@ class FrontmatterParser {
         }
     }
 
-    /// Convert TOML value to Swift type
-    private func convertTOMLValue(_ value: Any?) -> Any? {
-        guard let value = value else { return nil }
-
-        // Handle TOMLValue wrapper type
-        if let tomlValue = value as? TOMLValue {
-            if let str = tomlValue.string {
-                return str
-            }
-            if let bool = tomlValue.bool {
-                return bool
-            }
-            if let int = tomlValue.int {
-                return Int(int)
-            }
-            if let double = tomlValue.double {
-                return double
-            }
-            if let date = tomlValue.date {
-                return "\(date)"
-            }
-            if let time = tomlValue.time {
-                return "\(time)"
-            }
-            if let dateTime = tomlValue.dateTime {
-                return "\(dateTime)"
-            }
-            if let array = tomlValue.array {
-                return array.compactMap { convertTOMLValue($0) }
-            }
-            if let table = tomlValue.table {
-                var dict: [String: Any] = [:]
-                for key in table.keys {
-                    if let converted = convertTOMLValue(table[key]) {
-                        dict[key] = converted
-                    }
-                }
-                return dict
-            }
-        }
-
-        // Handle nested tables
-        if let table = value as? TOMLTable {
-            var dict: [String: Any] = [:]
-            for key in table.keys {
-                if let converted = convertTOMLValue(table[key]) {
-                    dict[key] = converted
-                }
-            }
-            return dict
-        }
-
-        // Handle arrays
-        if let array = value as? [Any] {
-            return array.compactMap { convertTOMLValue($0) }
-        }
-
-        // Fallback for native Swift types
-        return value
-    }
 
     /// Parse JSON frontmatter
     private func parseJSON(_ content: String, into frontmatter: Frontmatter) throws {
@@ -747,7 +687,7 @@ class FrontmatterParser {
         var dict: [String: Any] = [:]
         for key in ["draft", "date", "publishDate", "expiryDate"] {
             if let value = table[key] {
-                dict[key] = convertTOMLValue(value)
+                dict[key] = TOMLHelper.convertTOMLValue(value)
             }
         }
         return extractStatusFields(from: dict)
@@ -1058,7 +998,7 @@ class FrontmatterParser {
         let dict = buildSerializationDict(frontmatter)
 
         do {
-            let yaml = try Yams.dump(object: dict)
+            let yaml = try SerializationHelper.serializeToYAML(dict)
             return "---\n\(yaml)---"
         } catch {
             Logger.shared.error("FrontmatterParser: YAML serialization error", error: error)
@@ -1071,7 +1011,7 @@ class FrontmatterParser {
         let dict = buildSerializationDict(frontmatter)
 
         do {
-            let yaml = try Yams.dump(object: dict)
+            let yaml = try SerializationHelper.serializeToYAML(dict)
             return "---\n\(yaml)---"
         } catch {
             throw FrontmatterError.yamlSerializationFailed(error.localizedDescription)

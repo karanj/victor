@@ -73,6 +73,8 @@ struct LivePreviewPanel: View {
             .buttonStyle(.plain)
             .disabled(!canGoBack)
             .help("Go back")
+            .accessibilityLabel("Go back")
+            .accessibilityHint("Navigate to previous page")
 
             // Forward button
             Button {
@@ -84,6 +86,8 @@ struct LivePreviewPanel: View {
             .buttonStyle(.plain)
             .disabled(!canGoForward)
             .help("Go forward")
+            .accessibilityLabel("Go forward")
+            .accessibilityHint("Navigate to next page")
 
             // Refresh button
             Button {
@@ -93,6 +97,8 @@ struct LivePreviewPanel: View {
             }
             .buttonStyle(.plain)
             .help("Refresh")
+            .accessibilityLabel("Refresh page")
+            .accessibilityHint("Reload the current page")
 
             Divider()
                 .frame(height: 16)
@@ -152,23 +158,23 @@ struct LivePreviewPanel: View {
     // MARK: - Server Not Running Placeholder
 
     private var serverNotRunningPlaceholder: some View {
-        ContentUnavailableView {
-            Label("Hugo Server Not Running", systemImage: "server.rack")
-        } description: {
-            VStack(spacing: 12) {
-                Text("Start the Hugo development server to see live preview of your site.")
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-
-                // TODO: Add start server button when ServerControlPanel is implemented
-                // Button("Start Server") {
-                //     Task {
-                //         try? await HugoServerService.shared.start(siteURL: siteViewModel.site!.rootURL)
-                //     }
-                // }
-                // .buttonStyle(.borderedProminent)
-            }
-        }
+        EmptyStateView(
+            icon: "server.rack",
+            title: "Hugo Server Not Running",
+            message: "Start the Hugo development server to see live preview of your site."
+        )
+        // TODO: Add start server action when ServerControlPanel is implemented
+        // EmptyStateView(
+        //     icon: "server.rack",
+        //     title: "Hugo Server Not Running",
+        //     message: "Start the Hugo development server to see live preview of your site.",
+        //     actionLabel: "Start Server",
+        //     actionIcon: "play.fill"
+        // ) {
+        //     Task {
+        //         try? await HugoServerService.shared.start(siteURL: siteViewModel.site!.rootURL)
+        //     }
+        // }
     }
 
     // MARK: - Server State Management

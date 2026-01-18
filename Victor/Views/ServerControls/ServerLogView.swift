@@ -40,6 +40,8 @@ struct ServerLogView: View {
             }
             .toggleStyle(.button)
             .help("Auto-scroll to bottom")
+            .accessibilityLabel("Auto-scroll")
+            .accessibilityHint("Automatically scroll to bottom when new log entries appear")
 
             // Copy log button
             Button {
@@ -49,6 +51,8 @@ struct ServerLogView: View {
                     .labelStyle(.iconOnly)
             }
             .help("Copy log to clipboard")
+            .accessibilityLabel("Copy log")
+            .accessibilityHint("Copy all log entries to clipboard")
 
             // Clear log button
             Button {
@@ -58,6 +62,8 @@ struct ServerLogView: View {
                     .labelStyle(.iconOnly)
             }
             .help("Clear log")
+            .accessibilityLabel("Clear log")
+            .accessibilityHint("Remove all log entries")
         }
         .padding(8)
     }

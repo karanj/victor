@@ -97,10 +97,10 @@ struct PreviewPanel: View {
 
 struct PreviewPanelPlaceholder: View {
     var body: some View {
-        ContentUnavailableView(
-            "Preview",
-            systemImage: "eye",
-            description: Text("Select a markdown file to see preview")
+        EmptyStateView(
+            icon: "eye",
+            title: "Preview",
+            message: "Select a markdown file to see preview"
         )
     }
 }

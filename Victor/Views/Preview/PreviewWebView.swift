@@ -11,6 +11,29 @@ struct PreviewWebView: NSViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.suppressesIncrementalRendering = false
 
+        // Security: Disable JavaScript - markdown previews don't need it
+        // This prevents XSS attacks from malicious content in markdown files
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+
+        // Security: Add Content Security Policy via user script as additional defense
+        // Even with JS disabled, this provides defense-in-depth
+        let cspScript = """
+        (function() {
+            var meta = document.createElement('meta');
+            meta.httpEquiv = 'Content-Security-Policy';
+            meta.content = "default-src 'none'; style-src 'unsafe-inline'; img-src data: https: http:; font-src 'self' data:;";
+            if (document.head) {
+                document.head.insertBefore(meta, document.head.firstChild);
+            }
+        })();
+        """
+        let userScript = WKUserScript(
+            source: cspScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        configuration.userContentController.addUserScript(userScript)
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         context.coordinator.webView = webView
