@@ -104,8 +104,11 @@ actor AutoSaveService {
 
             coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
                 do {
-                    // Write the content
-                    try content.write(to: url, atomically: true, encoding: .utf8)
+                    // Write directly (not atomically) so Hugo's file watcher can detect
+                    // which file changed for --navigateToChanged. Atomic writes use rename
+                    // which Hugo can't associate with the content file path.
+                    // Risk is minimal since Hugo content is typically git-tracked.
+                    try content.write(to: url, atomically: false, encoding: .utf8)
 
                     // Get new modification date
                     let attributes = try FileManager.default.attributesOfItem(atPath: url.path)

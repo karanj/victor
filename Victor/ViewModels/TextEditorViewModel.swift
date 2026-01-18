@@ -34,7 +34,7 @@ class TextEditorViewModel {
 
     /// Whether auto-save is enabled (reads from UserDefaults)
     private var isAutoSaveEnabled: Bool {
-        UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? true
+        UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? false
     }
 
     /// Auto-save delay in seconds (reads from UserDefaults)

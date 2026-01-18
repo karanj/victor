@@ -284,7 +284,11 @@ class FileSystemService {
 
             coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
                 do {
-                    try content.write(to: coordinatedURL, atomically: true, encoding: .utf8)
+                    // Write directly (not atomically) so Hugo's file watcher can detect
+                    // which file changed for --navigateToChanged. Atomic writes use rename
+                    // which Hugo can't associate with the content file path.
+                    // Risk is minimal since Hugo content is typically git-tracked.
+                    try content.write(to: coordinatedURL, atomically: false, encoding: .utf8)
                 } catch {
                     writeError = error
                 }

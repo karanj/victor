@@ -36,6 +36,7 @@
 		401723A9BF52E565758A4A9A /* SiteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA94411ADE4D941B623452C5 /* SiteViewModel.swift */; };
 		405335F179D0CCFF442DCD7D /* ArchetypeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7C05C4033AD36F669C7AF0 /* ArchetypeManager.swift */; };
 		410A9C358E244257FA6A2C30 /* BuildIssuesPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C218E9EF99008C56DDA666 /* BuildIssuesPopover.swift */; };
+		4460D06D6925E9231BC80E12 /* LiveReloadClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04DB34D21FF0C86EDF108CAD /* LiveReloadClientTests.swift */; };
 		46AD3C5EB1472BD20E20CDD7 /* HugoConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C10280F6580C58FDF7E32AB /* HugoConfig.swift */; };
 		477348AC4CA59FF3081989AB /* FolderContentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA087B8214B1972274BA6F5E /* FolderContentsView.swift */; };
 		4BD67639E270CB34BE47E5D5 /* TemplateParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DDFE1122F73DA5BCF708843 /* TemplateParser.swift */; };
@@ -91,6 +92,7 @@
 		C7726362C3CC1F82E929931F /* HugoServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139E6B5015CEF9DB195E964B /* HugoServerTests.swift */; };
 		C7C16AAEBEB1B6427E7E004B /* PublishingTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E425A63F6B4F5A81217B8AB /* PublishingTab.swift */; };
 		C92F0586E16024CD0B3929A8 /* HugoConfigParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */; };
+		C95FDEC6AC13A5C542D0F2F4 /* LiveReloadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9032277C6EC3D9BD240E9F5A /* LiveReloadClient.swift */; };
 		CB04C228985378064E75996B /* ContentPathAutocompleteField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71CD8718559B4D36EDAAD857 /* ContentPathAutocompleteField.swift */; };
 		CBE91381C4646AB5E54827FC /* FileViewerRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815EA918C4B3B850A863AC39 /* FileViewerRouter.swift */; };
 		D2A793EECD19B92CF35A7C88 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9102466F776A1B376AC8C5E4 /* Logger.swift */; };
@@ -130,6 +132,7 @@
 
 /* Begin PBXFileReference section */
 		044151EAFFD0111E4BB58878 /* CustomFieldEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomFieldEditor.swift; sourceTree = "<group>"; };
+		04DB34D21FF0C86EDF108CAD /* LiveReloadClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveReloadClientTests.swift; sourceTree = "<group>"; };
 		062838065437851B5ABB7404 /* HelpTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpTooltip.swift; sourceTree = "<group>"; };
 		06554071BE570A431BEC465A /* Victor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Victor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		075B5E6FDA9BACC7F43D546D /* DataFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFile.swift; sourceTree = "<group>"; };
@@ -183,6 +186,7 @@
 		86C3A8A5613E8BFF9D10A642 /* ImageViewerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewerPanel.swift; sourceTree = "<group>"; };
 		8CF18C11530F31087472421D /* HugoShortcode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoShortcode.swift; sourceTree = "<group>"; };
 		8EF6A7DA5111F18A8F66A828 /* Frontmatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Frontmatter.swift; sourceTree = "<group>"; };
+		9032277C6EC3D9BD240E9F5A /* LiveReloadClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveReloadClient.swift; sourceTree = "<group>"; };
 		9102466F776A1B376AC8C5E4 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		9853E3C0E35EC9D2CEBEC4D5 /* FrontmatterBottomPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterBottomPanel.swift; sourceTree = "<group>"; };
 		99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterParserTests.swift; sourceTree = "<group>"; };
@@ -299,6 +303,7 @@
 				4677CA9101F20BE0B2C8D145 /* FrontmatterParser.swift */,
 				BA1485D0EC3841236DB9C093 /* HugoConfigParser.swift */,
 				4C0108DFAD1F31F18931BF56 /* HugoServerService.swift */,
+				9032277C6EC3D9BD240E9F5A /* LiveReloadClient.swift */,
 				9102466F776A1B376AC8C5E4 /* Logger.swift */,
 				3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */,
 				E77E7BEA998F133DD83D5A5B /* SearchService.swift */,
@@ -432,6 +437,7 @@
 				99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */,
 				EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */,
 				139E6B5015CEF9DB195E964B /* HugoServerTests.swift */,
+				04DB34D21FF0C86EDF108CAD /* LiveReloadClientTests.swift */,
 				FCBABD9E712D1C124E8CD106 /* SiteViewModelTests.swift */,
 			);
 			path = VictorTests;
@@ -775,6 +781,7 @@
 				B1D968E0DEDCD821046FAD0B /* ImageViewerPanel.swift in Sources */,
 				DAFAC8E35FDC6F5486D4707F /* InspectorPanel.swift in Sources */,
 				FFA06B7F848E9ED44017C62E /* LivePreviewPanel.swift in Sources */,
+				C95FDEC6AC13A5C542D0F2F4 /* LiveReloadClient.swift in Sources */,
 				D2A793EECD19B92CF35A7C88 /* Logger.swift in Sources */,
 				36E5FC2D4F693C6C41D83C05 /* MarkdownRenderer.swift in Sources */,
 				281A23A15B2B0AAC8668F4CC /* MenuEntryEditor.swift in Sources */,
@@ -829,6 +836,7 @@
 				2FCC48CCD498DB32C3C792AE /* FrontmatterParserTests.swift in Sources */,
 				17D178CDEC82395F7D3F980C /* HugoConfigParserTests.swift in Sources */,
 				C7726362C3CC1F82E929931F /* HugoServerTests.swift in Sources */,
+				4460D06D6925E9231BC80E12 /* LiveReloadClientTests.swift in Sources */,
 				51E9D71B3BA4870E482DC38A /* SiteViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

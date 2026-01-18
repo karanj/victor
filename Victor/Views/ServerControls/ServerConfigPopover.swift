@@ -61,6 +61,20 @@ struct ServerConfigPopover: View {
                         .onChange(of: config.buildExpired) { _, _ in
                             hasChanges = true
                         }
+                }
+
+                Divider()
+
+                // Live reload options
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Live Reload")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Toggle("Navigate to changed file", isOn: $config.navigateToChanged)
+                        .onChange(of: config.navigateToChanged) { _, _ in
+                            hasChanges = true
+                        }
 
                     Toggle("Disable live reload", isOn: $config.disableLiveReload)
                         .onChange(of: config.disableLiveReload) { _, _ in

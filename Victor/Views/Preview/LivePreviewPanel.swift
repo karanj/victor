@@ -13,6 +13,16 @@ struct LivePreviewPanel: View {
     @State private var canGoForward: Bool = false
     @State private var currentURL: String = ""
 
+    /// Navigation path triggered by LiveReload (from --navigateToChanged)
+    @State private var liveReloadNavigatePath: String?
+    /// Reload trigger incremented when LiveReload requests a refresh
+    @State private var reloadTrigger: Int = 0
+
+    /// Navigation action triggers
+    @State private var goBackTrigger: Int = 0
+    @State private var goForwardTrigger: Int = 0
+    @State private var refreshTrigger: Int = 0
+
     var body: some View {
         Group {
             if status.isRunning, let url = serverURL {
@@ -26,10 +36,14 @@ struct LivePreviewPanel: View {
                     LivePreviewWebView(
                         serverURL: url,
                         currentFilePath: currentFilePath,
+                        liveReloadNavigatePath: $liveReloadNavigatePath,
+                        reloadTrigger: reloadTrigger,
+                        goBackTrigger: goBackTrigger,
+                        goForwardTrigger: goForwardTrigger,
+                        refreshTrigger: refreshTrigger,
                         canGoBack: $canGoBack,
                         canGoForward: $canGoForward,
-                        currentURL: $currentURL,
-                        onNavigate: { }
+                        currentURL: $currentURL
                     )
                 }
             } else {
@@ -51,7 +65,7 @@ struct LivePreviewPanel: View {
         HStack(spacing: 12) {
             // Back button
             Button {
-                // Web view will handle navigation
+                goBackTrigger += 1
             } label: {
                 Image(systemName: "chevron.left")
                     .foregroundStyle(canGoBack ? .primary : .secondary)
@@ -62,7 +76,7 @@ struct LivePreviewPanel: View {
 
             // Forward button
             Button {
-                // Web view will handle navigation
+                goForwardTrigger += 1
             } label: {
                 Image(systemName: "chevron.right")
                     .foregroundStyle(canGoForward ? .primary : .secondary)
@@ -73,7 +87,7 @@ struct LivePreviewPanel: View {
 
             // Refresh button
             Button {
-                // Web view will handle refresh
+                refreshTrigger += 1
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
@@ -162,7 +176,27 @@ struct LivePreviewPanel: View {
     private func setupServerStateObservers() {
         Task {
             await HugoServerService.shared.setOnStatusChange { @MainActor newStatus in
+                let previousStatus = status
                 status = newStatus
+
+                // Connect/disconnect LiveReload based on server status
+                if newStatus.isRunning, let url = serverURL {
+                    Task {
+                        await LiveReloadClient.shared.connect(
+                            to: url,
+                            onNavigate: { path in
+                                liveReloadNavigatePath = path
+                            },
+                            onReload: {
+                                reloadTrigger += 1
+                            }
+                        )
+                    }
+                } else if previousStatus.isRunning && !newStatus.isRunning {
+                    Task {
+                        await LiveReloadClient.shared.disconnect()
+                    }
+                }
             }
         }
     }
@@ -174,6 +208,21 @@ struct LivePreviewPanel: View {
         await MainActor.run {
             status = currentStatus
             serverURL = currentServerURL
+
+            // Connect LiveReload if server is already running
+            if currentStatus.isRunning, let url = currentServerURL {
+                Task {
+                    await LiveReloadClient.shared.connect(
+                        to: url,
+                        onNavigate: { path in
+                            liveReloadNavigatePath = path
+                        },
+                        onReload: {
+                            reloadTrigger += 1
+                        }
+                    )
+                }
+            }
         }
     }
 }
@@ -184,10 +233,19 @@ private struct LivePreviewWebView: NSViewRepresentable {
     let serverURL: URL
     let currentFilePath: String?
 
+    /// Path to navigate to from LiveReload (--navigateToChanged)
+    @Binding var liveReloadNavigatePath: String?
+    /// Incremented when LiveReload requests a page refresh
+    let reloadTrigger: Int
+
+    /// Navigation action triggers from toolbar buttons
+    let goBackTrigger: Int
+    let goForwardTrigger: Int
+    let refreshTrigger: Int
+
     @Binding var canGoBack: Bool
     @Binding var canGoForward: Bool
     @Binding var currentURL: String
-    let onNavigate: () -> Void
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -207,26 +265,85 @@ private struct LivePreviewWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        // Build target URL
-        var targetURL = serverURL
+        // Handle LiveReload navigation (from --navigateToChanged)
+        if let navigatePath = liveReloadNavigatePath {
+            // Clear immediately to prevent re-triggering
+            DispatchQueue.main.async {
+                liveReloadNavigatePath = nil
+            }
 
-        // If we have a current file path, try to navigate to it
+            // Skip if already loading to avoid cancellation errors
+            if webView.isLoading {
+                return
+            }
+
+            let navigateURL = serverURL.appendingPathComponent(navigatePath)
+            context.coordinator.lastLoadedURL = navigateURL
+            let request = URLRequest(url: navigateURL)
+            webView.load(request)
+            return
+        }
+
+        // Handle LiveReload refresh
+        if context.coordinator.lastReloadTrigger != reloadTrigger {
+            context.coordinator.lastReloadTrigger = reloadTrigger
+
+            // Skip if already loading
+            if webView.isLoading {
+                return
+            }
+
+            webView.reload()
+            return
+        }
+
+        // Handle toolbar navigation buttons
+        if context.coordinator.lastGoBackTrigger != goBackTrigger {
+            context.coordinator.lastGoBackTrigger = goBackTrigger
+            if webView.canGoBack {
+                webView.goBack()
+            }
+            return
+        }
+
+        if context.coordinator.lastGoForwardTrigger != goForwardTrigger {
+            context.coordinator.lastGoForwardTrigger = goForwardTrigger
+            if webView.canGoForward {
+                webView.goForward()
+            }
+            return
+        }
+
+        if context.coordinator.lastRefreshTrigger != refreshTrigger {
+            context.coordinator.lastRefreshTrigger = refreshTrigger
+            webView.reload()
+            return
+        }
+
+        // Handle file selection change - only navigate when user selects a different file
         if let filePath = currentFilePath, context.coordinator.currentFilePath != filePath {
             context.coordinator.currentFilePath = filePath
 
             // Convert content file path to Hugo URL path
             // e.g., content/posts/my-post.md -> /posts/my-post/
             if let hugoPath = convertFilePathToHugoPath(filePath) {
-                targetURL = serverURL.appendingPathComponent(hugoPath)
+                let targetURL = serverURL.appendingPathComponent(hugoPath)
+                context.coordinator.lastLoadedURL = targetURL
+                let request = URLRequest(url: targetURL)
+                webView.load(request)
             }
-        }
-
-        // Only load if URL has changed
-        if context.coordinator.lastLoadedURL != targetURL {
+        } else if context.coordinator.lastLoadedURL == nil {
+            // Initial load - navigate to server root or current file
+            var targetURL = serverURL
+            if let filePath = currentFilePath {
+                context.coordinator.currentFilePath = filePath
+                if let hugoPath = convertFilePathToHugoPath(filePath) {
+                    targetURL = serverURL.appendingPathComponent(hugoPath)
+                }
+            }
             context.coordinator.lastLoadedURL = targetURL
             let request = URLRequest(url: targetURL)
             webView.load(request)
-            Logger.shared.debug("[LivePreview] Loading URL: \(targetURL.absoluteString)")
         }
 
         // Update navigation state
@@ -282,6 +399,10 @@ private struct LivePreviewWebView: NSViewRepresentable {
         weak var webView: WKWebView?
         var lastLoadedURL: URL?
         var currentFilePath: String?
+        var lastReloadTrigger: Int = 0
+        var lastGoBackTrigger: Int = 0
+        var lastGoForwardTrigger: Int = 0
+        var lastRefreshTrigger: Int = 0
 
         var canGoBackBinding: Binding<Bool>?
         var canGoForwardBinding: Binding<Bool>?
@@ -291,9 +412,8 @@ private struct LivePreviewWebView: NSViewRepresentable {
             webView?.navigationDelegate = nil
         }
 
-        // Handle navigation
+        // Handle navigation decision
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            // Allow all navigation within the Hugo server
             decisionHandler(.allow)
         }
 
