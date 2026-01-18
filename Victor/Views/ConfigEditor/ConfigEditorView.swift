@@ -109,23 +109,11 @@ struct ConfigEditorView: View {
                 .background(.secondary.opacity(0.2))
                 .cornerRadius(4)
 
-            // Unsaved indicator
-            if config.hasUnsavedChanges {
-                Circle()
-                    .fill(.orange)
-                    .frame(width: 8, height: 8)
-                    .accessibilityLabel("Unsaved changes")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
-
-            // Saved indicator
-            if showSavedIndicator {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(Color.Status.saved)
-                    .accessibilityLabel("Saved")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
+            // File status badges
+            FileStatusBadgeView(
+                hasUnsavedChanges: config.hasUnsavedChanges,
+                showSavedIndicator: showSavedIndicator
+            )
 
             Spacer()
 

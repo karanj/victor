@@ -51,23 +51,11 @@ struct TextEditorPanel: View {
                 .background(.secondary.opacity(0.2))
                 .cornerRadius(4)
 
-            // Unsaved indicator
-            if viewModel.hasUnsavedChanges {
-                Circle()
-                    .fill(Color.Status.modified)
-                    .frame(width: 8, height: 8)
-                    .accessibilityLabel("Unsaved changes")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
-
-            // Saved indicator
-            if viewModel.showSavedIndicator {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(Color.Status.saved)
-                    .accessibilityLabel("Saved")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
+            // File status badges
+            FileStatusBadgeView(
+                hasUnsavedChanges: viewModel.hasUnsavedChanges,
+                showSavedIndicator: viewModel.showSavedIndicator
+            )
 
             Spacer()
 

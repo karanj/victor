@@ -92,19 +92,10 @@ struct TranslationEditorView: View {
                 .background(.secondary.opacity(0.2))
                 .cornerRadius(4)
 
-            if dataFile.hasUnsavedChanges {
-                Circle()
-                    .fill(.orange)
-                    .frame(width: 8, height: 8)
-                    .accessibilityLabel("Unsaved changes")
-            }
-
-            if showSavedIndicator {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-                    .accessibilityLabel("Saved")
-            }
+            FileStatusBadgeView(
+                hasUnsavedChanges: dataFile.hasUnsavedChanges,
+                showSavedIndicator: showSavedIndicator
+            )
 
             Spacer()
 

@@ -84,21 +84,10 @@ struct DataFileEditorView: View {
                     .cornerRadius(4)
             }
 
-            if dataFile.hasUnsavedChanges {
-                Circle()
-                    .fill(.orange)
-                    .frame(width: 8, height: 8)
-                    .accessibilityLabel("Unsaved changes")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
-
-            if showSavedIndicator {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.green)
-                    .accessibilityLabel("Saved")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
+            FileStatusBadgeView(
+                hasUnsavedChanges: dataFile.hasUnsavedChanges,
+                showSavedIndicator: showSavedIndicator
+            )
 
             Spacer()
 

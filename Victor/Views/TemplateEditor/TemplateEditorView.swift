@@ -58,23 +58,11 @@ struct TemplateEditorView: View {
                     .cornerRadius(4)
             }
 
-            // Unsaved indicator
-            if template.hasUnsavedChanges {
-                Circle()
-                    .fill(Color.Status.modified)
-                    .frame(width: 8, height: 8)
-                    .accessibilityLabel("Unsaved changes")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
-
-            // Saved indicator
-            if showSavedIndicator {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(Color.Status.saved)
-                    .accessibilityLabel("Saved")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
+            // File status badges
+            FileStatusBadgeView(
+                hasUnsavedChanges: template.hasUnsavedChanges,
+                showSavedIndicator: showSavedIndicator
+            )
 
             Spacer()
 
