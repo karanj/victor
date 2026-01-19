@@ -77,23 +77,11 @@ struct ArchetypeEditorView: View {
                     .cornerRadius(4)
             }
 
-            // Unsaved indicator
-            if archetype.hasUnsavedChanges {
-                Circle()
-                    .fill(Color.Status.modified)
-                    .frame(width: 8, height: 8)
-                    .accessibilityLabel("Unsaved changes")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
-
-            // Saved indicator
-            if showSavedIndicator {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(Color.Status.saved)
-                    .accessibilityLabel("Saved")
-                    .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
-            }
+            // Status indicator (uses reusable component)
+            FileStatusBadgeView(
+                hasUnsavedChanges: archetype.hasUnsavedChanges,
+                showSavedIndicator: showSavedIndicator
+            )
 
             Spacer()
 
@@ -118,7 +106,7 @@ struct ArchetypeEditorView: View {
 
             // Help panel toggle
             Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard)) {
                     showHelpPanel.toggle()
                 }
             } label: {

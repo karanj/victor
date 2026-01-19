@@ -14,7 +14,7 @@ struct ConfigEssentialsTab: View {
                         .background(Color(nsColor: .textBackgroundColor))
                         .disableAutocorrection(true)
                         .onChange(of: config.baseURL) { _, _ in
-                            config.hasUnsavedChanges = true
+                            config.syncRawContentFromStructuredData()
                         }
                 }
                 .help("The absolute URL of your site")
@@ -24,7 +24,7 @@ struct ConfigEssentialsTab: View {
                         .padding(6)
                         .background(Color(nsColor: .textBackgroundColor))
                         .onChange(of: config.title) { _, _ in
-                            config.hasUnsavedChanges = true
+                            config.syncRawContentFromStructuredData()
                         }
                 }
                 .help("The title of your site")
@@ -34,7 +34,7 @@ struct ConfigEssentialsTab: View {
                         .padding(6)
                         .background(Color(nsColor: .textBackgroundColor))
                         .onChange(of: config.languageCode) { _, _ in
-                            config.hasUnsavedChanges = true
+                            config.syncRawContentFromStructuredData()
                         }
                 }
                 .help("RFC 5646 language code (e.g., en-us)")
@@ -49,7 +49,7 @@ struct ConfigEssentialsTab: View {
                     .padding(6)
                     .background(Color(nsColor: .textBackgroundColor))
                     .onChange(of: config.theme) { _, _ in
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
                 }
                 .help("Theme name or comma-separated list of themes")
@@ -64,7 +64,7 @@ struct ConfigEssentialsTab: View {
                     .padding(6)
                     .background(Color(nsColor: .textBackgroundColor))
                     .onChange(of: config.copyright) { _, _ in
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
                 }
                 .help("Copyright notice for your site footer")

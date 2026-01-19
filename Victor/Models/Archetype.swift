@@ -4,7 +4,7 @@ import Foundation
 /// Archetypes are stored in the archetypes/ directory and define templates
 /// for new content files with frontmatter and body placeholders.
 @Observable
-class Archetype: Identifiable, Hashable {
+class Archetype: EditableFile {
     let id: UUID
     let url: URL
 
@@ -212,12 +212,5 @@ class Archetype: Identifiable, Hashable {
     }
 
     // MARK: - Hashable & Equatable
-
-    static func == (lhs: Archetype, rhs: Archetype) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
+    // Provided by EditableFile protocol
 }

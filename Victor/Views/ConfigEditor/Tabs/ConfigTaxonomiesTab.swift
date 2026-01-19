@@ -23,7 +23,7 @@ struct ConfigTaxonomiesTab: View {
                         Spacer()
                         Button(role: .destructive) {
                             config.taxonomies.removeValue(forKey: singular)
-                            config.hasUnsavedChanges = true
+                            config.syncRawContentFromStructuredData()
                         } label: {
                             Image(systemName: "trash")
                         }
@@ -46,7 +46,7 @@ struct ConfigTaxonomiesTab: View {
                     Button("Add") {
                         if !newSingular.isEmpty && !newPlural.isEmpty {
                             config.taxonomies[newSingular] = newPlural
-                            config.hasUnsavedChanges = true
+                            config.syncRawContentFromStructuredData()
                             newSingular = ""
                             newPlural = ""
                         }

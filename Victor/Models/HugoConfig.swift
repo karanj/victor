@@ -3,7 +3,12 @@ import SwiftUI
 
 /// Represents a Hugo site configuration
 @Observable
-class HugoConfig {
+class HugoConfig: EditableFile {
+    // MARK: - Identification
+
+    /// Unique identifier for this config
+    let id: UUID = UUID()
+
     // MARK: - Required Fields
 
     /// The base URL of the site (e.g., "https://example.com/")
@@ -81,12 +86,42 @@ class HugoConfig {
     /// The raw file content from disk (for raw view)
     var rawContent: String = ""
 
-    /// Whether there are unsaved changes
-    var hasUnsavedChanges: Bool = false
+    /// The original content at the time of last save/load (for change detection)
+    @ObservationIgnored private var originalContent: String = ""
+
+    /// Whether there are unsaved changes (computed property comparing rawContent to originalContent)
+    var hasUnsavedChanges: Bool {
+        rawContent != originalContent
+    }
+
+    // MARK: - EditableFile Protocol
+
+    /// File URL (required by EditableFile protocol)
+    var url: URL {
+        sourceURL ?? URL(fileURLWithPath: "/tmp/hugo.toml")
+    }
+
+    /// Mark the current state as saved (reset change tracking)
+    func markAsSaved() {
+        originalContent = rawContent
+    }
+
+    /// Update rawContent from current structured properties
+    /// Call this when editing in form mode to trigger change detection
+    func syncRawContentFromStructuredData() {
+        do {
+            rawContent = try HugoConfigParser.shared.serialize(self)
+        } catch {
+            print("[HugoConfig] Failed to sync rawContent: \(error)")
+        }
+    }
 
     // MARK: - Initialization
 
-    init() {}
+    init() {
+        // When creating a new config, mark it as saved (empty is considered saved)
+        markAsSaved()
+    }
 
     /// Update structured properties from rawContent
     /// Call this when switching from Raw to Form view
@@ -233,6 +268,9 @@ extension HugoConfig {
         for (key, value) in dictionary where !knownFields.contains(key) {
             customFields[key] = value
         }
+
+        // Mark as saved since we just loaded from disk
+        markAsSaved()
     }
 }
 

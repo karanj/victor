@@ -45,7 +45,7 @@ struct DataItem: Identifiable {
 
 /// Represents a data file (YAML/JSON/TOML) in Hugo's data/ directory
 @Observable
-class DataFile: Identifiable, Hashable {
+class DataFile: EditableFile {
     let id: UUID
     let url: URL
     let format: DataFormat
@@ -126,12 +126,5 @@ class DataFile: Identifiable, Hashable {
     }
 
     // MARK: - Hashable & Equatable
-
-    static func == (lhs: DataFile, rhs: DataFile) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
+    // Provided by EditableFile protocol
 }

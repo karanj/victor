@@ -1151,7 +1151,7 @@ class SiteViewModel {
             try await fileSystemService.writeFile(to: url, content: content)
             // Keep rawContent in sync with what we saved
             config.rawContent = content
-            config.hasUnsavedChanges = false
+            config.markAsSaved()
             Logger.shared.info("Saved Hugo config: \(url.lastPathComponent)")
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"
@@ -1169,7 +1169,7 @@ class SiteViewModel {
         do {
             // Save rawContent directly without serialization
             try await fileSystemService.writeFile(to: url, content: config.rawContent)
-            config.hasUnsavedChanges = false
+            config.markAsSaved()
             Logger.shared.info("Saved Hugo config (raw): \(url.lastPathComponent)")
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"

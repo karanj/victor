@@ -12,21 +12,21 @@ struct ConfigContentTab: View {
                     .toggleStyle(.checkbox)
                     .help("Include draft content in builds")
                     .onChange(of: config.buildDrafts) { _, _ in
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
 
                 Toggle("Build Future", isOn: $config.buildFuture)
                     .toggleStyle(.checkbox)
                     .help("Include future-dated content in builds")
                     .onChange(of: config.buildFuture) { _, _ in
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
 
                 Toggle("Build Expired", isOn: $config.buildExpired)
                     .toggleStyle(.checkbox)
                     .help("Include expired content in builds")
                     .onChange(of: config.buildExpired) { _, _ in
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
             }
 
@@ -35,14 +35,14 @@ struct ConfigContentTab: View {
                     .toggleStyle(.checkbox)
                     .help("Generate robots.txt file")
                     .onChange(of: config.enableRobotsTXT) { _, _ in
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
 
                 LabeledContent("Summary Length") {
                     Stepper("\(config.summaryLength) words",
                             value: $config.summaryLength, in: 10...500, step: 10)
                         .onChange(of: config.summaryLength) { _, _ in
-                            config.hasUnsavedChanges = true
+                            config.syncRawContentFromStructuredData()
                         }
                 }
                 .help("Default length for auto-generated summaries")

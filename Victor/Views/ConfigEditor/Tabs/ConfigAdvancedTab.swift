@@ -14,7 +14,7 @@ struct ConfigAdvancedTab: View {
                         .padding(6)
                         .background(Color(nsColor: .textBackgroundColor))
                         .onChange(of: config.defaultContentLanguage) { _, _ in
-                            config.hasUnsavedChanges = true
+                            config.syncRawContentFromStructuredData()
                         }
                 }
 
@@ -26,7 +26,7 @@ struct ConfigAdvancedTab: View {
                     .padding(6)
                     .background(Color(nsColor: .textBackgroundColor))
                     .onChange(of: config.timeZone) { _, _ in
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
                 }
                 .help("IANA time zone (e.g., America/New_York, Europe/London)")

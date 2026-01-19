@@ -250,7 +250,7 @@ struct ConfigRawEditorView: View {
                     onTextChange: {
                         // Update the rawContent in config when edited
                         config.rawContent = editableContent
-                        config.hasUnsavedChanges = true
+                        config.syncRawContentFromStructuredData()
                     }
                 )
             }

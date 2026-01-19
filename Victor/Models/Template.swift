@@ -190,7 +190,7 @@ struct TemplateMetadata {
 
 /// Represents a Hugo template file with parsed metadata
 @Observable
-class Template: Identifiable, Hashable {
+class Template: EditableFile {
     let id: UUID
     let url: URL
     var content: String
@@ -293,14 +293,7 @@ class Template: Identifiable, Hashable {
     }
 
     // MARK: - Hashable & Equatable
-
-    static func == (lhs: Template, rhs: Template) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
+    // Provided by EditableFile protocol
 
     // MARK: - Methods
 
