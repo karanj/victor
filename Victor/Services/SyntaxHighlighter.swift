@@ -226,14 +226,114 @@ class SyntaxHighlighter {
     }
 
     /// Apply Go template highlighting to an NSTextStorage
+    /// Updates attributes in place to preserve cursor position
     func applyGoTemplateHighlighting(to textStorage: NSTextStorage, font: NSFont) {
         let code = textStorage.string
-        let highlighted = highlightGoTemplate(code: code)
+        let fullRange = NSRange(location: 0, length: textStorage.length)
 
         textStorage.beginEditing()
-        textStorage.setAttributedString(highlighted)
-        textStorage.addAttribute(.font, value: font, range: NSRange(location: 0, length: textStorage.length))
+
+        // Reset to default attributes (don't replace the string, just update attributes)
+        textStorage.removeAttribute(.foregroundColor, range: fullRange)
+        textStorage.addAttribute(.foregroundColor, value: NSColor.textColor, range: fullRange)
+        textStorage.addAttribute(.font, value: font, range: fullRange)
+
+        // Apply HTML/XML base highlighting if available
+        if let highlighted = highlight(code: code, language: "xml") {
+            // Copy attributes from highlighted string to our textStorage
+            highlighted.enumerateAttributes(in: NSRange(location: 0, length: highlighted.length), options: []) { attrs, range, _ in
+                if range.location + range.length <= textStorage.length {
+                    if let color = attrs[.foregroundColor] {
+                        textStorage.addAttribute(.foregroundColor, value: color, range: range)
+                    }
+                }
+            }
+        }
+
+        // Layer Go template highlighting on top (using the private method)
+        applyGoTemplateHighlightingAttributes(to: textStorage, text: code)
+
         textStorage.endEditing()
+    }
+
+    /// Apply Go template syntax highlighting attributes directly to text storage
+    private func applyGoTemplateHighlightingAttributes(to textStorage: NSTextStorage, text: String) {
+        // Colors for Go template syntax
+        let delimiterColor = NSColor.systemPurple
+        let keywordColor = NSColor.systemBlue
+        let variableColor = NSColor.systemTeal
+        let commentColor = NSColor.systemGray
+        let stringColor = NSColor.systemGreen
+
+        // 1. Go template comments {{/* */}} - highlight entire comment
+        if let commentRegex = try? NSRegularExpression(pattern: "\\{\\{/\\*[\\s\\S]*?\\*/\\}\\}", options: []) {
+            let matches = commentRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in matches {
+                if match.range.location + match.range.length <= textStorage.length {
+                    textStorage.addAttribute(.foregroundColor, value: commentColor, range: match.range)
+                }
+            }
+        }
+
+        // 2. Template delimiters {{ and }} (including {{- and -}})
+        if let delimRegex = try? NSRegularExpression(pattern: "\\{\\{-?|-?\\}\\}", options: []) {
+            let matches = delimRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in matches {
+                if match.range.location + match.range.length <= textStorage.length {
+                    textStorage.addAttribute(.foregroundColor, value: delimiterColor, range: match.range)
+                }
+            }
+        }
+
+        // 3. Keywords after {{ or {{-
+        let keywords = ["if", "else", "end", "range", "with", "define", "block", "template", "partial", "return", "and", "or", "not", "eq", "ne", "lt", "le", "gt", "ge"]
+        for keyword in keywords {
+            let pattern = "\\{\\{-?\\s*(\(keyword))\\b"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+                for match in matches {
+                    if match.numberOfRanges > 1 && match.range(at: 1).location != NSNotFound {
+                        let range = match.range(at: 1)
+                        if range.location + range.length <= textStorage.length {
+                            textStorage.addAttribute(.foregroundColor, value: keywordColor, range: range)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Variables starting with . or $ (e.g., .Title, .Params.author, $myVar)
+        if let varRegex = try? NSRegularExpression(pattern: "\\.[A-Z][a-zA-Z0-9_.]*|\\$[a-zA-Z_][a-zA-Z0-9_]*", options: []) {
+            let matches = varRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in matches {
+                if match.range.location + match.range.length <= textStorage.length {
+                    textStorage.addAttribute(.foregroundColor, value: variableColor, range: match.range)
+                }
+            }
+        }
+
+        // 5. Strings in double quotes within template blocks
+        if let templateBlockRegex = try? NSRegularExpression(pattern: "\\{\\{[^}]*\\}\\}", options: []) {
+            let blockMatches = templateBlockRegex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+
+            for blockMatch in blockMatches {
+                if let stringRange = Range(blockMatch.range, in: text) {
+                    let blockText = String(text[stringRange])
+                    if let stringRegex = try? NSRegularExpression(pattern: "\"[^\"]*\"", options: []) {
+                        let stringMatches = stringRegex.matches(in: blockText, options: [], range: NSRange(location: 0, length: blockText.utf16.count))
+                        for stringMatch in stringMatches {
+                            let absoluteRange = NSRange(
+                                location: blockMatch.range.location + stringMatch.range.location,
+                                length: stringMatch.range.length
+                            )
+                            if absoluteRange.location + absoluteRange.length <= textStorage.length {
+                                textStorage.addAttribute(.foregroundColor, value: stringColor, range: absoluteRange)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Check if Highlightr is available
