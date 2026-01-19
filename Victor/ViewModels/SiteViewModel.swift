@@ -992,8 +992,10 @@ class SiteViewModel {
         guard !loadedStatusFolderIDs.contains(folder.id) else { return }
 
         // Collect markdown file URLs that don't have status yet
+        // Exclude archetype files - they're templates and shouldn't show status badges
+        // Also, they may contain unquoted Hugo template syntax that crashes YAML parser
         let markdownChildren = folder.children.filter {
-            $0.isMarkdownFile && $0.statusMetadata == nil && $0.contentFile == nil
+            $0.isMarkdownFile && $0.statusMetadata == nil && $0.contentFile == nil && $0.hugoRole != .archetypes
         }
 
         guard !markdownChildren.isEmpty else {
