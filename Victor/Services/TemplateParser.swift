@@ -145,13 +145,6 @@ class TemplateParser {
 
         for function in functions {
             // Pattern: {{ function or {{ .Method | function or (function
-            let patterns = [
-                #/\{\{\s*\#(function)\b/#,
-                #/\|\s*\#(function)\b/#,
-                #/\(\s*\#(function)\b/#
-            ]
-
-            // Simple word boundary search
             let escapedFunc = NSRegularExpression.escapedPattern(for: function)
             let pattern = "\\{\\{\\s*\(escapedFunc)\\b|\\|\\s*\(escapedFunc)\\b|\\(\\s*\(escapedFunc)\\b"
 
@@ -296,7 +289,7 @@ extension TemplateParser {
             guard fileURL.pathExtension.lowercased() == "html" else { continue }
 
             do {
-                var template = try await parseTemplate(at: fileURL)
+                let template = try await parseTemplate(at: fileURL)
                 template.isThemeTemplate = isTheme
                 template.themeName = themeName
                 templates.append(template)
