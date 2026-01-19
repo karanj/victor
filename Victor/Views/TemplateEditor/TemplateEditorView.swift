@@ -240,8 +240,8 @@ struct TemplateTextView: NSViewRepresentable {
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
-            context.coordinator.applySyntaxHighlighting(to: textView)
-            textView.selectedRanges = selectedRanges
+            // Apply syntax highlighting and restore cursor position after it completes
+            context.coordinator.applySyntaxHighlighting(to: textView, preservingSelection: selectedRanges)
         }
     }
 
@@ -269,7 +269,7 @@ struct TemplateTextView: NSViewRepresentable {
             }
         }
 
-        func applySyntaxHighlighting(to textView: NSTextView) {
+        func applySyntaxHighlighting(to textView: NSTextView, preservingSelection selectedRanges: [NSValue]? = nil) {
             guard let textStorage = textView.textStorage else { return }
 
             let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -277,6 +277,11 @@ struct TemplateTextView: NSViewRepresentable {
             // Use SyntaxHighlighter for Go template highlighting
             Task { @MainActor in
                 SyntaxHighlighter.shared.applyGoTemplateHighlighting(to: textStorage, font: font)
+
+                // Restore selection after highlighting completes (if provided)
+                if let selectedRanges = selectedRanges {
+                    textView.selectedRanges = selectedRanges
+                }
             }
         }
     }
