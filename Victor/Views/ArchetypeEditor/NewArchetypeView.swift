@@ -144,7 +144,7 @@ struct NewArchetypeView: View {
                 return """
                 ---
                 title: "{{ replace .File.ContentBaseName "-" " " | title }}"
-                date: {{ .Date }}
+                date: '{{ .Date }}'
                 draft: true
                 description: ""
                 tags: []
@@ -158,7 +158,7 @@ struct NewArchetypeView: View {
                 return """
                 +++
                 title = "{{ replace .File.ContentBaseName "-" " " | title }}"
-                date = {{ .Date }}
+                date = '{{ .Date }}'
                 draft = true
                 description = ""
                 tags = []
@@ -188,7 +188,7 @@ struct NewArchetypeView: View {
                 return """
                 ---
                 title: "{{ .Title }}"
-                date: {{ .Date }}
+                date: '{{ .Date }}'
                 draft: true
                 ---
 
@@ -198,7 +198,7 @@ struct NewArchetypeView: View {
                 return """
                 +++
                 title = "{{ .Title }}"
-                date = {{ .Date }}
+                date = '{{ .Date }}'
                 draft = true
                 +++
 
