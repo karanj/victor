@@ -19,26 +19,27 @@ class Archetype: Identifiable, Hashable {
 
     // MARK: - Editing State
 
-    /// Original frontmatter content (for change tracking)
-    @ObservationIgnored var originalFrontmatterContent: String
+    /// Local raw content storage - prevents cursor jumping by not reconstructing on every access
+    /// This is the source of truth for the editor
+    private var localRawContent: String
 
-    /// Original body template content (for change tracking)
-    @ObservationIgnored var originalBodyTemplate: String
+    /// Original raw content (for change tracking)
+    @ObservationIgnored private var originalRawContent: String
 
     /// Whether this archetype has unsaved changes
     var hasUnsavedChanges: Bool {
-        frontmatterContent != originalFrontmatterContent ||
-        bodyTemplate != originalBodyTemplate
+        localRawContent != originalRawContent
     }
 
     /// Raw combined content for unified editing
+    /// This wraps localRawContent to parse and sync the parts when content changes
     var rawContent: String {
         get {
-            let delimiter = frontmatterFormat.delimiter
-            return "\(delimiter)\n\(frontmatterContent)\n\(delimiter)\n\n\(bodyTemplate)"
+            localRawContent
         }
         set {
-            // Parse the raw content back into frontmatter and body
+            localRawContent = newValue
+            // Parse the raw content to update frontmatter and body parts
             let parsed = Self.parseRawContent(newValue)
             frontmatterContent = parsed.frontmatter
             bodyTemplate = parsed.body
@@ -123,8 +124,7 @@ class Archetype: Identifiable, Hashable {
 
     /// Mark the current state as saved (reset original values)
     func markAsSaved() {
-        originalFrontmatterContent = frontmatterContent
-        originalBodyTemplate = bodyTemplate
+        originalRawContent = localRawContent
     }
 
     /// File name without extension
@@ -161,8 +161,12 @@ class Archetype: Identifiable, Hashable {
         self.frontmatterContent = frontmatterContent
         self.bodyTemplate = bodyTemplate
         self.frontmatterFormat = frontmatterFormat
-        self.originalFrontmatterContent = frontmatterContent
-        self.originalBodyTemplate = bodyTemplate
+
+        // Initialize raw content from parts
+        let delimiter = frontmatterFormat.delimiter
+        let initialRawContent = "\(delimiter)\n\(frontmatterContent)\n\(delimiter)\n\n\(bodyTemplate)"
+        self.localRawContent = initialRawContent
+        self.originalRawContent = initialRawContent
     }
 
     // MARK: - Template Processing
