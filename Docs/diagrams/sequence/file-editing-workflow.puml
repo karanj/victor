@@ -1,0 +1,46 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Sequence.puml
+HIDE_STEREOTYPE()
+
+title Victor - File Editing Workflow
+
+Person(user, "Content Author", "Edits Hugo content")
+Container(sidebar, "SidebarView", "SwiftUI", "File tree navigation")
+Container(viewmodel, "SiteViewModel", "Swift", "Central state")
+Container(editor, "EditorPanelView", "SwiftUI", "Markdown editor")
+Container(editor_vm, "EditorViewModel", "Swift", "Editor state")
+Container(autosave, "AutoSaveService", "Actor", "Debounced save")
+Container(filesystem, "FileSystemService", "Class", "File I/O")
+Container(preview, "PreviewPanel", "SwiftUI", "Markdown preview")
+Container(renderer, "MarkdownRenderer", "Class", "MD to HTML")
+
+== File Selection ==
+Rel(user, sidebar, "Clicks file in sidebar")
+Rel(sidebar, viewmodel, "selectNode(node)")
+Rel(viewmodel, filesystem, "readContentFile(url)")
+Rel(filesystem, viewmodel, "ContentFile with frontmatter + markdown")
+Rel(viewmodel, editor, "Updates selectedNode, triggers view refresh")
+
+== Editing Content ==
+Rel(user, editor, "Types in editor")
+Rel(editor, editor_vm, "markdownContent binding updates")
+Rel(editor_vm, viewmodel, "setEditedContent(content, nodeID)")
+Rel(editor_vm, renderer, "renderMarkdown(content)")
+Rel(renderer, preview, "HTML string")
+Rel(preview, user, "Shows live preview")
+
+== Auto-Save (if enabled) ==
+Rel(editor_vm, autosave, "scheduleAutoSave(url, content, lastModified)")
+Rel(autosave, autosave, "Debounce 2 seconds")
+Rel(autosave, filesystem, "Check conflict, write file")
+Rel(filesystem, autosave, "New modification date")
+Rel(autosave, editor_vm, "onSuccess callback")
+Rel(editor_vm, viewmodel, "markFileSaved(nodeID)")
+
+== Manual Save (Cmd+S) ==
+Rel(user, editor, "Presses Cmd+S")
+Rel(editor, editor_vm, "save()")
+Rel(editor_vm, filesystem, "saveContentFile()")
+Rel(editor_vm, viewmodel, "markFileSaved(nodeID)")
+
+@enduml

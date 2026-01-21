@@ -59,12 +59,7 @@ struct TemplateBrowserView: View {
 
             // Template count
             Text("\(filteredTemplates.count) templates")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.1))
-                .cornerRadius(4)
+                .badgeStyle(color: .secondary, font: Font.caption, backgroundOpacity: 0.1, horizontalPadding: 8)
 
             Spacer()
 

@@ -33,7 +33,9 @@
       "Bash(gh issue close:*)",
       "Bash(bd reopen:*)",
       "Bash(git checkout:*)",
-      "Bash(bd epic create:*)"
+      "Bash(bd epic create:*)",
+      "Skill(c4-diagrams)",
+      "Bash(python3:*)"
     ]
   }
 }

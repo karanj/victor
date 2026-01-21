@@ -40,9 +40,9 @@ struct TabBarView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: viewModel.useLivePreview ? "server.rack" : "doc.richtext")
-                    .font(.system(size: 12))
+                    .font(.caption)
                 Text(viewModel.useLivePreview ? "Live Preview" : "Markdown Preview")
-                    .font(.system(size: 12))
+                    .font(.caption)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)

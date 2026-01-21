@@ -55,34 +55,24 @@ struct ConfigEditorView: View {
         }
         .onChange(of: showRawEditor) { oldValue, newValue in
             if oldValue == false && newValue == true {
-                // When switching from Form to Raw, serialize form fields to rawContent
-                do {
-                    let serialized = try HugoConfigParser.shared.serialize(config)
-                    config.rawContent = serialized
-                    print("[ConfigEditorView] Form→Raw: serialized \(serialized.count) chars")
-                } catch {
-                    parseError = "Failed to serialize: \(error.localizedDescription)"
-                }
+                FormRawToggleHandler.handleFormToRaw(
+                    serializeToRaw: {
+                        let serialized = try HugoConfigParser.shared.serialize(config)
+                        config.rawContent = serialized
+                        print("[ConfigEditorView] Form→Raw: serialized \(serialized.count) chars")
+                    },
+                    parseError: &parseError
+                )
             } else if oldValue == true && newValue == false {
-                // When switching from Raw to Form, parse the raw content to update form fields
-                do {
-                    try config.updateFromRawContent()
-                    parseError = nil
-                } catch {
-                    parseError = error.localizedDescription
-                }
+                FormRawToggleHandler.handleRawToForm(
+                    parseFromRaw: {
+                        try config.updateFromRawContent()
+                    },
+                    parseError: &parseError
+                )
             }
         }
-        .alert("Parse Error", isPresented: Binding(
-            get: { parseError != nil },
-            set: { if !$0 { parseError = nil } }
-        )) {
-            Button("OK") { parseError = nil }
-        } message: {
-            if let error = parseError {
-                Text("Could not parse the raw content: \(error)")
-            }
-        }
+        .parseErrorAlert($parseError)
     }
 
     private var configToolbar: some View {
@@ -118,50 +108,19 @@ struct ConfigEditorView: View {
             Spacer()
 
             // Toggle between form and raw
-            Picker("View", selection: $showRawEditor) {
-                Text("Form").tag(false)
-                Text("Raw").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: AppConstants.Toolbar.viewFormLabelFrameWidth)
+            FormRawPickerView(showRawEditor: $showRawEditor)
 
-            Divider()
-                .frame(height: 20)
+            EditorToolbarDivider()
 
-            // Save button
-            Button {
-                Task {
-                    isSaving = true
-                    if showRawEditor {
-                        // In raw mode, save rawContent directly (bypass serialize)
-                        await onSaveRaw()
-                    } else {
-                        // In form mode, serialize from structured fields
-                        await onSave()
-                    }
-                    isSaving = false
-                    showSavedIndicatorBriefly()
-                }
-            } label: {
-                if isSaving {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                } else {
-                    Image(systemName: "square.and.arrow.down")
-                }
-            }
-            .disabled(!config.hasUnsavedChanges || isSaving)
-            .keyboardShortcut("s", modifiers: .command)
-            .help("Save (⌘S)")
+            EditorSaveButton(
+                isSaving: isSaving,
+                hasUnsavedChanges: config.hasUnsavedChanges,
+                action: save
+            )
 
             // Open in external editor
             if let url = config.sourceURL {
-                Button {
-                    NSWorkspace.shared.open(url)
-                } label: {
-                    Image(systemName: "arrow.up.forward.square")
-                }
-                .help("Open in default app")
+                EditorOpenExternalButton(url: url)
             }
         }
         .padding(.horizontal, 12)
@@ -170,12 +129,29 @@ struct ConfigEditorView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: showSavedIndicator)
     }
 
-    private func showSavedIndicatorBriefly() {
-        showSavedIndicator = true
-        Task {
-            try? await Task.sleep(for: .seconds(2.0))
-            showSavedIndicator = false
-        }
+    // MARK: - Actions
+
+    private func save() async {
+        let helper = EditorSaveHelper()
+        var errorMessage: String?
+        await helper.performSave(
+            operation: {
+                if showRawEditor {
+                    // In raw mode, save rawContent directly (bypass serialize)
+                    await onSaveRaw()
+                } else {
+                    // In form mode, serialize from structured fields
+                    await onSave()
+                }
+            },
+            isSaving: { isSaving },
+            setIsSaving: { isSaving = $0 },
+            showSavedIndicator: { showSavedIndicator },
+            setShowSavedIndicator: { showSavedIndicator = $0 },
+            errorMessage: { errorMessage },
+            setErrorMessage: { errorMessage = $0 },
+            afterSave: {}
+        )
     }
 }
 

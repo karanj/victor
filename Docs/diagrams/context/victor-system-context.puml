@@ -1,0 +1,22 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+HIDE_STEREOTYPE()
+
+title Victor - System Context Diagram
+
+Person(content_author, "Content Author", "Creates and manages Hugo website content")
+
+System(victor, "Victor", "Native macOS CMS application for Hugo static sites. Provides markdown editing, live preview, frontmatter GUI, and Hugo server integration.")
+
+System_Ext(hugo, "Hugo", "Static site generator that builds HTML from markdown content")
+System_Ext(filesystem, "File System", "Local Hugo site directory containing content, config, themes, and assets")
+System_Ext(browser, "Web Browser", "Displays live preview of Hugo site during development")
+
+Rel(content_author, victor, "Creates/edits content, manages site structure")
+Rel(victor, filesystem, "Reads/writes markdown files, config, assets")
+Rel(victor, hugo, "Starts/stops server, builds site")
+Rel(hugo, filesystem, "Reads source files, writes built site")
+Rel(hugo, browser, "Serves live preview via HTTP, live reload via WebSocket")
+Rel(content_author, browser, "Views live preview")
+
+@enduml

@@ -16,7 +16,7 @@ struct BreadcrumbBar: View {
                 if index > 0 {
                     // Separator chevron
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
 

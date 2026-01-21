@@ -1,0 +1,31 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+HIDE_STEREOTYPE()
+
+title Victor - Container Diagram
+
+Person(content_author, "Content Author", "Creates and manages Hugo website content")
+
+System_Boundary(victor, "Victor macOS Application") {
+    Container(app, "VictorApp", "SwiftUI App", "Application entry point, window management, menu commands")
+    Container(viewmodel, "SiteViewModel", "Swift @Observable", "Central state management: site data, selection, preferences, file cache")
+    Container(views, "Views Layer", "SwiftUI", "UI components: editors, sidebar, preview panels, inspectors")
+    Container(services, "Services Layer", "Swift Classes/Actors", "Business logic: file I/O, parsing, Hugo server, auto-save")
+    Container(models, "Models Layer", "Swift Structs/Classes", "Data structures: HugoSite, FileNode, ContentFile, Frontmatter")
+}
+
+System_Ext(hugo, "Hugo Server", "Static site generator subprocess")
+System_Ext(filesystem, "File System", "Hugo site directory")
+System_Ext(webview, "WKWebView", "Embedded browser for preview")
+
+Rel(content_author, app, "Interacts via UI")
+Rel(app, viewmodel, "Owns, passes to views")
+Rel(views, viewmodel, "Binds to @Observable state")
+Rel(viewmodel, services, "Delegates operations")
+Rel(services, models, "Creates/updates")
+Rel(services, filesystem, "Reads/writes files", "async/await")
+Rel(services, hugo, "Starts/stops, monitors output", "Process/Pipe")
+Rel(views, webview, "Displays preview content")
+Rel(hugo, webview, "Serves live preview", "HTTP/WebSocket")
+
+@enduml

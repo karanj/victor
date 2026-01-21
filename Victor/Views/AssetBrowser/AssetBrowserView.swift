@@ -8,6 +8,7 @@ struct AssetBrowserView: View {
     let onInsert: ((String) -> Void)?  // Callback when inserting into markdown
 
     @State private var assets: [Asset] = []
+    @State private var filteredAssets: [Asset] = []
     @State private var isLoading = true
     @State private var selectedAsset: Asset?
     @State private var viewMode: AssetViewMode = .grid
@@ -15,7 +16,9 @@ struct AssetBrowserView: View {
     @State private var searchText = ""
     @State private var sortOrder: AssetSortOrder = .name
 
-    var filteredAssets: [Asset] {
+    /// Updates filteredAssets based on current filter/search/sort criteria
+    /// Called only when inputs change, not on every view update
+    private func updateFilteredAssets() {
         var result = assets
 
         // Apply search
@@ -32,7 +35,7 @@ struct AssetBrowserView: View {
         // Apply sort
         result.sort { sortOrder.compare($0, $1) }
 
-        return result
+        filteredAssets = result
     }
 
     var body: some View {
@@ -62,6 +65,10 @@ struct AssetBrowserView: View {
         .task {
             await loadAssets()
         }
+        .onChange(of: assets) { _, _ in updateFilteredAssets() }
+        .onChange(of: searchText) { _, _ in updateFilteredAssets() }
+        .onChange(of: filterType) { _, _ in updateFilteredAssets() }
+        .onChange(of: sortOrder) { _, _ in updateFilteredAssets() }
     }
 
     // MARK: - Toolbar

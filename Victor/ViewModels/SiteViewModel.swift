@@ -44,6 +44,9 @@ class SiteViewModel {
     /// Fast lookup table for nodes by ID (O(1) instead of O(n) tree traversal)
     private var nodeByID: [UUID: FileNode] = [:]
 
+    /// Manages LRU caching of edited file content
+    private let fileCacheManager = FileCacheManager()
+
     /// Currently selected file node
     var selectedNode: FileNode?
 
@@ -61,33 +64,29 @@ class SiteViewModel {
         }
     }
 
-    /// Per-file edited content storage - preserves unsaved edits when switching files
-    /// Key is file node ID, value is the edited content
-    private var editedContentByFile: [UUID: String] = [:]
-
     /// Current editing content (for preview sync across layout modes)
-    /// Computed property that reads/writes from per-file storage based on selected node
+    /// Computed property that reads/writes from cache based on selected node
     var currentEditingContent: String {
         get {
             guard let nodeID = selectedNode?.id else { return "" }
-            return editedContentByFile[nodeID] ?? ""
+            return fileCacheManager.getContent(for: nodeID) ?? ""
         }
         set {
             guard let nodeID = selectedNode?.id else { return }
-            editedContentByFile[nodeID] = newValue
+            fileCacheManager.setContent(newValue, for: nodeID)
         }
     }
 
     /// Get edited content for a specific file by ID (regardless of which file is selected)
     /// Used by EditorViewModel to retrieve content for its specific file
     func getEditedContent(for nodeID: UUID) -> String? {
-        return editedContentByFile[nodeID]
+        return fileCacheManager.getContent(for: nodeID)
     }
 
     /// Set edited content for a specific file by ID (regardless of which file is selected)
     /// Used by EditorViewModel to update content for its specific file
     func setEditedContent(_ content: String, for nodeID: UUID) {
-        editedContentByFile[nodeID] = content
+        fileCacheManager.setContent(content, for: nodeID)
     }
 
     /// Live preview enabled state (controls real-time updates in split view)
@@ -181,101 +180,87 @@ class SiteViewModel {
     /// Maximum number of recent files to track
     private let maxRecentFiles = 10
 
+    // MARK: - Specialized File Properties (delegated to SpecializedFileManager)
+
     /// Hugo configuration (loaded when a config file is selected)
-    var hugoConfig: HugoConfig?
+    var hugoConfig: HugoConfig? {
+        get { specializedFileManager.hugoConfig }
+        set { specializedFileManager.hugoConfig = newValue }
+    }
 
     /// Whether the Hugo config is currently loading
-    var isLoadingConfig = false
-
-    /// Per-file storage for data files - preserves unsaved edits when switching
-    private var loadedDataFiles: [URL: DataFile] = [:]
+    var isLoadingConfig: Bool { specializedFileManager.isLoadingConfig }
 
     /// Currently loaded data file (computed from per-file storage based on selected node)
     var currentDataFile: DataFile? {
         get {
             guard let url = selectedNode?.url else { return nil }
-            return loadedDataFiles[url]
+            return specializedFileManager.getDataFile(for: url)
         }
         set {
             guard let url = selectedNode?.url else { return }
-            if let file = newValue {
-                loadedDataFiles[url] = file
-            } else {
-                loadedDataFiles.removeValue(forKey: url)
-            }
+            specializedFileManager.setDataFile(newValue, for: url)
         }
     }
 
     /// Whether a data file is currently loading
-    var isLoadingDataFile = false
+    var isLoadingDataFile: Bool { specializedFileManager.isLoadingDataFile }
 
     /// Error from last data file load attempt (to prevent infinite retry)
-    var dataFileLoadError: String?
+    var dataFileLoadError: String? { specializedFileManager.dataFileLoadError }
 
     /// URL of the last failed data file load (to prevent infinite retry)
-    var failedDataFileURL: URL?
-
-    /// Per-file storage for templates - preserves unsaved edits when switching
-    private var loadedTemplates: [URL: Template] = [:]
+    var failedDataFileURL: URL? { specializedFileManager.failedDataFileURL }
 
     /// Currently loaded template (computed from per-file storage based on selected node)
     var currentTemplate: Template? {
         get {
             guard let url = selectedNode?.url else { return nil }
-            return loadedTemplates[url]
+            return specializedFileManager.getTemplate(for: url)
         }
         set {
             guard let url = selectedNode?.url else { return }
-            if let file = newValue {
-                loadedTemplates[url] = file
-            } else {
-                loadedTemplates.removeValue(forKey: url)
-            }
+            specializedFileManager.setTemplate(newValue, for: url)
         }
     }
 
     /// Whether a template is currently loading
-    var isLoadingTemplate = false
+    var isLoadingTemplate: Bool { specializedFileManager.isLoadingTemplate }
 
     /// Error from last template load attempt
-    var templateLoadError: String?
+    var templateLoadError: String? { specializedFileManager.templateLoadError }
 
     /// URL of the last failed template load
-    var failedTemplateURL: URL?
-
-    /// Per-file storage for archetypes - preserves unsaved edits when switching
-    private var loadedArchetypes: [URL: Archetype] = [:]
+    var failedTemplateURL: URL? { specializedFileManager.failedTemplateURL }
 
     /// Currently loaded archetype (computed from per-file storage based on selected node)
     var currentArchetype: Archetype? {
         get {
             guard let url = selectedNode?.url else { return nil }
-            return loadedArchetypes[url]
+            return specializedFileManager.getArchetype(for: url)
         }
         set {
             guard let url = selectedNode?.url else { return }
-            if let file = newValue {
-                loadedArchetypes[url] = file
-            } else {
-                loadedArchetypes.removeValue(forKey: url)
-            }
+            specializedFileManager.setArchetype(newValue, for: url)
         }
     }
 
     /// Whether an archetype is currently loading
-    var isLoadingArchetype = false
+    var isLoadingArchetype: Bool { specializedFileManager.isLoadingArchetype }
 
     /// Error from last archetype load attempt
-    var archetypeLoadError: String?
+    var archetypeLoadError: String? { specializedFileManager.archetypeLoadError }
 
     /// URL of the last failed archetype load
-    var failedArchetypeURL: URL?
+    var failedArchetypeURL: URL? { specializedFileManager.failedArchetypeURL }
 
     /// Maximum number of ContentFiles to keep cached in memory
     /// Files beyond this limit will have their contentFile released
-    private let maxCachedContentFiles = 20
+    /// ContentFile objects are heavier than strings, but 50 is still reasonable
+    private let maxCachedContentFiles = 50
 
     /// LRU cache tracking: ordered list of node IDs with loaded content (most recent first)
+    /// Note: This tracks loaded ContentFile/TextFile objects, separate from edited content in FileCacheManager
     private var contentCacheOrder: [UUID] = []
 
     /// Recently opened sites (paths stored in UserDefaults)
@@ -300,8 +285,14 @@ class SiteViewModel {
     /// Duration to show "saved" indicator before fading
     private let savedIndicatorDuration: TimeInterval = 3.0
 
-    /// File system service
+    /// File system service (for site loading, content reading)
     private let fileSystemService = FileSystemService.shared
+
+    /// File operations service (for create, rename, duplicate, trash)
+    private let fileOperationsService = FileOperationsService.shared
+
+    /// Specialized file manager (for Hugo config, data files, templates, archetypes)
+    let specializedFileManager = SpecializedFileManager()
 
     /// Set of node IDs that should be auto-expanded during search
     private(set) var autoExpandedNodeIDs: Set<UUID> = []
@@ -646,13 +637,10 @@ class SiteViewModel {
         invalidateFilterCache()
         selectedNode = nil
         selectedFileID = nil
-        editedContentByFile.removeAll()  // Clear all per-file markdown edits
-        loadedDataFiles.removeAll()      // Clear all loaded data files
-        loadedTemplates.removeAll()      // Clear all loaded templates
-        loadedArchetypes.removeAll()     // Clear all loaded archetypes
-        hugoConfig = nil                 // Clear loaded Hugo config
+        fileCacheManager.clearAll()           // Clear all per-file markdown edits
+        specializedFileManager.clearAll()     // Clear Hugo config, data files, templates, archetypes
         recentFiles = []
-        contentCacheOrder = []
+        contentCacheOrder = []           // Clear loaded content tracking
         modifiedFileIDs = []
         recentlySavedFileIDs = [:]
         loadedStatusFolderIDs = []
@@ -733,8 +721,8 @@ class SiteViewModel {
         if let node = actualNode, node.isMarkdownFile {
             if let contentFile = node.contentFile {
                 // Content already loaded - only set if no existing edits
-                if editedContentByFile[node.id] == nil {
-                    editedContentByFile[node.id] = contentFile.markdownContent
+                if !fileCacheManager.hasContent(for: node.id) {
+                    fileCacheManager.setContent(contentFile.markdownContent, for: node.id)
                 }
                 addRecentFile(node)
                 updateContentCache(accessedNodeID: node.id)
@@ -746,8 +734,8 @@ class SiteViewModel {
                     await self.loadFileContent(for: node)
                     // Only update content if this node is still selected and has no edits
                     if node.id == self.selectedNode?.id,
-                       self.editedContentByFile[node.id] == nil {
-                        self.editedContentByFile[node.id] = node.contentFile?.markdownContent ?? ""
+                       !self.fileCacheManager.hasContent(for: node.id) {
+                        self.fileCacheManager.setContent(node.contentFile?.markdownContent ?? "", for: node.id)
                     }
                     if node.id == self.selectedNode?.id {
                         self.addRecentFile(node)
@@ -866,19 +854,9 @@ class SiteViewModel {
             return true
         }
 
-        // Check config, data files, and templates via their model state
+        // Check config, data files, templates, and archetypes via SpecializedFileManager
         if let node = findNode(id: nodeID) {
-            // Check Hugo config
-            if let config = hugoConfig, config.sourceURL == node.url, config.hasUnsavedChanges {
-                return true
-            }
-            if let dataFile = loadedDataFiles[node.url], dataFile.hasUnsavedChanges {
-                return true
-            }
-            if let template = loadedTemplates[node.url], template.hasUnsavedChanges {
-                return true
-            }
-            if let archetype = loadedArchetypes[node.url], archetype.hasUnsavedChanges {
+            if specializedFileManager.hasUnsavedChanges(for: node.url) {
                 return true
             }
         }
@@ -900,20 +878,8 @@ class SiteViewModel {
         if !modifiedFileIDs.isEmpty {
             return true
         }
-        // Check Hugo config
-        if hugoConfig?.hasUnsavedChanges == true {
-            return true
-        }
-        // Check data files
-        if loadedDataFiles.values.contains(where: { $0.hasUnsavedChanges }) {
-            return true
-        }
-        // Check templates
-        if loadedTemplates.values.contains(where: { $0.hasUnsavedChanges }) {
-            return true
-        }
-        // Check archetypes
-        if loadedArchetypes.values.contains(where: { $0.hasUnsavedChanges }) {
+        // Check specialized files (Hugo config, data files, templates, archetypes)
+        if specializedFileManager.hasUnsavedChanges {
             return true
         }
         return false
@@ -946,41 +912,8 @@ class SiteViewModel {
             }
         }
 
-        // Save Hugo config if modified
-        if hugoConfig?.hasUnsavedChanges == true {
-            await saveHugoConfig()
-        }
-
-        // Save data files with unsaved changes
-        for (_, dataFile) in loadedDataFiles where dataFile.hasUnsavedChanges {
-            do {
-                try await DataFileParser.shared.save(dataFile)
-                Logger.shared.info("Saved data file: \(dataFile.fileName)")
-            } catch {
-                Logger.shared.error("Failed to save data file \(dataFile.fileName)", error: error)
-            }
-        }
-
-        // Save templates with unsaved changes
-        for (_, template) in loadedTemplates where template.hasUnsavedChanges {
-            do {
-                try await TemplateParser.shared.save(template)
-                Logger.shared.info("Saved template: \(template.fileName)")
-            } catch {
-                Logger.shared.error("Failed to save template \(template.fileName)", error: error)
-            }
-        }
-
-        // Save archetypes with unsaved changes
-        for (_, archetype) in loadedArchetypes where archetype.hasUnsavedChanges {
-            do {
-                try archetype.rawContent.write(to: archetype.url, atomically: true, encoding: .utf8)
-                archetype.markAsSaved()
-                Logger.shared.info("Saved archetype: \(archetype.fileName)")
-            } catch {
-                Logger.shared.error("Failed to save archetype \(archetype.fileName)", error: error)
-            }
-        }
+        // Save specialized files (Hugo config, data files, templates, archetypes)
+        await specializedFileManager.saveAll()
     }
 
     // MARK: - Status Metadata Loading (Lazy)
@@ -1127,32 +1060,17 @@ class SiteViewModel {
 
     /// Load Hugo configuration from a config file URL
     func loadHugoConfig(from url: URL) async {
-        isLoadingConfig = true
         do {
-            let config = try await HugoConfigParser.shared.parseConfig(at: url)
-            hugoConfig = config
-            Logger.shared.info("Loaded Hugo config: \(url.lastPathComponent)")
+            try await specializedFileManager.loadHugoConfig(from: url)
         } catch {
             errorMessage = "Failed to load config: \(error.localizedDescription)"
-            Logger.shared.error("Error loading Hugo config", error: error)
         }
-        isLoadingConfig = false
     }
 
     /// Save the current Hugo configuration (from form fields)
     func saveHugoConfig() async {
-        guard let config = hugoConfig, let url = config.sourceURL else {
-            errorMessage = "No configuration to save"
-            return
-        }
-
         do {
-            let content = try HugoConfigParser.shared.serialize(config)
-            try await fileSystemService.writeFile(to: url, content: content)
-            // Keep rawContent in sync with what we saved
-            config.rawContent = content
-            config.markAsSaved()
-            Logger.shared.info("Saved Hugo config: \(url.lastPathComponent)")
+            try await specializedFileManager.saveHugoConfig()
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"
             Logger.shared.error("Error saving Hugo config", error: error)
@@ -1161,16 +1079,8 @@ class SiteViewModel {
 
     /// Save the current Hugo configuration directly from rawContent (for raw editor mode)
     func saveHugoConfigRaw() async {
-        guard let config = hugoConfig, let url = config.sourceURL else {
-            errorMessage = "No configuration to save"
-            return
-        }
-
         do {
-            // Save rawContent directly without serialization
-            try await fileSystemService.writeFile(to: url, content: config.rawContent)
-            config.markAsSaved()
-            Logger.shared.info("Saved Hugo config (raw): \(url.lastPathComponent)")
+            try await specializedFileManager.saveHugoConfigRaw()
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"
             Logger.shared.error("Error saving Hugo config", error: error)
@@ -1180,30 +1090,12 @@ class SiteViewModel {
     // MARK: - Data File Management
 
     /// Load a data file from URL (for files in data/ directory)
-    /// Only loads from disk if not already in memory (preserves unsaved edits)
     func loadDataFile(from url: URL) async {
-        // If already loaded, don't reload (preserves unsaved edits)
-        if loadedDataFiles[url] != nil {
-            isLoadingDataFile = false
-            return
-        }
-
-        // Clear previous error state
-        dataFileLoadError = nil
-        failedDataFileURL = nil
-        isLoadingDataFile = true
-
         do {
-            let dataFile = try await DataFileParser.shared.parseDataFile(at: url)
-            loadedDataFiles[url] = dataFile
-            Logger.shared.info("Loaded data file: \(url.lastPathComponent)")
+            try await specializedFileManager.loadDataFile(from: url)
         } catch {
-            dataFileLoadError = error.localizedDescription
-            failedDataFileURL = url
             errorMessage = "Failed to load data file: \(error.localizedDescription)"
-            Logger.shared.error("Error loading data file", error: error)
         }
-        isLoadingDataFile = false
     }
 
     /// Save the current data file
@@ -1214,8 +1106,7 @@ class SiteViewModel {
         }
 
         do {
-            try await DataFileParser.shared.save(dataFile)
-            Logger.shared.info("Saved data file: \(dataFile.fileName)")
+            try await specializedFileManager.saveDataFile(dataFile)
         } catch {
             errorMessage = "Failed to save data file: \(error.localizedDescription)"
             Logger.shared.error("Error saving data file", error: error)
@@ -1225,30 +1116,12 @@ class SiteViewModel {
     // MARK: - Template Management
 
     /// Load a template file from URL (for files in layouts/ or themes/ directories)
-    /// Only loads from disk if not already in memory (preserves unsaved edits)
     func loadTemplate(from url: URL) async {
-        // If already loaded, don't reload (preserves unsaved edits)
-        if loadedTemplates[url] != nil {
-            isLoadingTemplate = false
-            return
-        }
-
-        // Clear previous error state
-        templateLoadError = nil
-        failedTemplateURL = nil
-        isLoadingTemplate = true
-
         do {
-            let template = try await TemplateParser.shared.parseTemplate(at: url)
-            loadedTemplates[url] = template
-            Logger.shared.info("Loaded template: \(url.lastPathComponent)")
+            try await specializedFileManager.loadTemplate(from: url)
         } catch {
-            templateLoadError = error.localizedDescription
-            failedTemplateURL = url
             errorMessage = "Failed to load template: \(error.localizedDescription)"
-            Logger.shared.error("Error loading template", error: error)
         }
-        isLoadingTemplate = false
     }
 
     /// Save the current template
@@ -1259,8 +1132,7 @@ class SiteViewModel {
         }
 
         do {
-            try await TemplateParser.shared.save(template)
-            Logger.shared.info("Saved template: \(template.fileName)")
+            try await specializedFileManager.saveTemplate(template)
         } catch {
             errorMessage = "Failed to save template: \(error.localizedDescription)"
             Logger.shared.error("Error saving template", error: error)
@@ -1270,110 +1142,12 @@ class SiteViewModel {
     // MARK: - Archetype Management
 
     /// Load an archetype file from URL (for files in archetypes/ directory)
-    /// Only loads from disk if not already in memory (preserves unsaved edits)
     func loadArchetype(from url: URL) async {
-        // If already loaded, don't reload (preserves unsaved edits)
-        if loadedArchetypes[url] != nil {
-            isLoadingArchetype = false
-            return
-        }
-
-        // Clear previous error state
-        archetypeLoadError = nil
-        failedArchetypeURL = nil
-        isLoadingArchetype = true
-
         do {
-            let archetype = try await parseArchetype(at: url)
-            loadedArchetypes[url] = archetype
-            Logger.shared.info("Loaded archetype: \(url.lastPathComponent)")
+            try await specializedFileManager.loadArchetype(from: url)
         } catch {
-            archetypeLoadError = error.localizedDescription
-            failedArchetypeURL = url
             errorMessage = "Failed to load archetype: \(error.localizedDescription)"
-            Logger.shared.error("Error loading archetype", error: error)
         }
-        isLoadingArchetype = false
-    }
-
-    /// Parse an archetype file from disk
-    private func parseArchetype(at url: URL) async throws -> Archetype {
-        let content = try await Task.detached {
-            try String(contentsOf: url, encoding: .utf8)
-        }.value
-
-        // Parse frontmatter and body from the content
-        let lines = content.components(separatedBy: "\n")
-        guard !lines.isEmpty else {
-            return Archetype(url: url, frontmatterContent: "", bodyTemplate: content, frontmatterFormat: .yaml)
-        }
-
-        // Detect frontmatter format from first line
-        let firstLine = lines[0].trimmingCharacters(in: .whitespaces)
-        var format: FrontmatterFormat
-        var delimiter: String
-
-        if firstLine == "---" {
-            format = .yaml
-            delimiter = "---"
-        } else if firstLine == "+++" {
-            format = .toml
-            delimiter = "+++"
-        } else if firstLine.hasPrefix("{") {
-            // JSON frontmatter - parse differently
-            format = .json
-            return try parseJSONArchetype(url: url, content: content, lines: lines)
-        } else {
-            // No frontmatter detected - treat entire file as body
-            return Archetype(url: url, frontmatterContent: "", bodyTemplate: content, frontmatterFormat: .yaml)
-        }
-
-        // Find closing delimiter for YAML/TOML
-        var frontmatterLines: [String] = []
-        var bodyLines: [String] = []
-        var foundClosing = false
-
-        for (index, line) in lines.enumerated() {
-            if index == 0 { continue } // Skip opening delimiter
-
-            if line.trimmingCharacters(in: .whitespaces) == delimiter && !foundClosing {
-                foundClosing = true
-                continue
-            }
-
-            if foundClosing {
-                bodyLines.append(line)
-            } else {
-                frontmatterLines.append(line)
-            }
-        }
-
-        let frontmatter = frontmatterLines.joined(separator: "\n")
-        let body = bodyLines.joined(separator: "\n").trimmingCharacters(in: .newlines)
-
-        return Archetype(url: url, frontmatterContent: frontmatter, bodyTemplate: body, frontmatterFormat: format)
-    }
-
-    /// Parse JSON frontmatter archetype
-    private func parseJSONArchetype(url: URL, content: String, lines: [String]) throws -> Archetype {
-        var braceCount = 0
-        var endIndex = 0
-
-        for (index, line) in lines.enumerated() {
-            for char in line {
-                if char == "{" { braceCount += 1 }
-                if char == "}" { braceCount -= 1 }
-            }
-            if braceCount == 0 {
-                endIndex = index
-                break
-            }
-        }
-
-        let frontmatter = lines[0...endIndex].joined(separator: "\n")
-        let body = lines.dropFirst(endIndex + 1).joined(separator: "\n").trimmingCharacters(in: .newlines)
-
-        return Archetype(url: url, frontmatterContent: frontmatter, bodyTemplate: body, frontmatterFormat: .json)
     }
 
     /// Save the current archetype
@@ -1384,9 +1158,7 @@ class SiteViewModel {
         }
 
         do {
-            try archetype.rawContent.write(to: archetype.url, atomically: true, encoding: .utf8)
-            archetype.markAsSaved()
-            Logger.shared.info("Saved archetype: \(archetype.fileName)")
+            try await specializedFileManager.saveArchetype(archetype)
         } catch {
             errorMessage = "Failed to save archetype: \(error.localizedDescription)"
             Logger.shared.error("Error saving archetype", error: error)
@@ -1398,8 +1170,8 @@ class SiteViewModel {
         guard folder.isDirectory else { return }
 
         do {
-            // Ask filesystem service to create a new markdown file
-            let newFileURL = try await fileSystemService.createMarkdownFile(in: folder.url)
+            // Ask file operations service to create a new markdown file
+            let newFileURL = try await fileOperationsService.createMarkdownFile(in: folder.url)
 
             // Build a FileNode for the new file and insert it into the tree
             let newNode = FileNode(url: newFileURL, isDirectory: false, isPageBundle: false)
@@ -1434,7 +1206,7 @@ class SiteViewModel {
             node.contentFile = freshContent
 
             // Update the edited content to match fresh disk content
-            editedContentByFile[node.id] = freshContent.markdownContent
+            fileCacheManager.setContent(freshContent.markdownContent, for: node.id)
 
             // If this is the currently selected node, trigger a UI update
             if selectedNode?.id == node.id {
@@ -1451,7 +1223,7 @@ class SiteViewModel {
     /// Rename a file node
     func renameFile(node: FileNode, to newName: String) async {
         do {
-            let newURL = try await fileSystemService.renameFile(at: node.url, to: newName)
+            let newURL = try await fileOperationsService.renameFile(at: node.url, to: newName)
 
             // Update the node's URL
             node.url = newURL
@@ -1471,7 +1243,7 @@ class SiteViewModel {
     /// Duplicate a file node
     func duplicateFile(node: FileNode) async {
         do {
-            let newURL = try await fileSystemService.duplicateFile(at: node.url)
+            let newURL = try await fileOperationsService.duplicateFile(at: node.url)
 
             // Create a new FileNode for the duplicate
             let newNode = FileNode(url: newURL, isDirectory: node.isDirectory, isPageBundle: node.isPageBundle)
@@ -1504,7 +1276,7 @@ class SiteViewModel {
     /// Move a file node to trash
     func moveToTrash(node: FileNode) async {
         do {
-            try await fileSystemService.moveToTrash(at: node.url)
+            try await fileOperationsService.moveToTrash(at: node.url)
 
             // Remove from parent's children
             if let parent = node.parent {
@@ -1519,7 +1291,7 @@ class SiteViewModel {
 
             // Clear selection if this was selected
             if selectedNode?.id == node.id {
-                editedContentByFile.removeValue(forKey: node.id)  // Clear edited content for this file
+                fileCacheManager.clearContent(for: node.id)  // Clear edited content for this file
                 selectedNode = nil
                 selectedFileID = nil
             }
@@ -1531,12 +1303,12 @@ class SiteViewModel {
 
     /// Reveal a file in Finder
     func revealInFinder(node: FileNode) {
-        fileSystemService.revealInFinder(url: node.url)
+        fileOperationsService.revealInFinder(url: node.url)
     }
 
     /// Copy file path to clipboard
     func copyPath(node: FileNode) {
-        fileSystemService.copyPathToClipboard(url: node.url)
+        fileOperationsService.copyPathToClipboard(url: node.url)
     }
 
     /// Create a new folder inside the given directory
@@ -1544,7 +1316,7 @@ class SiteViewModel {
         guard parent.isDirectory else { return }
 
         do {
-            let newURL = try await fileSystemService.createFolder(in: parent.url)
+            let newURL = try await fileOperationsService.createFolder(in: parent.url)
 
             // Create a FileNode for the new folder
             let newNode = FileNode(url: newURL, isDirectory: true, isPageBundle: false)

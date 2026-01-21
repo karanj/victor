@@ -1,58 +1,126 @@
-import SwiftUI
+import Foundation
 
-/// Protocol for views that edit EditableFile models
-/// Provides standard interface for save/reload functionality
-///
-/// ## Usage
-/// Conforming views should implement save/reload using this pattern:
-/// ```swift
-/// func save() async {
-///     isSaving = true
-///     errorMessage = nil
-///
-///     do {
-///         try await performSave()
-///         model.markAsSaved()
-///         await onSaveComplete()
-///         await EditorHelpers.showSavedIndicatorBriefly(&showSavedIndicator)
-///     } catch {
-///         errorMessage = "Save failed: \(error.localizedDescription)"
-///     }
-///
-///     isSaving = false
-/// }
-/// ```
-protocol EditableEditor: View {
-    associatedtype Model: EditableFile
+// MARK: - EditorSaveHelper
 
-    var model: Model { get }
-    var isSaving: Bool { get set }
-    var showSavedIndicator: Bool { get set }
-    var errorMessage: String? { get set }
+/// Helper for common save operations across all editor views
+/// Encapsulates the save pattern: set isSaving, write content, mark saved, show indicator
+struct EditorSaveHelper {
 
-    /// Save the model to disk (implement file-specific logic)
-    func performSave() async throws
+    /// Perform a save operation with consistent state management and error handling
+    /// - Parameters:
+    ///   - url: The file URL to save to
+    ///   - content: Closure that returns the content to save (may throw)
+    ///   - isSaving: Getter for current isSaving state
+    ///   - setIsSaving: Setter for isSaving state
+    ///   - showSavedIndicator: Getter for current showSavedIndicator state
+    ///   - setShowSavedIndicator: Setter for showSavedIndicator state
+    ///   - errorMessage: Getter for current errorMessage state
+    ///   - setErrorMessage: Setter for errorMessage state
+    ///   - markAsSaved: Called after successful save to mark the model as saved
+    ///   - afterSave: Optional callback after successful save (e.g., to notify parent)
+    ///   - savedIndicatorDuration: How long to show the saved indicator (default 2 seconds)
+    @MainActor
+    func performSave(
+        to url: URL,
+        content: () throws -> String,
+        isSaving: () -> Bool,
+        setIsSaving: (Bool) -> Void,
+        showSavedIndicator: () -> Bool,
+        setShowSavedIndicator: (Bool) -> Void,
+        errorMessage: () -> String?,
+        setErrorMessage: (String?) -> Void,
+        markAsSaved: () -> Void,
+        afterSave: () async -> Void,
+        savedIndicatorDuration: Double = 2.0
+    ) async {
+        setIsSaving(true)
+        setErrorMessage(nil)
 
-    /// Reload the model from disk (implement file-specific logic)
-    func performReload() async throws
+        do {
+            let contentToWrite = try content()
+            try contentToWrite.write(to: url, atomically: true, encoding: .utf8)
+            markAsSaved()
+            await afterSave()
+            setShowSavedIndicator(true)
+            try? await Task.sleep(for: .seconds(savedIndicatorDuration))
+            setShowSavedIndicator(false)
+        } catch {
+            setErrorMessage("Save failed: \(error.localizedDescription)")
+        }
 
-    /// Callback after successful save (usually notify parent)
-    func onSaveComplete() async
+        setIsSaving(false)
+    }
 
-    /// Standard save flow (implement using the pattern in protocol docs)
-    func save() async
+    /// Perform a save operation with a custom async save closure
+    /// Use this when the save logic is more complex than just writing content to a file
+    /// - Parameters:
+    ///   - saveOperation: Async closure that performs the actual save (may throw)
+    ///   - isSaving: Getter for current isSaving state
+    ///   - setIsSaving: Setter for isSaving state
+    ///   - showSavedIndicator: Getter for current showSavedIndicator state
+    ///   - setShowSavedIndicator: Setter for showSavedIndicator state
+    ///   - errorMessage: Getter for current errorMessage state
+    ///   - setErrorMessage: Setter for errorMessage state
+    ///   - afterSave: Optional callback after successful save (e.g., to notify parent)
+    ///   - savedIndicatorDuration: How long to show the saved indicator (default 2 seconds)
+    @MainActor
+    func performSave(
+        operation saveOperation: () async throws -> Void,
+        isSaving: () -> Bool,
+        setIsSaving: (Bool) -> Void,
+        showSavedIndicator: () -> Bool,
+        setShowSavedIndicator: (Bool) -> Void,
+        errorMessage: () -> String?,
+        setErrorMessage: (String?) -> Void,
+        afterSave: () async -> Void,
+        savedIndicatorDuration: Double = 2.0
+    ) async {
+        setIsSaving(true)
+        setErrorMessage(nil)
 
-    /// Standard reload flow (implement using the pattern in protocol docs)
-    func reload() async
+        do {
+            try await saveOperation()
+            await afterSave()
+            setShowSavedIndicator(true)
+            try? await Task.sleep(for: .seconds(savedIndicatorDuration))
+            setShowSavedIndicator(false)
+        } catch {
+            setErrorMessage("Save failed: \(error.localizedDescription)")
+        }
+
+        setIsSaving(false)
+    }
 }
 
-/// Helper functions for editor implementations
-enum EditorHelpers {
-    /// Show saved indicator briefly (2 seconds)
+// MARK: - EditorReloadHelper
+
+/// Helper for common reload operations across all editor views
+/// Encapsulates the reload pattern: read from disk, update model, mark saved
+struct EditorReloadHelper {
+
+    /// Perform a reload operation with consistent error handling
+    /// - Parameters:
+    ///   - url: The file URL to reload from
+    ///   - updateContent: Closure to update the model with the loaded content
+    ///   - errorMessage: Getter for current errorMessage state
+    ///   - setErrorMessage: Setter for errorMessage state
+    ///   - markAsSaved: Called after successful reload to mark the model as saved
     @MainActor
-    static func showSavedIndicatorBriefly(_ showSavedIndicator: inout Bool) async {
-        showSavedIndicator = true
-        try? await Task.sleep(for: .seconds(2.0))
-        showSavedIndicator = false
+    func performReload(
+        from url: URL,
+        updateContent: (String) throws -> Void,
+        errorMessage: () -> String?,
+        setErrorMessage: (String?) -> Void,
+        markAsSaved: () -> Void
+    ) async {
+        setErrorMessage(nil)
+
+        do {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            try updateContent(content)
+            markAsSaved()
+        } catch {
+            setErrorMessage("Reload failed: \(error.localizedDescription)")
+        }
     }
 }

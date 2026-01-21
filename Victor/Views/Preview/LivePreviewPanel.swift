@@ -107,10 +107,10 @@ struct LivePreviewPanel: View {
             HStack(spacing: 4) {
                 Image(systemName: "globe")
                     .foregroundStyle(.secondary)
-                    .font(.system(size: 12))
+                    .font(.caption)
 
                 Text(currentURL.isEmpty ? serverURL?.absoluteString ?? "" : currentURL)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -129,7 +129,7 @@ struct LivePreviewPanel: View {
                     .frame(width: 8, height: 8)
 
                 Text(status.displayText)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 10)

@@ -48,6 +48,22 @@ enum AppConstants {
         static let textContainerInsetWidth: CGFloat = 16
         /// Vertical padding inside text container
         static let textContainerInsetHeight: CGFloat = 10
+        /// Field label width in forms
+        static let fieldLabelWidth: CGFloat = 100
+        /// Maximum height for autocomplete dropdown
+        static let autocompleteMaxHeight: CGFloat = 250
+    }
+
+    /// Standard spacing values
+    enum Spacing {
+        /// Small spacing (4pt)
+        static let small: CGFloat = 4
+        /// Medium spacing (8pt)
+        static let medium: CGFloat = 8
+        /// Large spacing (12pt)
+        static let large: CGFloat = 12
+        /// Extra large spacing (16pt)
+        static let extraLarge: CGFloat = 16
     }
 
     /// Sidebar layout constants
@@ -88,6 +104,24 @@ enum AppConstants {
         static let shortcodePickerHeight: CGFloat = 500
         /// Shortcode form minimum width
         static let shortcodeFormWidth: CGFloat = 400
+        /// Shortcode card width
+        static let shortcodeCardWidth: CGFloat = 350
+        /// New content dialog width
+        static let newContentWidth: CGFloat = 450
+        /// New content dialog height
+        static let newContentHeight: CGFloat = 400
+        /// Menu entry editor width
+        static let menuEditorWidth: CGFloat = 400
+        /// Menu weight field width
+        static let menuWeightWidth: CGFloat = 60
+        /// Custom field editor width
+        static let customFieldWidth: CGFloat = 400
+    }
+
+    /// Config editor constants
+    enum ConfigEditor {
+        /// Label column width
+        static let labelWidth: CGFloat = 120
     }
 
     /// Editor toolbar constants
@@ -122,12 +156,18 @@ enum AppConstants {
     enum GlobalSearch {
         /// Maximum matches to show per file (for performance)
         static let maxResultsPerFile = 100
-        /// Debounce interval for live search
-        static let debounceInterval: TimeInterval = 0.3
+        /// Debounce interval for live search (increased from 0.3 for large codebases)
+        static let debounceInterval: TimeInterval = 0.5
+        /// Minimum query length before search triggers (avoids expensive single-char searches)
+        static let minQueryLength = 2
         /// Width of search panel
         static let panelWidth: CGFloat = 700
         /// Height of search panel
         static let panelHeight: CGFloat = 500
+        /// Width of scope picker dropdown
+        static let scopePickerWidth: CGFloat = 100
+        /// Width of line number column in results
+        static let lineNumberWidth: CGFloat = 40
     }
 
     /// Centralized UserDefaults keys to avoid string literal duplication

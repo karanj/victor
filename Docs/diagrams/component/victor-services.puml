@@ -1,0 +1,53 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+HIDE_STEREOTYPE()
+
+title Victor - Services Layer Component Diagram
+
+Container(viewmodel, "SiteViewModel", "Swift @Observable", "Central state management")
+
+Container_Boundary(services, "Services Layer") {
+    Component(filesystem_svc, "FileSystemService", "Swift Class", "Directory scanning, file I/O, security-scoped bookmarks, context menu ops")
+    Component(file_ops_svc, "FileOperationsService", "Swift Class", "Create, rename, duplicate, trash operations")
+    Component(file_cache, "FileCacheManager", "Swift Class", "LRU cache for edited file content")
+    Component(specialized_mgr, "SpecializedFileManager", "Swift Class", "Per-file storage for config, data, templates, archetypes")
+
+    Component(hugo_server, "HugoServerService", "Swift Actor", "Hugo subprocess management, port detection, crash recovery")
+    Component(autosave, "AutoSaveService", "Swift Actor", "Debounced saves with conflict detection")
+    Component(livereload, "LiveReloadClient", "Swift Class", "WebSocket client for Hugo live reload")
+
+    Component(frontmatter_parser, "FrontmatterParser", "Swift Class", "Parse/serialize YAML/TOML/JSON frontmatter")
+    Component(config_parser, "HugoConfigParser", "Swift Class", "Parse/serialize Hugo config files")
+    Component(data_parser, "DataFileParser", "Swift Class", "Parse/serialize data/*.yaml/json/toml")
+    Component(template_parser, "TemplateParser", "Swift Class", "Parse Hugo/Go template files")
+
+    Component(markdown_renderer, "MarkdownRenderer", "Swift Class", "Convert markdown to HTML using Down library")
+    Component(syntax_highlighter, "SyntaxHighlighter", "Swift Class", "Syntax highlighting for editor (NSTextView)")
+    Component(theme_css, "ThemeCSSService", "Swift Class", "Extract CSS from Hugo themes for preview")
+    Component(build_error_parser, "BuildErrorParser", "Swift Class", "Parse Hugo build errors from server output")
+    Component(search_service, "SearchService", "Swift Class", "Full-text search across site content")
+    Component(asset_service, "AssetService", "Swift Class", "Asset discovery and metadata")
+    Component(archetype_manager, "ArchetypeManager", "Swift Class", "Manage Hugo archetypes for new content")
+}
+
+System_Ext(filesystem, "File System", "Hugo site files")
+System_Ext(hugo, "Hugo Server", "Hugo subprocess")
+
+Rel(viewmodel, filesystem_svc, "Loads/saves files")
+Rel(viewmodel, file_ops_svc, "File operations")
+Rel(viewmodel, file_cache, "Caches edits")
+Rel(viewmodel, specialized_mgr, "Specialized files")
+Rel(viewmodel, hugo_server, "Server control")
+Rel(viewmodel, autosave, "Schedules saves")
+
+Rel(filesystem_svc, filesystem, "Reads/writes")
+Rel(filesystem_svc, frontmatter_parser, "Parses frontmatter")
+Rel(specialized_mgr, config_parser, "Parses config")
+Rel(specialized_mgr, data_parser, "Parses data files")
+Rel(specialized_mgr, template_parser, "Parses templates")
+
+Rel(hugo_server, hugo, "Manages subprocess")
+Rel(hugo_server, build_error_parser, "Parses errors")
+Rel(autosave, filesystem_svc, "Writes files")
+
+@enduml

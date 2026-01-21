@@ -92,17 +92,7 @@ struct ArchetypeEditorView: View {
                     .foregroundStyle(.red)
             }
 
-            // Saving indicator
-            if isSaving {
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Saving...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Divider()
-                .frame(height: 20)
+            EditorToolbarDivider()
 
             // Help panel toggle
             Button {
@@ -114,49 +104,20 @@ struct ArchetypeEditorView: View {
             }
             .help("Toggle template help panel")
 
-            Divider()
-                .frame(height: 20)
+            EditorToolbarDivider()
 
-            // Save button
-            Button {
-                Task {
-                    await save()
-                }
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-            }
-            .keyboardShortcut("s", modifiers: .command)
-            .disabled(!archetype.hasUnsavedChanges || isSaving)
-            .help("Save (Cmd+S)")
+            EditorSaveButton(
+                isSaving: isSaving,
+                hasUnsavedChanges: archetype.hasUnsavedChanges,
+                action: save
+            )
 
-            // Reload button
-            Button {
-                Task {
-                    await reloadFromDisk()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Reload from disk")
+            EditorReloadButton(action: reloadFromDisk)
 
-            Divider()
-                .frame(height: 20)
+            EditorToolbarDivider()
 
-            // Open in external editor
-            Button {
-                NSWorkspace.shared.open(archetype.url)
-            } label: {
-                Image(systemName: "arrow.up.forward.square")
-            }
-            .help("Open in default app")
-
-            // Reveal in Finder
-            Button {
-                NSWorkspace.shared.activateFileViewerSelecting([archetype.url])
-            } label: {
-                Image(systemName: "folder")
-            }
-            .help("Reveal in Finder")
+            EditorOpenExternalButton(url: archetype.url)
+            EditorRevealInFinderButton(url: archetype.url)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -167,33 +128,29 @@ struct ArchetypeEditorView: View {
     // MARK: - Actions
 
     private func save() async {
-        isSaving = true
-        errorMessage = nil
-
-        do {
-            // Write raw content directly to disk
-            try archetype.rawContent.write(to: archetype.url, atomically: true, encoding: .utf8)
-            archetype.markAsSaved()
-            await onSave()
-            showSavedIndicator = true
-
-            // Hide saved indicator after delay
-            try? await Task.sleep(for: .seconds(2))
-            showSavedIndicator = false
-        } catch {
-            errorMessage = "Save failed: \(error.localizedDescription)"
-        }
-
-        isSaving = false
+        let helper = EditorSaveHelper()
+        await helper.performSave(
+            to: archetype.url,
+            content: { archetype.rawContent },
+            isSaving: { isSaving },
+            setIsSaving: { isSaving = $0 },
+            showSavedIndicator: { showSavedIndicator },
+            setShowSavedIndicator: { showSavedIndicator = $0 },
+            errorMessage: { errorMessage },
+            setErrorMessage: { errorMessage = $0 },
+            markAsSaved: { archetype.markAsSaved() },
+            afterSave: { await onSave() }
+        )
     }
 
     private func reloadFromDisk() async {
-        do {
-            let content = try String(contentsOf: archetype.url, encoding: .utf8)
-            archetype.rawContent = content
-            archetype.markAsSaved()
-        } catch {
-            errorMessage = "Reload failed: \(error.localizedDescription)"
-        }
+        let helper = EditorReloadHelper()
+        await helper.performReload(
+            from: archetype.url,
+            updateContent: { archetype.rawContent = $0 },
+            errorMessage: { errorMessage },
+            setErrorMessage: { errorMessage = $0 },
+            markAsSaved: { archetype.markAsSaved() }
+        )
     }
 }

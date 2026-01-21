@@ -73,58 +73,20 @@ struct TemplateEditorView: View {
                     .foregroundStyle(.red)
             }
 
-            // Saving indicator
-            if isSaving {
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Saving...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            EditorToolbarDivider()
 
-            Divider()
-                .frame(height: 20)
+            EditorSaveButton(
+                isSaving: isSaving,
+                hasUnsavedChanges: template.hasUnsavedChanges,
+                action: save
+            )
 
-            // Save button
-            Button {
-                Task {
-                    await save()
-                }
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-            }
-            .keyboardShortcut("s", modifiers: .command)
-            .disabled(!template.hasUnsavedChanges || isSaving)
-            .help("Save (⌘S)")
+            EditorReloadButton(action: reloadFromDisk)
 
-            // Reload button
-            Button {
-                Task {
-                    await reloadFromDisk()
-                }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Reload from disk")
+            EditorToolbarDivider()
 
-            Divider()
-                .frame(height: 20)
-
-            // Open in external editor
-            Button {
-                NSWorkspace.shared.open(template.url)
-            } label: {
-                Image(systemName: "arrow.up.forward.square")
-            }
-            .help("Open in default app")
-
-            // Reveal in Finder
-            Button {
-                NSWorkspace.shared.activateFileViewerSelecting([template.url])
-            } label: {
-                Image(systemName: "folder")
-            }
-            .help("Reveal in Finder")
+            EditorOpenExternalButton(url: template.url)
+            EditorRevealInFinderButton(url: template.url)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -147,34 +109,32 @@ struct TemplateEditorView: View {
     // MARK: - Actions
 
     private func save() async {
-        isSaving = true
-        errorMessage = nil
-
-        do {
-            try await TemplateParser.shared.save(template)
-            await onSave()
-            showSavedIndicator = true
-
-            // Hide saved indicator after delay
-            try? await Task.sleep(for: .seconds(2))
-            showSavedIndicator = false
-        } catch {
-            errorMessage = "Save failed: \(error.localizedDescription)"
-        }
-
-        isSaving = false
+        let helper = EditorSaveHelper()
+        await helper.performSave(
+            operation: { try await TemplateParser.shared.save(template) },
+            isSaving: { isSaving },
+            setIsSaving: { isSaving = $0 },
+            showSavedIndicator: { showSavedIndicator },
+            setShowSavedIndicator: { showSavedIndicator = $0 },
+            errorMessage: { errorMessage },
+            setErrorMessage: { errorMessage = $0 },
+            afterSave: { await onSave() }
+        )
     }
 
     private func reloadFromDisk() async {
-        do {
-            let content = try String(contentsOf: template.url, encoding: .utf8)
-            template.content = content
-            template.originalContent = content
-            // Re-parse metadata
-            template.metadata = TemplateParser.shared.extractMetadata(from: content)
-        } catch {
-            errorMessage = "Reload failed: \(error.localizedDescription)"
-        }
+        let helper = EditorReloadHelper()
+        await helper.performReload(
+            from: template.url,
+            updateContent: { content in
+                template.content = content
+                template.originalContent = content
+                template.metadata = TemplateParser.shared.extractMetadata(from: content)
+            },
+            errorMessage: { errorMessage },
+            setErrorMessage: { errorMessage = $0 },
+            markAsSaved: { template.markAsSaved() }
+        )
     }
 }
 

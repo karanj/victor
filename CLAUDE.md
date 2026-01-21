@@ -108,6 +108,59 @@ dictionary["buildDrafts"] = config.buildDrafts  // Always include
 ### YAML Width
 Use `width: -1` to prevent line wrapping in Yams serialization.
 
+### Content State Dual Storage
+Content is stored in two places for file switching without data loss:
+
+| Location | Purpose |
+|----------|---------|
+| `SiteViewModel.editedContentByFile: [UUID: String]` | Persists edits when switching between files |
+| `EditorViewModel.localContent: String` | Active editing state, bound to NSTextView |
+
+**Sync Flow**:
+1. File selected → `EditorViewModel.localContent` initialized from `SiteViewModel` (or file if no cached edits)
+2. User edits → `localContent` updates → synced back to `SiteViewModel.editedContentByFile`
+3. File switch → current `localContent` persisted to `editedContentByFile` before loading new file
+4. Save → content written to disk, `editedContentByFile` entry cleared
+
+**Source of truth**: `EditorViewModel.localContent` during active editing; `SiteViewModel.editedContentByFile` when file is not actively edited.
+
+### Service Concurrency Strategy
+Services use different patterns based on their state and access patterns:
+
+| Service | Pattern | Rationale |
+|---------|---------|-----------|
+| `HugoServerService` | `actor` | Manages process lifecycle, output buffering - mutable state with concurrent access |
+| `AutoSaveService` | `actor` | Debounce timers, pending save tracking - mutable state modified from multiple call sites |
+| `FileSystemService` | `class` + `@MainActor` methods | Stateless operations, but some methods update UI-bound data |
+| Parsers (Frontmatter, Config, Data) | `class` with static `shared` | Stateless, thread-safe parsing operations |
+| `AssetService` | `class` with static `shared` | Mostly reads with cached thumbnails - cache is thread-safe via actor isolation |
+
+**When to use `actor`**: Service has mutable state accessed from multiple concurrent contexts (timers, callbacks, async operations).
+
+**When `@MainActor` methods suffice**: Service is stateless but needs to update `@Observable` models or UI state.
+
+### Model Type Strategy (Struct vs Class)
+
+Models use `@Observable class` pattern by design. Evaluation of struct alternatives:
+
+| Model | Pattern | Rationale |
+|-------|---------|-----------|
+| `Frontmatter` | class | 30+ mutable fields, `@Bindable` in 7+ views, version tracking for change detection |
+| `FileNode` | class | Tree structure with `weak var parent`, recursive child relationships require reference semantics |
+| `HugoConfig` | class | Form-bound editing via `@Bindable`, implements `EditableFile: AnyObject` protocol |
+| `DataFile` | class | Form-bound editing, `EditableFile` protocol, change tracking via `originalContent` comparison |
+| `ContentFile` | class | Contains `Frontmatter` reference, assigned to `FileNode.contentFile` for shared access |
+
+**Why classes are appropriate here:**
+1. **SwiftUI Binding**: `@Bindable` requires `@Observable` which works with classes. Form editors use two-way binding extensively.
+2. **Shared Mutation**: Models are mutated from multiple locations (form fields, raw editor sync, auto-save). Reference semantics ensure all observers see the same state.
+3. **Protocol Constraints**: `EditableFile` requires `AnyObject` for type-erased storage in dictionaries and generic handling.
+4. **Tree Structures**: `FileNode` needs parent-child references that would cause copy-on-write issues with structs.
+
+**Struct alternatives considered:**
+- `FrontmatterSnapshot` already exists as an immutable struct for change detection - this is the appropriate pattern for value-type needs.
+- `HugoMenuItem` is a struct because it's a simple data container without binding requirements.
+
 ## Debugging
 
 | Issue | Check |

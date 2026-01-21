@@ -23,24 +23,12 @@ struct ShortcodeCardView: View {
 
                     if shortcode.isDeprecated {
                         Text("Deprecated")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.Status.warning.opacity(0.2))
-                            .foregroundStyle(Color.Status.warning)
-                            .clipShape(Capsule())
+                            .capsuleBadgeStyle(color: Color.Status.warning)
                     }
 
                     if shortcode.hasClosingTag {
                         Text("Block")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.Status.info.opacity(0.2))
-                            .foregroundStyle(Color.Status.info)
-                            .clipShape(Capsule())
+                            .capsuleBadgeStyle(color: Color.Status.info)
                     }
                 }
 

@@ -102,8 +102,14 @@ struct GlobalSearchView: View {
                     .onSubmit {
                         performSearch()
                     }
-                    .onChange(of: searchQuery) { _, _ in
-                        debounceSearch()
+                    .onChange(of: searchQuery) { _, newValue in
+                        if newValue.count >= AppConstants.GlobalSearch.minQueryLength {
+                            debounceSearch()
+                        } else {
+                            // Clear results for short queries
+                            searchTask?.cancel()
+                            results = GlobalSearchResults()
+                        }
                     }
 
                 if !searchQuery.isEmpty {
@@ -240,12 +246,7 @@ struct GlobalSearchView: View {
                     Spacer()
 
                     Text("\(fileResult.matchCount)")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(4)
+                        .countBadgeStyle()
                 }
             }
         }

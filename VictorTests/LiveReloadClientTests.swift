@@ -105,6 +105,88 @@ final class LiveReloadClientTests: XCTestCase {
         XCTAssertNil(message.liveImg)
     }
 
+    // MARK: - Certificate Validation Delegate Tests
+
+    func testLocalhostConnectionUsesDefaultHandling() async throws {
+        let delegate = LiveReloadSessionDelegate()
+
+        // Create a mock authentication challenge for localhost
+        let protectionSpace = URLProtectionSpace(
+            host: "localhost",
+            port: 1313,
+            protocol: "wss",
+            realm: nil,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust
+        )
+
+        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        XCTAssertEqual(disposition, .performDefaultHandling, "Localhost should use default handling")
+    }
+
+    func testLoopbackIPConnectionUsesDefaultHandling() async throws {
+        let delegate = LiveReloadSessionDelegate()
+
+        // Create a mock authentication challenge for 127.0.0.1
+        let protectionSpace = URLProtectionSpace(
+            host: "127.0.0.1",
+            port: 1313,
+            protocol: "wss",
+            realm: nil,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust
+        )
+
+        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        XCTAssertEqual(disposition, .performDefaultHandling, "127.0.0.1 should use default handling")
+    }
+
+    func testIPv6LoopbackConnectionUsesDefaultHandling() async throws {
+        let delegate = LiveReloadSessionDelegate()
+
+        // Create a mock authentication challenge for ::1 (IPv6 loopback)
+        let protectionSpace = URLProtectionSpace(
+            host: "::1",
+            port: 1313,
+            protocol: "wss",
+            realm: nil,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust
+        )
+
+        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        XCTAssertEqual(disposition, .performDefaultHandling, "IPv6 loopback should use default handling")
+    }
+
+    func testRemoteHostUsesDefaultHandling() async throws {
+        let delegate = LiveReloadSessionDelegate()
+
+        // Create a mock authentication challenge for a remote host
+        let protectionSpace = URLProtectionSpace(
+            host: "example.com",
+            port: 443,
+            protocol: "wss",
+            realm: nil,
+            authenticationMethod: NSURLAuthenticationMethodServerTrust
+        )
+
+        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        XCTAssertEqual(disposition, .performDefaultHandling, "Remote hosts should use default certificate validation")
+    }
+
+    func testNonServerTrustChallengeUsesDefaultHandling() async throws {
+        let delegate = LiveReloadSessionDelegate()
+
+        // Create a mock authentication challenge for non-server-trust (e.g., HTTP Basic)
+        let protectionSpace = URLProtectionSpace(
+            host: "localhost",
+            port: 1313,
+            protocol: "http",
+            realm: "test",
+            authenticationMethod: NSURLAuthenticationMethodHTTPBasic
+        )
+
+        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        XCTAssertEqual(disposition, .performDefaultHandling, "Non-server-trust challenges should use default handling")
+    }
+
     // MARK: - Integration Tests
 
     func testLiveReloadClientCallbacksAreInvoked() async throws {

@@ -120,42 +120,20 @@ struct TranslationEditorView: View {
             .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(6)
 
-            Picker("View", selection: $showRawEditor) {
-                Text("Form").tag(false)
-                Text("Raw").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
+            FormRawPickerView(
+                showRawEditor: $showRawEditor,
+                width: AppConstants.Toolbar.viewIconLabelFrameWidth
+            )
 
-            Divider()
-                .frame(height: 20)
+            EditorToolbarDivider()
 
-            Button {
-                Task {
-                    isSaving = true
-                    syncEntriesToDataFile()
-                    await onSave()
-                    isSaving = false
-                    showSavedIndicatorBriefly()
-                }
-            } label: {
-                if isSaving {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                } else {
-                    Image(systemName: "square.and.arrow.down")
-                }
-            }
-            .disabled(!dataFile.hasUnsavedChanges || isSaving)
-            .keyboardShortcut("s", modifiers: .command)
-            .help("Save (⌘S)")
+            EditorSaveButton(
+                isSaving: isSaving,
+                hasUnsavedChanges: dataFile.hasUnsavedChanges,
+                action: save
+            )
 
-            Button {
-                NSWorkspace.shared.open(dataFile.url)
-            } label: {
-                Image(systemName: "arrow.up.forward.square")
-            }
-            .help("Open in default app")
+            EditorOpenExternalButton(url: dataFile.url)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -318,12 +296,22 @@ struct TranslationEditorView: View {
         syncEntriesToDataFile()
     }
 
-    private func showSavedIndicatorBriefly() {
-        showSavedIndicator = true
-        Task {
-            try? await Task.sleep(for: .seconds(2.0))
-            showSavedIndicator = false
-        }
+    private func save() async {
+        let helper = EditorSaveHelper()
+        var errorMessage: String?
+        await helper.performSave(
+            operation: {
+                syncEntriesToDataFile()
+                await onSave()
+            },
+            isSaving: { isSaving },
+            setIsSaving: { isSaving = $0 },
+            showSavedIndicator: { showSavedIndicator },
+            setShowSavedIndicator: { showSavedIndicator = $0 },
+            errorMessage: { errorMessage },
+            setErrorMessage: { errorMessage = $0 },
+            afterSave: {}
+        )
     }
 }
 

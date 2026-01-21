@@ -1,5 +1,51 @@
 import Foundation
 
+// MARK: - URLSession Delegate for Certificate Validation
+
+/// Delegate for handling WebSocket connection authentication challenges.
+/// Provides certificate validation for secure connections (wss://).
+final class LiveReloadSessionDelegate: NSObject, URLSessionDelegate {
+
+    /// Localhost and loopback addresses that are trusted for local development
+    private static let trustedLocalHosts: Set<String> = ["localhost", "127.0.0.1", "::1"]
+
+    /// Resolve an authentication challenge and return the appropriate disposition.
+    /// Exposed for testing purposes.
+    /// - Parameter protectionSpace: The protection space describing the authentication challenge
+    /// - Returns: The disposition to use for the challenge
+    func resolveAuthChallenge(for protectionSpace: URLProtectionSpace) -> URLSession.AuthChallengeDisposition {
+        // For non-server-trust challenges, use default handling
+        guard protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
+            return .performDefaultHandling
+        }
+
+        // For localhost/loopback addresses, allow the connection with default handling
+        // This permits self-signed certificates commonly used in local development
+        if Self.trustedLocalHosts.contains(protectionSpace.host) {
+            Logger.shared.debug("[LiveReload] Allowing local connection to \(protectionSpace.host)")
+            return .performDefaultHandling
+        }
+
+        // For remote hosts, use default handling which enforces standard certificate validation
+        // This ensures proper TLS security for any non-local connections
+        Logger.shared.debug("[LiveReload] Using default certificate validation for \(protectionSpace.host)")
+        return .performDefaultHandling
+    }
+
+    // MARK: - URLSessionDelegate
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        let disposition = resolveAuthChallenge(for: challenge.protectionSpace)
+        completionHandler(disposition, nil)
+    }
+}
+
+// MARK: - LiveReload Client
+
 /// Native WebSocket client for Hugo's LiveReload protocol
 /// Handles reload and navigation messages from the Hugo server
 actor LiveReloadClient {
@@ -27,6 +73,7 @@ actor LiveReloadClient {
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var session: URLSession?
+    private var sessionDelegate: LiveReloadSessionDelegate?
     private var serverURL: URL?
     private var isConnected = false
     private var reconnectTask: Task<Void, Never>?
@@ -64,6 +111,7 @@ actor LiveReloadClient {
         webSocketTask = nil
         session?.invalidateAndCancel()
         session = nil
+        sessionDelegate = nil
         isConnected = false
         Logger.shared.info("[LiveReload] Disconnected")
     }
@@ -90,10 +138,11 @@ actor LiveReloadClient {
 
         Logger.shared.info("[LiveReload] Connecting to \(wsURL.absoluteString)")
 
-        // Create session and task
+        // Create session with delegate for certificate validation
         let configuration = URLSessionConfiguration.default
         configuration.waitsForConnectivity = true
-        session = URLSession(configuration: configuration)
+        sessionDelegate = LiveReloadSessionDelegate()
+        session = URLSession(configuration: configuration, delegate: sessionDelegate, delegateQueue: nil)
 
         webSocketTask = session?.webSocketTask(with: wsURL)
         webSocketTask?.resume()

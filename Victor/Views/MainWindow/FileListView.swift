@@ -29,6 +29,7 @@ struct FileListView: View {
             } else {
                 // Regular file row
                 FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
+                    .equatable()
                     .tag(node.id)
                     .contextMenu {
                         FileContextMenu(node: node, siteViewModel: siteViewModel)
@@ -66,6 +67,7 @@ struct FileTreeRow: View {
             .tag(node.id)
         } else {
             FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
+                .equatable()
                 .tag(node.id)
                 .contextMenu {
                     FileContextMenu(node: node, siteViewModel: siteViewModel)
@@ -145,10 +147,15 @@ struct FileRowViewModel: Equatable {
 
 // MARK: - File Row
 
-struct FileRowView: View {
+struct FileRowView: View, Equatable {
     let viewModel: FileRowViewModel
     /// The node is passed separately to observe contentStatus changes (loaded async)
     let node: FileNode
+
+    static func == (lhs: FileRowView, rhs: FileRowView) -> Bool {
+        lhs.viewModel == rhs.viewModel &&
+        lhs.node.contentStatuses == rhs.node.contentStatuses
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -432,6 +439,7 @@ struct FolderRowWithSheets: View {
 
     var body: some View {
         FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
+            .equatable()
             .contextMenu {
                 FolderContextMenu(
                     node: node,
@@ -557,4 +565,39 @@ struct FileContextMenu: View {
             Label("Copy Path", systemImage: "doc.on.clipboard")
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("File Status Indicators") {
+    VStack(alignment: .leading, spacing: 16) {
+        HStack {
+            Text("No status:")
+            Spacer()
+            FileStatusIndicator(status: .none)
+        }
+
+        HStack {
+            Text("Modified:")
+            Spacer()
+            FileStatusIndicator(status: .modified)
+        }
+
+        HStack {
+            Text("Saved:")
+            Spacer()
+            FileStatusIndicator(status: .saved)
+        }
+    }
+    .padding()
+    .frame(width: 200)
+}
+
+#Preview("Content Status Badges") {
+    VStack(alignment: .leading, spacing: 12) {
+        ContentStatusBadge(status: .draft)
+        ContentStatusBadge(status: .scheduled)
+        ContentStatusBadge(status: .expired)
+    }
+    .padding()
 }

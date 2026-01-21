@@ -245,12 +245,14 @@ private struct HelpItem: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 Text(variable)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.blue)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(3)
+                    .badgeStyle(
+                        color: .blue,
+                        font: Font.system(.caption, design: .monospaced),
+                        backgroundOpacity: 0.1,
+                        shape: .roundedRectangle(cornerRadius: 3),
+                        horizontalPadding: 4,
+                        verticalPadding: 1
+                    )
 
                 Spacer()
 
@@ -274,12 +276,13 @@ private struct HelpItem: View {
 
             if let example = example {
                 Text("{{ \(example) }}")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(3)
+                    .badgeStyle(
+                        color: .secondary,
+                        font: Font.system(.caption2, design: .monospaced),
+                        backgroundOpacity: 0.1,
+                        shape: .roundedRectangle(cornerRadius: 3),
+                        horizontalPadding: 4
+                    )
             }
         }
         .padding(.vertical, 4)

@@ -25,37 +25,27 @@ struct DataFileEditorView: View {
         }
         .onChange(of: showRawEditor) { oldValue, newValue in
             if oldValue == false && newValue == true {
-                // Form → Raw: serialize current data to rawContent
-                do {
-                    let serialized = try DataFileParser.shared.serialize(dataFile)
-                    dataFile.updateRawContent(serialized)
-                } catch {
-                    parseError = "Failed to serialize: \(error.localizedDescription)"
-                }
+                FormRawToggleHandler.handleFormToRaw(
+                    serializeToRaw: {
+                        let serialized = try DataFileParser.shared.serialize(dataFile)
+                        dataFile.updateRawContent(serialized)
+                    },
+                    parseError: &parseError
+                )
             } else if oldValue == true && newValue == false {
-                // Raw → Form: parse rawContent back to data
-                do {
-                    let parsed = try DataFileParser.shared.parse(
-                        content: dataFile.rawContent,
-                        format: dataFile.format
-                    )
-                    dataFile.data = parsed
-                    parseError = nil
-                } catch {
-                    parseError = error.localizedDescription
-                }
+                FormRawToggleHandler.handleRawToForm(
+                    parseFromRaw: {
+                        let parsed = try DataFileParser.shared.parse(
+                            content: dataFile.rawContent,
+                            format: dataFile.format
+                        )
+                        dataFile.data = parsed
+                    },
+                    parseError: &parseError
+                )
             }
         }
-        .alert("Parse Error", isPresented: Binding(
-            get: { parseError != nil },
-            set: { if !$0 { parseError = nil } }
-        )) {
-            Button("OK") { parseError = nil }
-        } message: {
-            if let error = parseError {
-                Text("Could not parse the raw content: \(error)")
-            }
-        }
+        .parseErrorAlert($parseError)
     }
 
     private var dataToolbar: some View {
@@ -67,21 +57,11 @@ struct DataFileEditorView: View {
                 .font(.headline)
 
             Text(dataFile.format.displayName)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.2))
-                .cornerRadius(4)
+                .badgeStyle(color: .secondary, font: Font.caption, backgroundOpacity: 0.2)
 
             if dataFile.isArrayRoot {
                 Text("Array")
-                    .font(.caption)
-                    .foregroundStyle(.blue)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.blue.opacity(0.1))
-                    .cornerRadius(4)
+                    .badgeStyle(color: .blue, font: Font.caption, backgroundOpacity: 0.1)
             }
 
             FileStatusBadgeView(
@@ -91,41 +71,17 @@ struct DataFileEditorView: View {
 
             Spacer()
 
-            Picker("View", selection: $showRawEditor) {
-                Text("Form").tag(false)
-                Text("Raw").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: AppConstants.Toolbar.viewFormLabelFrameWidth)
+            FormRawPickerView(showRawEditor: $showRawEditor)
 
-            Divider()
-                .frame(height: 20)
+            EditorToolbarDivider()
 
-            Button {
-                Task {
-                    isSaving = true
-                    await onSave()
-                    isSaving = false
-                    showSavedIndicatorBriefly()
-                }
-            } label: {
-                if isSaving {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                } else {
-                    Image(systemName: "square.and.arrow.down")
-                }
-            }
-            .disabled(!dataFile.hasUnsavedChanges || isSaving)
-            .keyboardShortcut("s", modifiers: .command)
-            .help("Save (⌘S)")
+            EditorSaveButton(
+                isSaving: isSaving,
+                hasUnsavedChanges: dataFile.hasUnsavedChanges,
+                action: save
+            )
 
-            Button {
-                NSWorkspace.shared.open(dataFile.url)
-            } label: {
-                Image(systemName: "arrow.up.forward.square")
-            }
-            .help("Open in default app")
+            EditorOpenExternalButton(url: dataFile.url)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -133,12 +89,22 @@ struct DataFileEditorView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: showSavedIndicator)
     }
 
-    private func showSavedIndicatorBriefly() {
-        showSavedIndicator = true
-        Task {
-            try? await Task.sleep(for: .seconds(2.0))
-            showSavedIndicator = false
-        }
+    // MARK: - Actions
+
+    private func save() async {
+        let helper = EditorSaveHelper()
+        // Using a dummy error message since this editor doesn't display save errors
+        var errorMessage: String?
+        await helper.performSave(
+            operation: { await onSave() },
+            isSaving: { isSaving },
+            setIsSaving: { isSaving = $0 },
+            showSavedIndicator: { showSavedIndicator },
+            setShowSavedIndicator: { showSavedIndicator = $0 },
+            errorMessage: { errorMessage },
+            setErrorMessage: { errorMessage = $0 },
+            afterSave: {}
+        )
     }
 }
 
@@ -477,4 +443,57 @@ struct DataRawEditorView: View {
             editableContent = dataFile.rawContent
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Dictionary Data File") {
+    let dataFile = DataFile(
+        url: URL(fileURLWithPath: "/mock/data/authors.yaml"),
+        format: .yaml,
+        data: [
+            "name": "Jane Doe",
+            "email": "jane@example.com",
+            "bio": "A software engineer passionate about SwiftUI."
+        ],
+        rawContent: """
+        name: Jane Doe
+        email: jane@example.com
+        bio: A software engineer passionate about SwiftUI.
+        """
+    )
+    return DataFileEditorView(dataFile: dataFile, onSave: {})
+        .frame(width: 600, height: 400)
+}
+
+#Preview("Array Data File") {
+    let dataFile = DataFile(
+        url: URL(fileURLWithPath: "/mock/data/social.json"),
+        format: .json,
+        data: [
+            ["name": "Twitter", "url": "https://twitter.com/example"],
+            ["name": "GitHub", "url": "https://github.com/example"],
+            ["name": "LinkedIn", "url": "https://linkedin.com/in/example"]
+        ],
+        rawContent: """
+        [
+          {"name": "Twitter", "url": "https://twitter.com/example"},
+          {"name": "GitHub", "url": "https://github.com/example"},
+          {"name": "LinkedIn", "url": "https://linkedin.com/in/example"}
+        ]
+        """
+    )
+    return DataFileEditorView(dataFile: dataFile, onSave: {})
+        .frame(width: 600, height: 500)
+}
+
+#Preview("Empty Data File") {
+    let dataFile = DataFile(
+        url: URL(fileURLWithPath: "/mock/data/config.toml"),
+        format: .toml,
+        data: [:] as [String: Any],
+        rawContent: ""
+    )
+    return DataFileEditorView(dataFile: dataFile, onSave: {})
+        .frame(width: 600, height: 400)
 }
