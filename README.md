@@ -48,27 +48,45 @@ For detailed usage instructions, see the **[User Manual](Docs/USER-MANUAL.md)**.
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
-- Xcode 15+ (for development)
-- Swift 5.9+
+- [Hugo](https://gohugo.io/installation/) installed on your system
 
 ## Installation
 
+1. Download **Victor.dmg** from the [latest release](https://github.com/karanj/victor/releases/latest)
+2. Open the DMG and drag Victor to your Applications folder
+3. **Important**: On first launch, right-click the app and select **Open** (see note below)
+
+### First Launch Security Note
+
+Victor is not notarized with Apple, so macOS will show an "unidentified developer" warning. To open it:
+
+- **Right-click** Victor.app → click **Open** → click **Open** in the dialog
+
+Alternatively, run this in Terminal:
 ```bash
-# Clone the repository
-git clone https://github.com/karanj/victor.git
-cd victor
-
-# Generate Xcode project
-xcodegen generate
-
-# Open in Xcode and run (⌘R)
-open Victor.xcodeproj
+xattr -cr /Applications/Victor.app
 ```
 
-### Command Line Build
+You only need to do this once. After that, Victor will open normally.
+
+## Building from Source
+
+For developers who want to build from source:
 
 ```bash
-xcodebuild -project Victor.xcodeproj -scheme Victor -configuration Debug build
+# Clone and build
+git clone https://github.com/karanj/victor.git
+cd victor
+xcodegen generate
+open Victor.xcodeproj
+# Press ⌘R to build and run
+```
+
+Requires Xcode 15+ and Swift 5.9+.
+
+To build a distributable DMG:
+```bash
+./scripts/build-release.sh
 ```
 
 ## Architecture
