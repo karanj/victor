@@ -224,6 +224,8 @@ class EditorViewModel {
                         return
                     }
 
+                    Logger.shared.info("[AutoSave] Successfully saved \(nodeURL.lastPathComponent)")
+
                     // Update modification date
                     self.contentFile.lastModified = newModificationDate
                     // Use the captured markdown content, not editableContent

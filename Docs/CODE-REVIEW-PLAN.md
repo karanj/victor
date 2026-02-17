@@ -353,10 +353,10 @@ struct EmptyStateView: View {
 
 | ID | Category | Description | File(s) |
 |----|----------|-------------|---------|
-| SEC-1 | Security | Validate Hugo binary path locations | `HugoServerService.swift` |
-| SEC-2 | Security | Add path traversal protection | `FileSystemService.swift` |
-| SEC-3 | Security | Add CSP to preview WebView | `PreviewWebView.swift` |
-| ARCH-6 | Architecture | Log successful saves after file switch | `EditorViewModel.swift` |
+| SEC-1 | Security | ~~Validate Hugo binary path locations~~ | `HugoServerService.swift` | ✅ Done |
+| SEC-2 | Security | ~~Add path traversal protection~~ | `FileSystemService.swift` | ✅ Done |
+| SEC-3 | Security | ~~Add CSP to preview WebView~~ | `PreviewWebView.swift` | ✅ Done |
+| ARCH-6 | Architecture | ~~Log successful saves after file switch~~ | `EditorViewModel.swift` | ✅ Done |
 
 ### P1 - High (Plan for Next Sprint)
 

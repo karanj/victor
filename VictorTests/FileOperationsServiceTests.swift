@@ -25,15 +25,15 @@ final class FileOperationsServiceTests: XCTestCase {
     // MARK: - Create Markdown File Tests
 
     func testCreateMarkdownFileReturnsURL() async throws {
-        let newURL = try await service.createMarkdownFile(in: tempDirectory)
+        let newURL = try await service.createMarkdownFile(in: tempDirectory, siteRoot: tempDirectory)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: newURL.path))
         XCTAssertEqual(newURL.pathExtension, "md")
     }
 
     func testCreateMarkdownFileCreatesUniqueNames() async throws {
-        let url1 = try await service.createMarkdownFile(in: tempDirectory)
-        let url2 = try await service.createMarkdownFile(in: tempDirectory)
+        let url1 = try await service.createMarkdownFile(in: tempDirectory, siteRoot: tempDirectory)
+        let url2 = try await service.createMarkdownFile(in: tempDirectory, siteRoot: tempDirectory)
 
         XCTAssertNotEqual(url1, url2)
         XCTAssertTrue(FileManager.default.fileExists(atPath: url1.path))
@@ -57,7 +57,7 @@ final class FileOperationsServiceTests: XCTestCase {
         let originalURL = tempDirectory.appendingPathComponent("original.md")
         try "# Test".write(to: originalURL, atomically: true, encoding: .utf8)
 
-        let newURL = try await service.renameFile(at: originalURL, to: "renamed.md")
+        let newURL = try await service.renameFile(at: originalURL, to: "renamed.md", siteRoot: tempDirectory)
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: originalURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: newURL.path))
@@ -69,7 +69,7 @@ final class FileOperationsServiceTests: XCTestCase {
         let originalURL = tempDirectory.appendingPathComponent("test.md")
         try content.write(to: originalURL, atomically: true, encoding: .utf8)
 
-        let newURL = try await service.renameFile(at: originalURL, to: "new-name.md")
+        let newURL = try await service.renameFile(at: originalURL, to: "new-name.md", siteRoot: tempDirectory)
 
         let readContent = try String(contentsOf: newURL, encoding: .utf8)
         XCTAssertEqual(readContent, content)
@@ -117,6 +117,76 @@ final class FileOperationsServiceTests: XCTestCase {
         let fileURL = tempDirectory.appendingPathComponent("test.md")
         service.revealInFinder(url: fileURL)
         // No assertion needed - just checking it doesn't crash
+    }
+
+    // MARK: - Path Traversal Protection Tests
+
+    func testRenameFileRejectsPathTraversal() async throws {
+        let originalURL = tempDirectory.appendingPathComponent("test.md")
+        try "# Test".write(to: originalURL, atomically: true, encoding: .utf8)
+
+        // "../evil.md" is already rejected by isSafeFilename, but verify it throws accessDenied
+        do {
+            _ = try await service.renameFile(at: originalURL, to: "../evil.md", siteRoot: tempDirectory)
+            XCTFail("Expected accessDenied error for path traversal rename")
+        } catch let error as FileError {
+            XCTAssertEqual(error, .accessDenied)
+        }
+    }
+
+    func testRenameFileRejectsEscapingSiteRoot() async throws {
+        // Create a subdirectory as the "site root" and a file inside it
+        let siteRoot = tempDirectory.appendingPathComponent("mysite")
+        let contentDir = siteRoot.appendingPathComponent("content")
+        try FileManager.default.createDirectory(at: contentDir, withIntermediateDirectories: true)
+
+        let originalURL = contentDir.appendingPathComponent("post.md")
+        try "# Post".write(to: originalURL, atomically: true, encoding: .utf8)
+
+        // Rename to a name that would land outside the site root
+        // The file is at mysite/content/post.md, renaming within content/ is fine,
+        // but we use a separate siteRoot to test the validation
+        let outsideRoot = tempDirectory.appendingPathComponent("outside")
+        try FileManager.default.createDirectory(at: outsideRoot, withIntermediateDirectories: true)
+
+        // Direct test on FileSystemService with a restrictive siteRoot
+        let fsService = FileSystemService.shared
+        do {
+            // File is at mysite/content/post.md, siteRoot is mysite/content
+            // Renaming to "safe.md" should work with content as siteRoot
+            let result = try await fsService.renameFile(at: originalURL, to: "safe.md", siteRoot: contentDir)
+            XCTAssertEqual(result.lastPathComponent, "safe.md")
+        }
+
+        // Now test that creating a file in a directory outside siteRoot fails
+        do {
+            _ = try await fsService.createMarkdownFile(in: outsideRoot, siteRoot: siteRoot)
+            XCTFail("Expected accessDenied error for create outside site root")
+        } catch let error as FileError {
+            XCTAssertEqual(error, .accessDenied)
+        }
+    }
+
+    func testCreateMarkdownFileValidatesWithinSiteRoot() async throws {
+        // Create two separate directories - one as site root, one outside
+        let siteRoot = tempDirectory.appendingPathComponent("site")
+        let outsideDir = tempDirectory.appendingPathComponent("outside")
+        try FileManager.default.createDirectory(at: siteRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+
+        let fsService = FileSystemService.shared
+
+        // Creating inside site root should succeed
+        let validURL = try await fsService.createMarkdownFile(in: siteRoot, siteRoot: siteRoot)
+        XCTAssertTrue(validURL.path.hasPrefix(siteRoot.standardized.path))
+
+        // Creating outside site root should throw accessDenied
+        do {
+            _ = try await fsService.createMarkdownFile(in: outsideDir, siteRoot: siteRoot)
+            XCTFail("Expected accessDenied error for create outside site root")
+        } catch let error as FileError {
+            XCTAssertEqual(error, .accessDenied)
+        }
     }
 
     // MARK: - Copy Path Tests

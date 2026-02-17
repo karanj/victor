@@ -358,7 +358,10 @@ class FileSystemService {
     }
 
     /// Create a new markdown file inside the given folder URL
-    func createMarkdownFile(in folderURL: URL) async throws -> URL {
+    /// - Parameters:
+    ///   - folderURL: The folder to create the file in
+    ///   - siteRoot: The site root URL for path traversal validation
+    func createMarkdownFile(in folderURL: URL, siteRoot: URL) async throws -> URL {
         let fileManager = FileManager.default
 
         // Ensure directory exists
@@ -381,6 +384,9 @@ class FileSystemService {
             candidateURL = folderURL.appendingPathComponent(candidateName)
             index += 1
         }
+
+        // Validate the candidate path stays within site boundaries
+        try validatePathWithinSite(candidateURL, siteRoot: siteRoot)
 
         // Simple default frontmatter and body
         let content = """
@@ -411,7 +417,11 @@ class FileSystemService {
     // MARK: - File Operations (Context Menu)
 
     /// Rename a file or folder
-    func renameFile(at url: URL, to newName: String) async throws -> URL {
+    /// - Parameters:
+    ///   - url: The current file URL
+    ///   - newName: The new filename
+    ///   - siteRoot: The site root URL for path traversal validation
+    func renameFile(at url: URL, to newName: String, siteRoot: URL) async throws -> URL {
         // Security: Validate filename doesn't contain path traversal sequences
         guard isSafeFilename(newName) else {
             Logger.shared.warning("[Security] Unsafe filename rejected in rename: \(newName)")
@@ -419,6 +429,9 @@ class FileSystemService {
         }
 
         let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+
+        // Validate the new path stays within site boundaries
+        try validatePathWithinSite(newURL, siteRoot: siteRoot)
 
         // Check if destination already exists
         if FileManager.default.fileExists(atPath: newURL.path) {
@@ -580,7 +593,7 @@ class FileSystemService {
 
 // MARK: - File Errors
 
-enum FileError: LocalizedError {
+enum FileError: LocalizedError, Equatable {
     case accessDenied
     case fileNotFound
     case corruptedFrontmatter

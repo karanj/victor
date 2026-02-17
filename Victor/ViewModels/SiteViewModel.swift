@@ -1171,7 +1171,8 @@ class SiteViewModel {
 
         do {
             // Ask file operations service to create a new markdown file
-            let newFileURL = try await fileOperationsService.createMarkdownFile(in: folder.url)
+            guard let siteRoot = site?.rootURL else { return }
+            let newFileURL = try await fileOperationsService.createMarkdownFile(in: folder.url, siteRoot: siteRoot)
 
             // Build a FileNode for the new file and insert it into the tree
             let newNode = FileNode(url: newFileURL, isDirectory: false, isPageBundle: false)
@@ -1223,7 +1224,8 @@ class SiteViewModel {
     /// Rename a file node
     func renameFile(node: FileNode, to newName: String) async {
         do {
-            let newURL = try await fileOperationsService.renameFile(at: node.url, to: newName)
+            guard let siteRoot = site?.rootURL else { return }
+            let newURL = try await fileOperationsService.renameFile(at: node.url, to: newName, siteRoot: siteRoot)
 
             // Update the node's URL
             node.url = newURL

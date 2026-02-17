@@ -21,10 +21,12 @@ final class FileOperationsService {
     // MARK: - Create Operations
 
     /// Create a new markdown file in the given directory
-    /// - Parameter directory: The directory URL to create the file in
+    /// - Parameters:
+    ///   - directory: The directory URL to create the file in
+    ///   - siteRoot: The site root URL for path traversal validation
     /// - Returns: The URL of the newly created file
-    func createMarkdownFile(in directory: URL) async throws -> URL {
-        return try await fileSystemService.createMarkdownFile(in: directory)
+    func createMarkdownFile(in directory: URL, siteRoot: URL) async throws -> URL {
+        return try await fileSystemService.createMarkdownFile(in: directory, siteRoot: siteRoot)
     }
 
     /// Create a new folder in the given directory
@@ -40,9 +42,10 @@ final class FileOperationsService {
     /// - Parameters:
     ///   - url: The current file URL
     ///   - newName: The new filename (just the name, not the full path)
+    ///   - siteRoot: The site root URL for path traversal validation
     /// - Returns: The new file URL after renaming
-    func renameFile(at url: URL, to newName: String) async throws -> URL {
-        return try await fileSystemService.renameFile(at: url, to: newName)
+    func renameFile(at url: URL, to newName: String, siteRoot: URL) async throws -> URL {
+        return try await fileSystemService.renameFile(at: url, to: newName, siteRoot: siteRoot)
     }
 
     /// Duplicate a file
