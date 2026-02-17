@@ -55,6 +55,53 @@ enum SerializationHelper {
         return jsonString
     }
 
+    // MARK: - Normalization
+
+    /// Recursively normalize values for serialization
+    /// Converts `[AnyHashable: Any]` (returned by Yams) to `[String: Any]`
+    static func normalizeForSerialization(_ value: Any) -> Any {
+        if let dict = value as? [AnyHashable: Any] {
+            var normalized: [String: Any] = [:]
+            for (key, val) in dict {
+                let stringKey = (key as? String) ?? String(describing: key)
+                normalized[stringKey] = normalizeForSerialization(val)
+            }
+            return normalized
+        } else if let dict = value as? [String: Any] {
+            var normalized: [String: Any] = [:]
+            for (key, val) in dict {
+                normalized[key] = normalizeForSerialization(val)
+            }
+            return normalized
+        } else if let array = value as? [Any] {
+            return array.map { normalizeForSerialization($0) }
+        }
+        return value
+    }
+
+    // MARK: - Validated Serialization
+
+    /// Serialize dictionary to YAML with round-trip validation
+    /// Ensures the output can be parsed back successfully
+    /// - Parameter dict: Dictionary to serialize
+    /// - Returns: Validated YAML string
+    /// - Throws: Error if serialization or round-trip validation fails
+    static func serializeToYAMLValidated(_ dict: [String: Any]) throws -> String {
+        let output = try serializeToYAML(dict)
+
+        // Round-trip validation: ensure output is parseable
+        do {
+            _ = try Yams.load(yaml: output)
+        } catch {
+            print("[SerializationHelper] YAML round-trip validation failed!")
+            print("[SerializationHelper] Serialized output:\n\(output)")
+            print("[SerializationHelper] Parse error: \(error)")
+            throw error
+        }
+
+        return output
+    }
+
     // MARK: - Errors
 
     enum ParsingError: LocalizedError {

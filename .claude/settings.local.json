@@ -35,7 +35,8 @@
       "Bash(git checkout:*)",
       "Bash(bd epic create:*)",
       "Skill(c4-diagrams)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(bd export:*)"
     ]
   }
 }

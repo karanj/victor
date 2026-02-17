@@ -76,7 +76,7 @@ class DataFileParser {
 
     /// Serialize a DataFile back to string
     func serialize(_ dataFile: DataFile) throws -> String {
-        let normalized = normalizeForSerialization(dataFile.data)
+        let normalized = SerializationHelper.normalizeForSerialization(dataFile.data)
         return try serialize(data: normalized, format: dataFile.format)
     }
 
@@ -100,12 +100,7 @@ class DataFileParser {
             throw DataFileError.serializationFailed
         }
 
-        let output = try SerializationHelper.serializeToYAML(dict)
-
-        // Round-trip validation
-        _ = try Yams.load(yaml: output)
-
-        return output
+        return try SerializationHelper.serializeToYAMLValidated(dict)
     }
 
     private func serializeToJSON(_ data: Any) throws -> String {
@@ -116,131 +111,7 @@ class DataFileParser {
     }
 
     private func serializeToTOML(_ dictionary: [String: Any]) throws -> String {
-        var lines: [String] = []
-        serializeTOMLTable(dictionary, path: [], lines: &lines)
-        return lines.joined(separator: "\n") + "\n"
-    }
-
-    // MARK: - TOML Serialization Helpers
-
-    private func serializeTOMLTable(_ dict: [String: Any], path: [String], lines: inout [String]) {
-        var simpleValues: [(String, Any)] = []
-        var nestedTables: [(String, [String: Any])] = []
-        var arrayOfTables: [(String, [[String: Any]])] = []
-
-        for (key, value) in dict.sorted(by: { $0.key < $1.key }) {
-            if let arrayValue = value as? [Any] {
-                if let dictArray = arrayValue as? [[String: Any]], !dictArray.isEmpty {
-                    arrayOfTables.append((key, dictArray))
-                } else {
-                    simpleValues.append((key, value))
-                }
-            } else if let dictValue = value as? [String: Any] {
-                nestedTables.append((key, dictValue))
-            } else {
-                simpleValues.append((key, value))
-            }
-        }
-
-        // Write table header if not at root and have simple values
-        if !path.isEmpty && !simpleValues.isEmpty {
-            if !lines.isEmpty {
-                lines.append("")
-            }
-            lines.append("[\(path.joined(separator: "."))]")
-        }
-
-        // Write simple values
-        for (key, value) in simpleValues {
-            lines.append(formatTOMLValue(key: key, value: value))
-        }
-
-        // Write nested tables
-        for (key, nestedDict) in nestedTables {
-            serializeTOMLTable(nestedDict, path: path + [key], lines: &lines)
-        }
-
-        // Write arrays of tables
-        for (key, dictArray) in arrayOfTables {
-            let tablePath = path + [key]
-            let tablePathStr = tablePath.joined(separator: ".")
-
-            for tableDict in dictArray {
-                if !lines.isEmpty {
-                    lines.append("")
-                }
-                lines.append("[[\(tablePathStr)]]")
-
-                for (itemKey, itemValue) in tableDict.sorted(by: { $0.key < $1.key }) {
-                    if let nestedDict = itemValue as? [String: Any] {
-                        serializeTOMLTable(nestedDict, path: tablePath + [itemKey], lines: &lines)
-                    } else {
-                        lines.append(formatTOMLValue(key: itemKey, value: itemValue))
-                    }
-                }
-            }
-        }
-    }
-
-    private func formatTOMLValue(key: String, value: Any) -> String {
-        if let stringValue = value as? String {
-            let escaped = stringValue
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"", with: "\\\"")
-            return "\(key) = \"\(escaped)\""
-        } else if let boolValue = value as? Bool {
-            return "\(key) = \(boolValue)"
-        } else if let intValue = value as? Int {
-            return "\(key) = \(intValue)"
-        } else if let doubleValue = value as? Double {
-            return "\(key) = \(doubleValue)"
-        } else if let arrayValue = value as? [Any] {
-            let formatted = arrayValue.map { formatTOMLArrayElement($0) }.joined(separator: ", ")
-            return "\(key) = [\(formatted)]"
-        }
-        return "\(key) = \"\(String(describing: value))\""
-    }
-
-    private func formatTOMLArrayElement(_ value: Any) -> String {
-        if let stringValue = value as? String {
-            let escaped = stringValue
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"", with: "\\\"")
-            return "\"\(escaped)\""
-        } else if let boolValue = value as? Bool {
-            return "\(boolValue)"
-        } else if let intValue = value as? Int {
-            return "\(intValue)"
-        } else if let doubleValue = value as? Double {
-            return "\(doubleValue)"
-        }
-        return "\"\(String(describing: value))\""
-    }
-
-    // MARK: - TOML Parsing Helpers
-    // Now using TOMLHelper for conversion
-
-    // MARK: - Normalization
-
-    /// Recursively normalize values for serialization
-    private func normalizeForSerialization(_ value: Any) -> Any {
-        if let dict = value as? [AnyHashable: Any] {
-            var normalized: [String: Any] = [:]
-            for (key, val) in dict {
-                let stringKey = (key as? String) ?? String(describing: key)
-                normalized[stringKey] = normalizeForSerialization(val)
-            }
-            return normalized
-        } else if let dict = value as? [String: Any] {
-            var normalized: [String: Any] = [:]
-            for (key, val) in dict {
-                normalized[key] = normalizeForSerialization(val)
-            }
-            return normalized
-        } else if let array = value as? [Any] {
-            return array.map { normalizeForSerialization($0) }
-        }
-        return value
+        return TOMLHelper.serializeToTOML(dictionary)
     }
 
     // MARK: - File Operations

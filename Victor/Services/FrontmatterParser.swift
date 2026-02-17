@@ -282,13 +282,7 @@ class FrontmatterParser {
     private func parseTOML(_ content: String, into frontmatter: Frontmatter) throws {
         do {
             let table = try TOMLTable(string: content)
-
-            // Convert TOML table to dictionary for unified parsing
-            var dict: [String: Any] = [:]
-            for key in table.keys {
-                dict[key] = TOMLHelper.convertTOMLValue(table[key])
-            }
-
+            let dict = TOMLHelper.convertTOMLToDict(table)
             extractAllFields(from: dict, into: frontmatter)
         } catch {
             throw FrontmatterError.tomlParsingFailed(error.localizedDescription)
@@ -1025,18 +1019,13 @@ class FrontmatterParser {
 
         // Convert dictionary to TOML table
         for (key, value) in dict {
-            addToTOMLTable(key: key, value: value, table: tomlTable)
+            TOMLHelper.addToTOMLTable(key: key, value: value, table: tomlTable)
         }
 
         let tomlString = String(describing: tomlTable)
         // Ensure there's a newline before the closing delimiter
         let normalizedToml = tomlString.hasSuffix("\n") ? tomlString : tomlString + "\n"
         return "+++\n\(normalizedToml)+++"
-    }
-
-    /// Add a value to TOML table
-    private func addToTOMLTable(key: String, value: Any, table: TOMLTable) {
-        TOMLHelper.addToTOMLTable(key: key, value: value, table: table)
     }
 
     /// Serialize to JSON format (non-throwing, falls back to rawContent)
@@ -1060,11 +1049,7 @@ class FrontmatterParser {
         let dict = buildSerializationDict(frontmatter)
 
         do {
-            let jsonData = try JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
-            guard let jsonString = String(data: jsonData, encoding: .utf8) else {
-                throw FrontmatterError.jsonSerializationFailed("Could not convert data to UTF-8 string")
-            }
-            return jsonString
+            return try SerializationHelper.serializeToJSON(dict)
         } catch let error as FrontmatterError {
             throw error
         } catch {

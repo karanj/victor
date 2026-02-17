@@ -89,7 +89,128 @@ enum TOMLHelper {
         return value
     }
 
-    // MARK: - Serialization
+    // MARK: - Text Serialization
+
+    /// Serialize a dictionary to TOML text format
+    /// - Parameter dictionary: The dictionary to serialize
+    /// - Returns: TOML-formatted string with trailing newline
+    static func serializeToTOML(_ dictionary: [String: Any]) -> String {
+        var lines: [String] = []
+        serializeTOMLTable(dictionary, path: [], lines: &lines)
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// Recursively serialize a TOML table
+    /// - Parameters:
+    ///   - dict: The dictionary to serialize
+    ///   - path: The current key path (e.g., ["menu", "main"] for [menu.main])
+    ///   - lines: The output lines array
+    static func serializeTOMLTable(_ dict: [String: Any], path: [String], lines: inout [String]) {
+        var simpleValues: [(String, Any)] = []
+        var nestedTables: [(String, [String: Any])] = []
+        var arrayOfTables: [(String, [[String: Any]])] = []
+
+        for (key, value) in dict.sorted(by: { $0.key < $1.key }) {
+            if let arrayValue = value as? [Any] {
+                if let dictArray = arrayValue as? [[String: Any]], !dictArray.isEmpty {
+                    arrayOfTables.append((key, dictArray))
+                } else {
+                    simpleValues.append((key, value))
+                }
+            } else if let dictValue = value as? [String: Any] {
+                nestedTables.append((key, dictValue))
+            } else {
+                simpleValues.append((key, value))
+            }
+        }
+
+        // Write table header if not at root and have simple values
+        if !path.isEmpty && !simpleValues.isEmpty {
+            if !lines.isEmpty {
+                lines.append("")
+            }
+            lines.append("[\(path.joined(separator: "."))]")
+        }
+
+        // Write simple values
+        for (key, value) in simpleValues {
+            lines.append(formatTOMLValue(key: key, value: value))
+        }
+
+        // Write nested tables
+        for (key, nestedDict) in nestedTables {
+            serializeTOMLTable(nestedDict, path: path + [key], lines: &lines)
+        }
+
+        // Write arrays of tables using [[table.name]] syntax
+        for (key, dictArray) in arrayOfTables {
+            let tablePath = path + [key]
+            let tablePathStr = tablePath.joined(separator: ".")
+
+            for tableDict in dictArray {
+                if !lines.isEmpty {
+                    lines.append("")
+                }
+                lines.append("[[\(tablePathStr)]]")
+
+                for (itemKey, itemValue) in tableDict.sorted(by: { $0.key < $1.key }) {
+                    if let nestedDict = itemValue as? [String: Any] {
+                        serializeTOMLTable(nestedDict, path: tablePath + [itemKey], lines: &lines)
+                    } else if let nestedArray = itemValue as? [[String: Any]] {
+                        // Nested array of tables within array of tables
+                        for nestedTableDict in nestedArray {
+                            lines.append("")
+                            lines.append("[[\(tablePathStr).\(itemKey)]]")
+                            for (nk, nv) in nestedTableDict.sorted(by: { $0.key < $1.key }) {
+                                lines.append(formatTOMLValue(key: nk, value: nv))
+                            }
+                        }
+                    } else {
+                        lines.append(formatTOMLValue(key: itemKey, value: itemValue))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Format a single TOML key-value pair
+    static func formatTOMLValue(key: String, value: Any) -> String {
+        if let stringValue = value as? String {
+            let escaped = stringValue
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            return "\(key) = \"\(escaped)\""
+        } else if let boolValue = value as? Bool {
+            return "\(key) = \(boolValue)"
+        } else if let intValue = value as? Int {
+            return "\(key) = \(intValue)"
+        } else if let doubleValue = value as? Double {
+            return "\(key) = \(doubleValue)"
+        } else if let arrayValue = value as? [Any] {
+            let formatted = arrayValue.map { formatTOMLArrayElement($0) }.joined(separator: ", ")
+            return "\(key) = [\(formatted)]"
+        }
+        return "\(key) = \"\(String(describing: value))\""
+    }
+
+    /// Format a single element within a TOML array
+    static func formatTOMLArrayElement(_ value: Any) -> String {
+        if let stringValue = value as? String {
+            let escaped = stringValue
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            return "\"\(escaped)\""
+        } else if let boolValue = value as? Bool {
+            return "\(boolValue)"
+        } else if let intValue = value as? Int {
+            return "\(intValue)"
+        } else if let doubleValue = value as? Double {
+            return "\(doubleValue)"
+        }
+        return "\"\(String(describing: value))\""
+    }
+
+    // MARK: - Table Serialization
 
     /// Add a value to a TOML table
     /// Handles conversion of Swift types to TOML values
