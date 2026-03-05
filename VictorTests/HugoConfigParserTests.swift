@@ -1347,6 +1347,63 @@ final class HugoConfigParserTests: XCTestCase {
         XCTAssertEqual(found?.lastPathComponent, "hugo.yaml")
     }
 
+    // MARK: - Permalink Round-Trip Tests
+
+    func testPermalinksTOMLRoundTrip() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [permalinks]
+        posts = "/:year/:month/:title/"
+        articles = "/:year/:title/"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        XCTAssertEqual(config.permalinks, [
+            "posts": "/:year/:month/:title/",
+            "articles": "/:year/:title/"
+        ])
+        // Should not leak into customFields
+        XCTAssertNil(config.customFields["permalinks"])
+
+        try assertTOMLRoundTrip(input)
+    }
+
+    func testPermalinksYAMLRoundTrip() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        permalinks:
+          posts: "/:year/:month/:title/"
+          blog: "/:year/:title/"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .yaml)
+        XCTAssertEqual(config.permalinks, [
+            "posts": "/:year/:month/:title/",
+            "blog": "/:year/:title/"
+        ])
+        XCTAssertNil(config.customFields["permalinks"])
+
+        try assertYAMLRoundTrip(input)
+    }
+
+    func testPermalinksJSONRoundTrip() throws {
+        let input = """
+        {
+          "baseURL": "https://example.com/",
+          "permalinks": {
+            "posts": "/:year/:month/:title/"
+          }
+        }
+        """
+
+        let config = try parser.parseConfig(content: input, format: .json)
+        XCTAssertEqual(config.permalinks, ["posts": "/:year/:month/:title/"])
+        XCTAssertNil(config.customFields["permalinks"])
+
+        try assertJSONRoundTrip(input)
+    }
+
     // MARK: - Helper Methods
 
     /// Assert that TOML content survives a parse -> serialize -> parse round-trip
@@ -1397,6 +1454,9 @@ final class HugoConfigParserTests: XCTestCase {
         XCTAssertEqual(lhs.defaultContentLanguage, rhs.defaultContentLanguage, "defaultContentLanguage mismatch", file: file, line: line)
         XCTAssertEqual(lhs.timeZone, rhs.timeZone, "timeZone mismatch", file: file, line: line)
         XCTAssertEqual(lhs.copyright, rhs.copyright, "copyright mismatch", file: file, line: line)
+
+        // Compare permalinks
+        XCTAssertEqual(lhs.permalinks, rhs.permalinks, "permalinks mismatch", file: file, line: line)
 
         // Compare params
         XCTAssertTrue(

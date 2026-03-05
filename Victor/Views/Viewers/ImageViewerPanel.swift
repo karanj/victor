@@ -23,17 +23,12 @@ struct ImageViewerPanel: View {
 
             // Image content
             if isLoading {
-                ProgressView("Loading image...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingStateView(message: "Loading image...")
             } else if let errorMessage = errorMessage {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text(errorMessage)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ErrorStateView(
+                    title: "Failed to Load Image",
+                    message: errorMessage
+                )
             } else if let image = image {
                 ScrollView([.horizontal, .vertical]) {
                     Image(nsImage: image)

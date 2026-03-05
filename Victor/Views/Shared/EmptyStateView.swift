@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Reusable empty state view component
 /// Provides a consistent way to display empty states across the application
@@ -53,6 +54,57 @@ extension EmptyStateView {
         self.action = action
         self.actionLabel = actionLabel
         self.actionIcon = actionIcon
+    }
+}
+
+// MARK: - Loading State View
+
+/// Reusable loading state with centered spinner and message
+struct LoadingStateView: View {
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(message)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Error State View
+
+/// Reusable error state with icon, title, message, and optional retry/open actions
+struct ErrorStateView: View {
+    let title: String
+    let message: String
+    var retryAction: (() -> Void)? = nil
+    var openURL: URL? = nil
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundStyle(.orange)
+            Text(title)
+                .font(.headline)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if let retryAction {
+                Button("Retry") { retryAction() }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top)
+            }
+            if let openURL {
+                Button("Open in Default App") { NSWorkspace.shared.open(openURL) }
+                    .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

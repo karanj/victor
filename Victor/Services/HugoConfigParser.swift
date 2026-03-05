@@ -156,6 +156,11 @@ class HugoConfigParser {
             dictionary["menu"] = menuDict
         }
 
+        // Permalinks
+        if !config.permalinks.isEmpty {
+            dictionary["permalinks"] = config.permalinks
+        }
+
         // Params - normalize for proper serialization
         if !config.params.isEmpty {
             dictionary["params"] = SerializationHelper.normalizeForSerialization(config.params)

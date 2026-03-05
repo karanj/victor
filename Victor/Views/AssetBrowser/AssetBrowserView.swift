@@ -150,56 +150,31 @@ struct AssetBrowserView: View {
     // MARK: - Content Views
 
     private var loadingView: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text("Loading assets...")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        LoadingStateView(message: "Loading assets...")
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("No assets found")
-                .font(.headline)
-            Text("Add files to this directory")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Button {
-                // Reveal folder in Finder
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
-            } label: {
-                Label("Open in Finder", systemImage: "folder")
-            }
-            .buttonStyle(.bordered)
-            .padding(.top, 8)
+        EmptyStateView(
+            icon: "photo.on.rectangle.angled",
+            title: "No Assets Found",
+            message: "Add files to this directory",
+            actionLabel: "Open in Finder",
+            actionIcon: "folder"
+        ) {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var noResultsView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("No matching assets")
-                .font(.headline)
-            Text("Try adjusting your search or filter")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Button("Clear filters") {
-                searchText = ""
-                filterType = .all
-            }
-            .buttonStyle(.bordered)
+        EmptyStateView(
+            icon: "magnifyingglass",
+            title: "No Matching Assets",
+            message: "Try adjusting your search or filter",
+            actionLabel: "Clear Filters"
+        ) {
+            searchText = ""
+            filterType = .all
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

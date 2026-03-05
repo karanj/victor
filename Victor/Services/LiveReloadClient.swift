@@ -4,7 +4,7 @@ import Foundation
 
 /// Delegate for handling WebSocket connection authentication challenges.
 /// Provides certificate validation for secure connections (wss://).
-final class LiveReloadSessionDelegate: NSObject, URLSessionDelegate {
+final class LiveReloadSessionDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {
 
     /// Localhost and loopback addresses that are trusted for local development
     private static let trustedLocalHosts: Set<String> = ["localhost", "127.0.0.1", "::1"]
@@ -19,16 +19,15 @@ final class LiveReloadSessionDelegate: NSObject, URLSessionDelegate {
             return .performDefaultHandling
         }
 
-        // For localhost/loopback addresses, allow the connection with default handling
+        // For localhost/loopback addresses, trust the server's certificate
         // This permits self-signed certificates commonly used in local development
-        if Self.trustedLocalHosts.contains(protectionSpace.host) {
+        if Self.trustedLocalHosts.contains(protectionSpace.host),
+           protectionSpace.serverTrust != nil {
             Logger.shared.debug("[LiveReload] Allowing local connection to \(protectionSpace.host)")
-            return .performDefaultHandling
+            return .useCredential
         }
 
         // For remote hosts, use default handling which enforces standard certificate validation
-        // This ensures proper TLS security for any non-local connections
-        Logger.shared.debug("[LiveReload] Using default certificate validation for \(protectionSpace.host)")
         return .performDefaultHandling
     }
 
@@ -37,10 +36,16 @@ final class LiveReloadSessionDelegate: NSObject, URLSessionDelegate {
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+        completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        let disposition = resolveAuthChallenge(for: challenge.protectionSpace)
-        completionHandler(disposition, nil)
+        let protectionSpace = challenge.protectionSpace
+        let disposition = resolveAuthChallenge(for: protectionSpace)
+
+        if disposition == .useCredential, let serverTrust = protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+        } else {
+            completionHandler(disposition, nil)
+        }
     }
 }
 
@@ -55,15 +60,15 @@ actor LiveReloadClient {
     // MARK: - Types
 
     /// LiveReload message from Hugo server
-    public struct LiveReloadMessage: Codable {
-        public let command: String
-        public let path: String?
-        public let originalPath: String?
-        public let liveCSS: Bool?
-        public let liveImg: Bool?
-        public let overrideURL: Int?
-        public let protocols: [String]?
-        public let serverName: String?
+    struct LiveReloadMessage: Codable {
+        let command: String
+        let path: String?
+        let originalPath: String?
+        let liveCSS: Bool?
+        let liveImg: Bool?
+        let overrideURL: Int?
+        let protocols: [String]?
+        let serverName: String?
     }
 
     /// Navigation prefix used by Hugo for --navigateToChanged

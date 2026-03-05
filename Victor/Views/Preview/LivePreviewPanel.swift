@@ -6,6 +6,9 @@ import WebKit
 struct LivePreviewPanel: View {
     let siteViewModel: SiteViewModel
     let currentFilePath: String?
+    let permalinkResolver: PermalinkResolver
+    let currentDate: Date?
+    let currentSlug: String?
 
     @State private var status: HugoServerStatus = .stopped
     @State private var serverURL: URL?
@@ -36,6 +39,9 @@ struct LivePreviewPanel: View {
                     LivePreviewWebView(
                         serverURL: url,
                         currentFilePath: currentFilePath,
+                        permalinkResolver: permalinkResolver,
+                        currentDate: currentDate,
+                        currentSlug: currentSlug,
                         liveReloadNavigatePath: $liveReloadNavigatePath,
                         reloadTrigger: reloadTrigger,
                         goBackTrigger: goBackTrigger,
@@ -238,6 +244,9 @@ struct LivePreviewPanel: View {
 private struct LivePreviewWebView: NSViewRepresentable {
     let serverURL: URL
     let currentFilePath: String?
+    let permalinkResolver: PermalinkResolver
+    let currentDate: Date?
+    let currentSlug: String?
 
     /// Path to navigate to from LiveReload (--navigateToChanged)
     @Binding var liveReloadNavigatePath: String?
@@ -330,22 +339,22 @@ private struct LivePreviewWebView: NSViewRepresentable {
         if let filePath = currentFilePath, context.coordinator.currentFilePath != filePath {
             context.coordinator.currentFilePath = filePath
 
-            // Convert content file path to Hugo URL path
-            // e.g., content/posts/my-post.md -> /posts/my-post/
-            if let hugoPath = convertFilePathToHugoPath(filePath) {
-                let targetURL = serverURL.appendingPathComponent(hugoPath)
-                context.coordinator.lastLoadedURL = targetURL
-                let request = URLRequest(url: targetURL)
-                webView.load(request)
-            }
+            let hugoPath = permalinkResolver.resolveURL(
+                filePath: filePath, date: currentDate, slug: currentSlug
+            )
+            let targetURL = serverURL.appendingPathComponent(hugoPath)
+            context.coordinator.lastLoadedURL = targetURL
+            let request = URLRequest(url: targetURL)
+            webView.load(request)
         } else if context.coordinator.lastLoadedURL == nil {
             // Initial load - navigate to server root or current file
             var targetURL = serverURL
             if let filePath = currentFilePath {
                 context.coordinator.currentFilePath = filePath
-                if let hugoPath = convertFilePathToHugoPath(filePath) {
-                    targetURL = serverURL.appendingPathComponent(hugoPath)
-                }
+                let hugoPath = permalinkResolver.resolveURL(
+                    filePath: filePath, date: currentDate, slug: currentSlug
+                )
+                targetURL = serverURL.appendingPathComponent(hugoPath)
             }
             context.coordinator.lastLoadedURL = targetURL
             let request = URLRequest(url: targetURL)
@@ -361,42 +370,6 @@ private struct LivePreviewWebView: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
-    }
-
-    /// Convert content file path to Hugo URL path
-    /// e.g., content/posts/my-post.md -> /posts/my-post/
-    private func convertFilePathToHugoPath(_ filePath: String) -> String? {
-        // Remove 'content/' prefix if present
-        var path = filePath
-        if path.hasPrefix("content/") {
-            path = String(path.dropFirst("content/".count))
-        }
-
-        // Remove file extension
-        if let lastDot = path.lastIndex(of: ".") {
-            path = String(path[..<lastDot])
-        }
-
-        // Handle index files (_index.md or index.md)
-        if path.hasSuffix("/_index") || path.hasSuffix("/index") {
-            if let lastSlash = path.lastIndex(of: "/") {
-                path = String(path[..<lastSlash])
-            }
-        } else if path == "_index" || path == "index" {
-            path = ""
-        }
-
-        // Ensure path starts with /
-        if !path.isEmpty && !path.hasPrefix("/") {
-            path = "/" + path
-        }
-
-        // Hugo expects trailing slash for section pages
-        if !path.isEmpty && !path.hasSuffix("/") {
-            path += "/"
-        }
-
-        return path.isEmpty ? "/" : path
     }
 
     // MARK: - Coordinator
@@ -453,7 +426,10 @@ private struct LivePreviewWebView: NSViewRepresentable {
 #Preview("Running Server") {
     LivePreviewPanel(
         siteViewModel: SiteViewModel(),
-        currentFilePath: "content/posts/my-post.md"
+        currentFilePath: "content/posts/my-post.md",
+        permalinkResolver: PermalinkResolver(permalinks: [:]),
+        currentDate: nil,
+        currentSlug: nil
     )
     .frame(width: 800, height: 600)
 }
@@ -461,7 +437,10 @@ private struct LivePreviewWebView: NSViewRepresentable {
 #Preview("Server Stopped") {
     LivePreviewPanel(
         siteViewModel: SiteViewModel(),
-        currentFilePath: nil
+        currentFilePath: nil,
+        permalinkResolver: PermalinkResolver(permalinks: [:]),
+        currentDate: nil,
+        currentSlug: nil
     )
     .frame(width: 800, height: 600)
 }

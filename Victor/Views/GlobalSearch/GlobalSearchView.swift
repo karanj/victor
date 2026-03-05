@@ -256,40 +256,23 @@ struct GlobalSearchView: View {
     // MARK: - State Views
 
     private var loadingView: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text("Searching...")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        LoadingStateView(message: "Searching...")
     }
 
     private var emptyResultsView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text("No results found")
-                .font(.headline)
-            Text("Try a different search term or scope")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView(
+            icon: "magnifyingglass",
+            title: "No Results Found",
+            message: "Try a different search term or scope"
+        )
     }
 
     private var placeholderView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text("Search across all files")
-                .font(.headline)
-            Text("Enter a search term to find matches in your Hugo site")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        EmptyStateView(
+            icon: "doc.text.magnifyingglass",
+            title: "Search Across All Files",
+            message: "Enter a search term to find matches in your Hugo site"
+        )
     }
 
     // MARK: - Actions

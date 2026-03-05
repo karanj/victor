@@ -60,6 +60,12 @@ class HugoConfig: EditableFile {
         "tag": "tags"
     ]
 
+    // MARK: - Permalinks
+
+    /// Permalink patterns keyed by section name (e.g. ["posts": "/:year/:month/:title/"])
+    /// Parsed from [permalinks] or [permalinks.page] in Hugo config
+    var permalinks: [String: String] = [:]
+
     // MARK: - Menus
 
     /// Menu definitions
@@ -245,6 +251,38 @@ extension HugoConfig {
             self.params = params
         }
 
+        // Parse permalinks
+        if let permalinksRaw = dictionary["permalinks"] {
+            if let flat = permalinksRaw as? [String: String] {
+                self.permalinks = flat
+            } else if let nested = permalinksRaw as? [String: Any],
+                      let pagePermalinks = nested["page"] as? [String: String] {
+                self.permalinks = pagePermalinks
+            } else if let anyHashable = permalinksRaw as? [AnyHashable: Any] {
+                // Yams can produce [AnyHashable: Any] dictionaries
+                var result: [String: String] = [:]
+                // Check for nested "page" sub-key
+                if let pageValue = anyHashable["page" as AnyHashable] {
+                    if let pageDict = pageValue as? [AnyHashable: Any] {
+                        for (k, v) in pageDict {
+                            if let key = k as? String, let val = v as? String {
+                                result[key] = val
+                            }
+                        }
+                    }
+                }
+                // Fall back to flat format
+                if result.isEmpty {
+                    for (k, v) in anyHashable {
+                        if let key = k as? String, let val = v as? String {
+                            result[key] = val
+                        }
+                    }
+                }
+                self.permalinks = result
+            }
+        }
+
         // Parse menus
         if let menusDict = dictionary["menus"] as? [String: [[String: Any]]] {
             for (menuName, items) in menusDict {
@@ -262,7 +300,7 @@ extension HugoConfig {
             "baseURL", "title", "languageCode", "theme", "copyright",
             "buildDrafts", "buildFuture", "buildExpired", "enableRobotsTXT",
             "summaryLength", "defaultContentLanguage", "timeZone",
-            "taxonomies", "params", "menus", "menu"
+            "taxonomies", "params", "menus", "menu", "permalinks"
         ]
 
         for (key, value) in dictionary where !knownFields.contains(key) {

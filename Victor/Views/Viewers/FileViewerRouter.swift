@@ -84,12 +84,7 @@ struct FileViewerRouter: View {
     @ViewBuilder
     private var configEditorContent: some View {
         if siteViewModel.isLoadingConfig {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading configuration...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingStateView(message: "Loading configuration...")
         } else if let config = siteViewModel.hugoConfig, config.sourceURL == node.url {
             ConfigEditorView(config: config, onSave: {
                 await siteViewModel.saveHugoConfig()
@@ -98,15 +93,10 @@ struct FileViewerRouter: View {
             })
         } else {
             // Config not loaded yet - trigger load
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading configuration...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task {
-                await siteViewModel.loadHugoConfig(from: node.url)
-            }
+            LoadingStateView(message: "Loading configuration...")
+                .task {
+                    await siteViewModel.loadHugoConfig(from: node.url)
+                }
         }
     }
 
@@ -138,14 +128,11 @@ struct FileViewerRouter: View {
                 siteViewModel: siteViewModel
             )
         } else {
-            VStack(spacing: 12) {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
-                Text("No site loaded")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyStateView(
+                icon: "doc.text.magnifyingglass",
+                title: "No Site Loaded",
+                message: "Open a Hugo site to browse templates"
+            )
         }
     }
 
@@ -153,55 +140,24 @@ struct FileViewerRouter: View {
     @ViewBuilder
     private var dataFileEditorContent: some View {
         if siteViewModel.isLoadingDataFile {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading data file...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingStateView(message: "Loading data file...")
         } else if let dataFile = siteViewModel.currentDataFile, dataFile.url == node.url {
             DataFileEditorView(dataFile: dataFile, onSave: {
                 await siteViewModel.saveDataFile()
             })
         } else if let error = siteViewModel.dataFileLoadError, siteViewModel.failedDataFileURL == node.url {
-            // Show error state - don't retry
-            VStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                    .foregroundStyle(.orange)
-                Text("Failed to load data file")
-                    .font(.headline)
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                Button("Retry") {
-                    Task {
-                        await siteViewModel.loadDataFile(from: node.url)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.top)
-
-                Button("Open in Default App") {
-                    NSWorkspace.shared.open(node.url)
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorStateView(
+                title: "Failed to load data file",
+                message: error,
+                retryAction: { Task { await siteViewModel.loadDataFile(from: node.url) } },
+                openURL: node.url
+            )
         } else {
             // Data file not loaded yet - trigger load
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading data file...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task {
-                await siteViewModel.loadDataFile(from: node.url)
-            }
+            LoadingStateView(message: "Loading data file...")
+                .task {
+                    await siteViewModel.loadDataFile(from: node.url)
+                }
         }
     }
 
@@ -209,55 +165,24 @@ struct FileViewerRouter: View {
     @ViewBuilder
     private var translationEditorContent: some View {
         if siteViewModel.isLoadingDataFile {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading translation file...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingStateView(message: "Loading translation file...")
         } else if let dataFile = siteViewModel.currentDataFile, dataFile.url == node.url {
             TranslationEditorView(dataFile: dataFile, onSave: {
                 await siteViewModel.saveDataFile()
             })
         } else if let error = siteViewModel.dataFileLoadError, siteViewModel.failedDataFileURL == node.url {
-            // Show error state - don't retry
-            VStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                    .foregroundStyle(.orange)
-                Text("Failed to load translation file")
-                    .font(.headline)
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                Button("Retry") {
-                    Task {
-                        await siteViewModel.loadDataFile(from: node.url)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.top)
-
-                Button("Open in Default App") {
-                    NSWorkspace.shared.open(node.url)
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorStateView(
+                title: "Failed to load translation file",
+                message: error,
+                retryAction: { Task { await siteViewModel.loadDataFile(from: node.url) } },
+                openURL: node.url
+            )
         } else {
             // Translation file not loaded yet - trigger load
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading translation file...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task {
-                await siteViewModel.loadDataFile(from: node.url)
-            }
+            LoadingStateView(message: "Loading translation file...")
+                .task {
+                    await siteViewModel.loadDataFile(from: node.url)
+                }
         }
     }
 
@@ -265,55 +190,24 @@ struct FileViewerRouter: View {
     @ViewBuilder
     private var templateEditorContent: some View {
         if siteViewModel.isLoadingTemplate {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading template...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingStateView(message: "Loading template...")
         } else if let template = siteViewModel.currentTemplate, template.url == node.url {
             TemplateEditorView(template: template, onSave: {
                 await siteViewModel.saveTemplate()
             })
         } else if let error = siteViewModel.templateLoadError, siteViewModel.failedTemplateURL == node.url {
-            // Show error state - don't retry
-            VStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                    .foregroundStyle(.orange)
-                Text("Failed to load template")
-                    .font(.headline)
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                Button("Retry") {
-                    Task {
-                        await siteViewModel.loadTemplate(from: node.url)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.top)
-
-                Button("Open in Default App") {
-                    NSWorkspace.shared.open(node.url)
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorStateView(
+                title: "Failed to load template",
+                message: error,
+                retryAction: { Task { await siteViewModel.loadTemplate(from: node.url) } },
+                openURL: node.url
+            )
         } else {
             // Template not loaded yet - trigger load
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading template...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task {
-                await siteViewModel.loadTemplate(from: node.url)
-            }
+            LoadingStateView(message: "Loading template...")
+                .task {
+                    await siteViewModel.loadTemplate(from: node.url)
+                }
         }
     }
 
@@ -321,55 +215,24 @@ struct FileViewerRouter: View {
     @ViewBuilder
     private var archetypeEditorContent: some View {
         if siteViewModel.isLoadingArchetype {
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading archetype...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingStateView(message: "Loading archetype...")
         } else if let archetype = siteViewModel.currentArchetype, archetype.url == node.url {
             ArchetypeEditorView(archetype: archetype, onSave: {
                 await siteViewModel.saveArchetype()
             })
         } else if let error = siteViewModel.archetypeLoadError, siteViewModel.failedArchetypeURL == node.url {
-            // Show error state - don't retry
-            VStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                    .foregroundStyle(.orange)
-                Text("Failed to load archetype")
-                    .font(.headline)
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                Button("Retry") {
-                    Task {
-                        await siteViewModel.loadArchetype(from: node.url)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.top)
-
-                Button("Open in Default App") {
-                    NSWorkspace.shared.open(node.url)
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorStateView(
+                title: "Failed to load archetype",
+                message: error,
+                retryAction: { Task { await siteViewModel.loadArchetype(from: node.url) } },
+                openURL: node.url
+            )
         } else {
             // Archetype not loaded yet - trigger load
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("Loading archetype...")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task {
-                await siteViewModel.loadArchetype(from: node.url)
-            }
+            LoadingStateView(message: "Loading archetype...")
+                .task {
+                    await siteViewModel.loadArchetype(from: node.url)
+                }
         }
     }
 }

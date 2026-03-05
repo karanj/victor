@@ -188,12 +188,24 @@ struct ContentView: View {
             // Use live preview from Hugo server
             LivePreviewPanel(
                 siteViewModel: siteViewModel,
-                currentFilePath: relativeFilePath(for: node)
+                currentFilePath: relativeFilePath(for: node),
+                permalinkResolver: permalinkResolver(for: siteViewModel),
+                currentDate: node.contentFile?.frontmatter?.date,
+                currentSlug: node.contentFile?.frontmatter?.slug
             )
         } else if let contentFile = node.contentFile {
             // Use markdown preview
             PreviewPanel(contentFile: contentFile, siteViewModel: siteViewModel)
         }
+    }
+
+    /// Build a PermalinkResolver from the current Hugo config
+    private func permalinkResolver(for viewModel: SiteViewModel) -> PermalinkResolver {
+        if let config = viewModel.hugoConfig {
+            let permalinks = PermalinkResolver.parsePermalinks(from: config)
+            return PermalinkResolver(permalinks: permalinks)
+        }
+        return PermalinkResolver(permalinks: [:])
     }
 
     /// Get relative file path from site root

@@ -170,12 +170,19 @@ Models use `@Observable class` pattern by design. Evaluation of struct alternati
 | Assets not loading | Folder in static/ or assets/, `AssetService.swift` |
 | File switching bugs | `EditorViewModelTests.swift`, nodeID validation in callbacks |
 
-## Future Work
+## Outstanding Work
 
-Feature requests and bugs are tracked in **beads** (`.beads/` directory). Run `bd list` or `bd ready` to see open issues.
+Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, 18 open tickets). Key areas:
+- **P2**: Protocol abstractions for services (ARCH-2), FSEvents file watching (9 tickets, dependency chain)
+- **P3**: Git integration (6 tickets), preview syntax highlighting, Hugo theme CSS
+- **P4**: VoiceOver audit
+
+To find work ready to start: look for `status: open` (no blockers). `status: blocked` tickets list their `blocked_by` dependencies.
 
 ## Project Docs
 
+- `Docs/ISSUES.yaml` - Issue tracker (open work items)
+- `Docs/CODE-REVIEW-PLAN.md` - Code review findings and status
 - `Docs/HUGO-SERVER-INTEGRATION.md` - Hugo server integration
 - `Docs/DATA-ARCHETYPES-GUIDE.md` - Data files and archetypes
-- `Docs/CODE-REVIEW-ISSUES.yaml` - Code review findings
+- `Docs/TODO.md` - Detailed ticket descriptions (reference/archive)

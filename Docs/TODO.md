@@ -1,645 +1,386 @@
 # Victor TODO
 
 Last updated: 2026-02-17
-Migrated from beads issue tracker
 
-## Epics
+## Format
 
-### Code Review 2026-01 - Quality & Security Improvements (P1)
-**ID**: victor-oci
-Comprehensive code review findings from expert panel covering security, architecture, SwiftUI best practices, and DRY principles.
+Each ticket uses the following DSL:
 
-**Scope**:
-- 4 P0 Critical items (security hardening)
-- 4 P1 High priority items (architecture, accessibility)
-- 8 P2 Medium priority items (performance, DRY)
-- 6 P3 Low priority items (nice to have)
+```
+### [ID] Title
+- **Status**: open | in-progress | blocked | done
+- **Priority**: P0 (critical) | P1 (high) | P2 (medium) | P3 (low) | P4 (backlog)
+- **Type**: epic | task | feature | bug
+- **Blocked by**: [ticket IDs this depends on]
+- **Blocks**: [ticket IDs that depend on this]
+- **Files**: [files to create or modify]
+- **Estimate**: [time estimate if known]
 
-**Reference**: See Docs/CODE-REVIEW-PLAN.md for full details
-
-**Child Tasks**:
-- victor-zw4: Add protocol abstractions for services (P2)
-- And 26 other code review items tracked in CODE-REVIEW-PLAN.md
-
-### File System Watching (FSEvents) for Auto-Reload (P3)
-**ID**: victor-iv0
-Implement file system watching to automatically reload files when changed externally.
-
-**Implementation**:
-- Use FSEvents API to watch Hugo site directory
-- Detect file changes, additions, deletions
-- Auto-reload affected files in editor
-- Show notification when external changes detected
-- Conflict resolution dialog if file modified in both places
-- Preference to enable/disable auto-reload
-
-**Files**: FileSystemWatcher.swift (new), SiteViewModel.swift, AutoSaveService.swift (modified)
-**Estimated**: 3-4 hours
-
-**Child Tasks** (all P2):
-1. victor-bfs: Create FileWatcherService actor
-2. victor-93p: Create FileChangeNotification model
-3. victor-5cl: Add file watcher lifecycle to SiteViewModel
-4. victor-so7: Add save intent registration to save operations
-5. victor-rpt: Create notification UI views
-6. victor-u5y: Integrate notifications into ContentView
-7. victor-8cw: Add file watching preference toggle
-8. victor-8u1: Handle edge cases (delete, rename, batch)
-9. victor-rey: Add automated test coverage for file watcher
-
-### Git Integration (P3)
-**ID**: victor-edf
-Add Git integration for viewing status and committing changes from within Victor.
-
-**Implementation**:
-- Git status display in sidebar (show modified/staged/untracked files)
-- Commit dialog with message input and file staging
-- Push/pull buttons in toolbar
-- Branch display and switching
-- Diff viewer for changed files
-- Use libgit2 or shell out to git command
-
-**Files**: GitService.swift, GitStatusView.swift, CommitDialog.swift (new)
-**Estimated**: 5-6 hours
-
-**Child Tasks** (all P3):
-1. victor-04m: Create GitService for git operations
-2. victor-cit: Git status display in sidebar (depends on victor-04m)
-3. victor-7zv: Commit dialog with file staging (depends on victor-04m)
-4. victor-agi: Push/Pull functionality (depends on victor-04m)
-5. victor-95t: Branch display and switching (depends on victor-04m)
-6. victor-2d4: Diff viewer for changed files (depends on victor-04m)
+Description and implementation details.
+```
 
 ---
 
-## File System Watching Tasks (P2)
-
-### victor-bfs: Create FileWatcherService actor
-Create new actor service at `Victor/Services/FileWatcherService.swift` managing FSEventStream lifecycle.
-
-**Implementation Details**:
-- Actor-based design following AutoSaveService pattern for thread safety
-- FSEvents callbacks occur on arbitrary background threads, requiring actor isolation
-- Use `FSEventStreamCreate` with flags: `kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer`
-- Set dispatch queue to `DispatchQueue.global(qos: .utility)`
-
-**Key Methods**:
-- `startWatching(path:delegate:)` - Create and start FSEventStream
-- `stopWatching()` - Stop, invalidate, and release stream
-- `registerSaveIntent(for:)` - Mark URL as 'our save' to ignore (prevents false positives)
-
-**Event Coalescing**:
-- Accumulate events in 500ms window before processing
-- Use `pendingEvents: [URL: FileChangeEvent]` dictionary
-- Schedule coalescing with cancellable Task
-- After window expires, batch events and notify delegate
-
-**Save Intent Registry**:
-- `saveIntents: [URL: Date]` dictionary tracks internal saves
-- 5-second expiration for intent registration
-- When FSEvent fires, check if URL in registry - if so, ignore and clear
-
-**Types to Define**:
-- `FileChangeEvent` enum: .modified, .created, .deleted, .renamed
-- `FileChangeBatch` struct with events dictionary
-- `FileWatcherDelegate` protocol with async callback
-
-**Constants** (add to AppConstants.swift):
-- `FileWatcher.coalesceWindow = 0.5`
-- `FileWatcher.saveIntentTimeout = 5.0`
-- `FileWatcher.fsEventsLatency = 0.3`
-
-### victor-93p: Create FileChangeNotification model
-**Depends on**: victor-iv0
-
-Create model for UI notifications at `Victor/Models/FileChangeNotification.swift`.
-
-**FileChangeNotification struct**:
-```swift
-struct FileChangeNotification: Identifiable {
-    let id: UUID
-    let type: NotificationType
-    let urls: [URL]
-    let message: String
-    let timestamp: Date
-
-    enum NotificationType {
-        case conflict      // File changed externally AND locally
-        case autoReloaded  // File auto-reloaded (no local changes)
-        case deleted       // File was deleted externally
-        case created       // New files detected
-    }
-}
-```
-
-**Usage**:
-- Conflict: '${filename}' was modified. You have unsaved changes.
-- Auto-reloaded: N file(s) reloaded from disk
-- Deleted: '${filename}' was deleted externally
-- Created: N new file(s) detected
-
-**Action Options**:
-- Reload from Disk
-- Keep Editing (for conflicts)
-- Dismiss
-- Show All (for batch)
-
-### victor-5cl: Add file watcher lifecycle to SiteViewModel
-**Depends on**: victor-bfs, victor-93p
-
-Integrate FileWatcherService lifecycle into SiteViewModel.
-
-**New Properties**:
-```swift
-private var fileWatcher: FileWatcherService?
-var fileChangeNotifications: [FileChangeNotification] = []
-@AppStorage("isFileWatchingEnabled") var isFileWatchingEnabled = true
-```
-
-**New Methods**:
-```swift
-func startFileWatching() async {
-    guard isFileWatchingEnabled, let siteURL = site?.rootURL else { return }
-    fileWatcher = FileWatcherService()
-    await fileWatcher?.startWatching(path: siteURL.path, delegate: self)
-}
-
-func stopFileWatching() {
-    fileWatcher?.stopWatching()
-    fileWatcher = nil
-}
-```
-
-**Lifecycle Integration**:
-- `loadSite(from:)` → call `startFileWatching()` after success
-- `closeSite()` → call `stopFileWatching()` before clearing state
-- `reloadSite()` → restart with stop then start
-
-**Implement FileWatcherDelegate**:
-```swift
-extension SiteViewModel: FileWatcherDelegate {
-    func fileWatcherDidDetectChanges(_ batch: FileChangeBatch) async {
-        // Filter to site files only
-        // Check modifiedFileIDs for conflicts
-        // Auto-reload unmodified files if preference enabled
-        // Create FileChangeNotification for conflicts
-    }
-}
-```
-
-**Notification Management**:
-- `dismissNotification(_ notification:)`
-- `reloadExternallyChangedFiles(_ notification:)`
-- `scheduleNotificationDismissal(_ notification:)` with 5s timer
-
-### victor-so7: Add save intent registration to save operations
-**Depends on**: victor-bfs
-
-Modify AutoSaveService and FileSystemService to register save intents before writes.
-
-**Purpose**: Prevents FileWatcherService from treating our own saves as external changes. This avoids fragile timestamp comparison.
-
-**AutoSaveService.swift modifications**:
-In `performSave()` method, before the actual write:
-```swift
-await FileWatcherService.shared.registerSaveIntent(for: fileURL)
-```
-
-**FileSystemService.swift modifications**:
-Add intent registration to:
-1. `writeFile(to:content:)` - line ~281
-2. `createFile(at:content:)` - line ~370
-3. `duplicateFile(at:)` - line ~411
-
-**Pattern**:
-```swift
-// Before NSFileCoordinator write:
-await FileWatcherService.shared.registerSaveIntent(for: url)
-
-let coordinator = NSFileCoordinator()
-coordinator.coordinate(writingItemAt: url, ...) { ... }
-```
-
-**Timing**:
-- Intent valid for 5 seconds (saveIntentTimeout)
-- Covers slow saves and I/O delays
-- Auto-expires to handle edge cases
-
-### victor-rpt: Create notification UI views
-**Depends on**: victor-93p
-
-Create toast/banner UI for file change notifications.
-
-**Files to Create**:
-
-**1. Victor/Views/Notifications/FileChangeNotificationView.swift**
-Single notification banner:
-- Horizontal layout: icon + message + action buttons
-- Icon based on notification type (exclamationmark.triangle, checkmark.circle, etc.)
-- Action buttons: Reload / Dismiss (or Keep Editing for conflicts)
-- Subtle background with rounded corners
-- Animated appearance/disappearance
-
-```swift
-struct FileChangeNotificationView: View {
-    let notification: FileChangeNotification
-    let onDismiss: () -> Void
-    let onReload: () -> Void
-
-    var body: some View {
-        HStack {
-            Image(systemName: iconName)
-            Text(notification.message)
-            Spacer()
-            Button("Reload") { onReload() }
-            Button("Dismiss") { onDismiss() }
-        }
-        .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(8)
-    }
-}
-```
-
-**2. Victor/Views/Notifications/FileChangeNotificationContainer.swift**
-Container managing multiple notifications:
-- VStack of notifications with spacing
-- Animated entry/exit transitions
-- Auto-dismiss timer (5 seconds)
-- Maximum 3 visible notifications (queue extras)
-
-**Styling**:
-- Use semantic colors from Color+Semantic.swift
-- Conflict: orange tint
-- Auto-reloaded: green tint
-- Deleted: red tint
-
-### victor-u5y: Integrate notifications into ContentView
-**Depends on**: victor-rpt, victor-5cl
-
-Add notification overlay to main content area.
-
-**ContentView.swift modification**:
-Add overlay to the main content area (detail column):
-```swift
-.overlay(alignment: .top) {
-    FileChangeNotificationContainer(
-        notifications: siteViewModel.fileChangeNotifications,
-        onDismiss: { siteViewModel.dismissNotification($0) },
-        onReload: { Task { await siteViewModel.reloadExternallyChangedFiles($0) } }
-    )
-    .padding(.top, 8)
-    .padding(.horizontal, 16)
-}
-```
-
-**Positioning**:
-- Top of editor area, below toolbar/tab bar
-- Horizontally centered with padding
-- Z-index above editor content
-
-**Focus Mode Consideration**:
-- Queue notifications during focus mode
-- Display queued notifications when exiting focus mode
-- Add check in FocusModeView or notification container
-
-**App Termination**:
-In VictorApp.swift, add cleanup:
-```swift
-func applicationWillTerminate(_ notification: Notification) {
-    siteViewModel?.stopFileWatching()
-}
-```
-
-### victor-8cw: Add file watching preference toggle
-**Depends on**: victor-5cl
-
-Add preference section to enable/disable file watching.
-
-**PreferencesView.swift modification**:
-Add new section:
-```swift
-Section {
-    Toggle("Enable file watching", isOn: $isFileWatchingEnabled)
-        .toggleStyle(.checkbox)
-
-    if isFileWatchingEnabled {
-        Toggle("Auto-reload unchanged files", isOn: $autoReloadUnchangedFiles)
-            .toggleStyle(.checkbox)
-            .padding(.leading, 20)
-    }
-} header: {
-    Text("File Watching")
-} footer: {
-    Text("Detect when files are modified by external applications.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-}
-```
-
-**AppStorage Keys** (add to AppConstants.swift):
-```swift
-enum UserDefaultsKeys {
-    static let isFileWatchingEnabled = "isFileWatchingEnabled"
-    static let autoReloadUnchangedFiles = "autoReloadUnchangedFiles"
-}
-```
-
-**Behavior**:
-- isFileWatchingEnabled: Master toggle, stops/starts FileWatcherService
-- autoReloadUnchangedFiles: If true, silently reload files without local changes
-- If false, show notification for all external changes
-
-**SiteViewModel Integration**:
-Watch for preference changes and restart watcher:
-```swift
-.onChange(of: isFileWatchingEnabled) { _, newValue in
-    if newValue {
-        Task { await startFileWatching() }
-    } else {
-        stopFileWatching()
-    }
-}
-```
-
-### victor-8u1: Handle edge cases (delete, rename, batch)
-**Depends on**: victor-5cl
-
-Handle edge cases in file watching.
-
-**1. Deleted Files**:
-- If currently editing deleted file: show alert with options
-  - Save to New Location
-  - Close Without Saving
-- If file in sidebar but not open: mark as deleted or remove from tree
-- Use FSEventStreamEventFlags: kFSEventStreamEventFlagItemRemoved
-
-**2. Renamed/Moved Files**:
-- FSEvents provides kFSEventStreamEventFlagItemRenamed
-- Renamed events come in pairs (old path, new path)
-- Update FileNode.url if file moved within site
-- If currently open: update editor title/path
-
-**3. New Files Created**:
-- Detect via kFSEventStreamEventFlagItemCreated
-- Trigger sidebar refresh for new files in watched directories
-- Option: full reloadSite() or targeted folder refresh
-- Show notification: 'N new file(s) detected'
-
-**4. Batch Operations** (git checkout):
-- FSEvents naturally batches events
-- Coalesce window (500ms) groups rapid changes
-- Show consolidated notification: '15 files changed externally'
-- Action: 'Reload All' button reloads all affected files
-
-**5. Directory Changes**:
-- Folders deleted: remove from tree, close any open files from that folder
-- Folders created: refresh parent to show new folder
-- Use kFSEventStreamEventFlagItemIsDir to detect directories
-
-**6. Focus Mode**:
-- Queue notifications during focus mode
-- Check focusModeEnabled in SiteViewModel before showing notifications
-- Display queued notifications on focus mode exit
-
-**7. App in Background**:
-- FSEvents continues to fire while app inactive
-- Process queued events when app becomes active
-- Consider NSWorkspace.shared.notificationCenter for activation events
-
-### victor-rey: Add automated test coverage for file watcher
-**Depends on**: victor-u5y, victor-8cw, victor-8u1
-
-Create comprehensive test coverage for FileWatcherService.
-
-**New Test File**: Victor/Tests/FileWatcherServiceTests.swift
-
-**1. Save Intent Registry Tests**:
-- testRegisterSaveIntent_addsToRegistry
-- testRegisterSaveIntent_expiresAfterTimeout
-- testRegisterSaveIntent_clearedOnEventMatch
-- testMultipleSaveIntents_trackedIndependently
-
-**2. Event Coalescing Tests**:
-- testCoalescing_batchesRapidEvents
-- testCoalescing_respectsWindow
-- testCoalescing_firesAfterQuietPeriod
-- testCoalescing_cancelsPreviousTask
-
-**3. Event Classification Tests**:
-- testClassifyEvent_modified
-- testClassifyEvent_created
-- testClassifyEvent_deleted
-- testClassifyEvent_renamed
-
-**4. Delegate Callback Tests**:
-- testDelegate_calledWithBatchedEvents
-- testDelegate_notCalledForOwnSaves
-- testDelegate_calledOnMainThread
-
-**5. Lifecycle Tests**:
-- testStartWatching_createsStream
-- testStopWatching_releasesStream
-- testStopWatching_clearsState
-- testRestartWatching_worksCorrectly
-
-**SiteViewModel Integration Tests** (FileWatcherIntegrationTests.swift):
-
-**6. Conflict Detection Tests**:
-- testExternalChange_withLocalChanges_showsConflict
-- testExternalChange_withoutLocalChanges_autoReloads
-- testConflictNotification_containsCorrectInfo
-
-**7. Notification Management Tests**:
-- testNotification_autoDismissesAfterTimeout
-- testNotification_dismissedOnUserAction
-- testMultipleNotifications_queuedCorrectly
-
-**8. Preference Tests**:
-- testWatchingDisabled_noEventsProcessed
-- testAutoReloadDisabled_showsNotificationInstead
-- testPreferenceChange_restartsWatcher
-
-**Mock Strategy**:
-- Create MockFileWatcherService for testing without real FSEvents
-- Inject mock into SiteViewModel for integration tests
-- Use protocol-based design for testability
+## Summary
+
+| Priority | Open | Done | Total |
+|----------|------|------|-------|
+| P0       | 0    | 4    | 4     |
+| P1       | 0    | 7    | 7     |
+| P2       | 10   | 8    | 18    |
+| P3       | 7    | 19   | 26    |
+| P4       | 1    | 0    | 1     |
+| **Total**| **18** | **38** | **56** |
 
 ---
 
-## Git Integration Tasks (P3)
+## Open Tickets
 
-### victor-04m: Create GitService for git operations
-Create a service layer for Git operations.
+### Architecture
 
-**Implementation**:
-- Create GitService.swift
-- Methods: status(), stage(), unstage(), commit(), push(), pull()
-- Use Process to shell out to git command (simpler than libgit2)
-- Handle errors gracefully
+#### [victor-zw4] ARCH-2: Add protocol abstractions for services
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: none
+- **Files**: All service files (FileSystemService, HugoServerService, AutoSaveService, AssetService, SearchService, etc.)
+- **Estimate**: 2 days
+- **Review ref**: CODE-REVIEW-PLAN.md ARCH-2
 
-**File**: GitService.swift (new)
+Services use concrete `.shared` singletons (212 instances across 41 files). Hard to test, creates tight coupling.
 
-### victor-cit: Git status display in sidebar
-**Depends on**: victor-04m
-
-Show git status indicators in the file list sidebar.
-
-**Implementation**:
-- Show modified/staged/untracked file indicators
-- Color-coded badges or icons
-- Integration with SiteViewModel to track git status
-
-**Files**: FileListView.swift, SiteViewModel.swift
-
-### victor-7zv: Commit dialog with file staging
-**Depends on**: victor-04m
-
-Create commit dialog for staging and committing changes.
-
-**Implementation**:
-- CommitDialog.swift
-- File list with checkboxes for staging
-- Commit message text field
-- Commit button with validation
-
-**File**: CommitDialog.swift (new)
-
-### victor-agi: Push/Pull functionality
-**Depends on**: victor-04m
-
-Add push and pull buttons to toolbar.
-
-**Implementation**:
-- Add push/pull buttons to toolbar
-- Show progress indicators
-- Handle auth (SSH keys or credential helper)
-- Error handling for conflicts
-
-**Files**: Toolbar view, GitService.swift
-
-### victor-95t: Branch display and switching
-**Depends on**: victor-04m
-
-Show current branch and allow switching.
-
-**Implementation**:
-- Display current branch name in UI
-- Branch picker/dropdown
-- Create new branch option
-- Handle uncommitted changes on switch
-
-**Files**: GitStatusView.swift (new), GitService.swift
-
-### victor-2d4: Diff viewer for changed files
-**Depends on**: victor-04m
-
-Show diffs for changed files.
-
-**Implementation**:
-- DiffViewer.swift
-- Side-by-side or inline diff view
-- Syntax highlighting for diff
-- Navigate between changed hunks
-
-**File**: DiffViewer.swift (new)
-
----
-
-## Architecture Tasks (P2)
-
-### victor-zw4: ARCH-2: Add protocol abstractions for services
-**Files**: All service files (FileSystemService, HugoServerService, AutoSaveService, etc.)
-
-**Issue**: Services are concrete classes without protocol abstractions. 212 instances of .shared across 41 files. Hard to test, creates tight coupling.
-
-**Fix**: Create protocol abstractions:
-
+**Fix**: Create protocol abstractions and inject via constructor or SwiftUI Environment:
 ```swift
 protocol FileSystemServicing {
     func readContentFile(at url: URL) async throws -> ContentFile
     func writeContentFile(_ content: String, to url: URL) async throws
-    // ... other methods
 }
 
-final class FileSystemService: FileSystemServicing {
-    static let shared: FileSystemServicing = FileSystemService()
-    // ... implementation
-}
-```
-
-Then inject via constructor or SwiftUI Environment:
-```swift
 @Environment(\.fileSystemService) var fileSystemService
 ```
 
-**Effort**: Medium (2 days)
+---
 
-**Reference**: Docs/CODE-REVIEW-PLAN.md ARCH-2
+### File System Watching (FSEvents)
+
+Epic: **victor-iv0** — Auto-reload files when changed externally. Uses FSEvents API for directory watching with event coalescing, save intent registry (to ignore our own writes), and toast notifications for conflicts.
+
+#### [victor-bfs] Create FileWatcherService actor
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: none (entry point for FSEvents work)
+- **Blocks**: victor-5cl, victor-so7
+- **Files**: `Victor/Services/FileWatcherService.swift` (new), `Victor/AppConstants.swift`
+- **Estimate**: 2-3 hours
+
+Create actor-based service managing FSEventStream lifecycle, following AutoSaveService pattern.
+
+**Key design**:
+- `startWatching(path:delegate:)` / `stopWatching()` for stream lifecycle
+- `registerSaveIntent(for:)` — marks URL as internal save to ignore (5s expiry)
+- Event coalescing: accumulate in 500ms window via `pendingEvents: [URL: FileChangeEvent]`
+- FSEvents flags: `kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer`
+- Dispatch to `DispatchQueue.global(qos: .utility)`
+
+**Types to define**: `FileChangeEvent` (.modified/.created/.deleted/.renamed), `FileChangeBatch`, `FileWatcherDelegate` protocol.
+
+**Constants** for AppConstants: `FileWatcher.coalesceWindow = 0.5`, `FileWatcher.saveIntentTimeout = 5.0`, `FileWatcher.fsEventsLatency = 0.3`
+
+#### [victor-93p] Create FileChangeNotification model
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: none
+- **Blocks**: victor-rpt, victor-5cl
+- **Files**: `Victor/Models/FileChangeNotification.swift` (new)
+- **Estimate**: 30 min
+
+```swift
+struct FileChangeNotification: Identifiable {
+    let id: UUID
+    let type: NotificationType  // .conflict, .autoReloaded, .deleted, .created
+    let urls: [URL]
+    let message: String
+    let timestamp: Date
+}
+```
+
+Action options: Reload from Disk, Keep Editing (conflicts), Dismiss, Show All (batch).
+
+#### [victor-5cl] Add file watcher lifecycle to SiteViewModel
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: victor-bfs, victor-93p
+- **Blocks**: victor-u5y, victor-8cw, victor-8u1
+- **Files**: `Victor/ViewModels/SiteViewModel.swift`
+- **Estimate**: 2-3 hours
+
+Wire FileWatcherService into SiteViewModel lifecycle:
+- `loadSite()` -> `startFileWatching()`
+- `closeSite()` -> `stopFileWatching()`
+- Implement `FileWatcherDelegate` to filter events, detect conflicts (check `editedContentByFile`), auto-reload unmodified files
+- Manage `fileChangeNotifications` array with auto-dismiss timers
+
+#### [victor-so7] Add save intent registration to save operations
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: victor-bfs
+- **Files**: `Victor/Services/AutoSaveService.swift`, `Victor/Services/FileSystemService.swift`
+- **Estimate**: 1 hour
+
+Call `FileWatcherService.shared.registerSaveIntent(for: url)` before every write in:
+1. `AutoSaveService.performSave()`
+2. `FileSystemService.writeFile(to:content:)`
+3. `FileSystemService.createFile(at:content:)`
+4. `FileSystemService.duplicateFile(at:)`
+
+Prevents FSEvents from treating our own saves as external changes.
+
+#### [victor-rpt] Create notification UI views
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: victor-93p
+- **Blocks**: victor-u5y
+- **Files**: `Victor/Views/Notifications/FileChangeNotificationView.swift` (new), `Victor/Views/Notifications/FileChangeNotificationContainer.swift` (new)
+- **Estimate**: 2 hours
+
+Toast/banner UI:
+- `FileChangeNotificationView`: icon + message + action buttons (Reload/Dismiss), `.ultraThinMaterial` background
+- `FileChangeNotificationContainer`: VStack managing up to 3 visible notifications with animated entry/exit, 5s auto-dismiss
+- Color tinting: orange (conflict), green (auto-reloaded), red (deleted)
+
+#### [victor-u5y] Integrate notifications into ContentView
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: victor-rpt, victor-5cl
+- **Files**: `Victor/Views/MainWindow/ContentView.swift`, `Victor/VictorApp.swift`
+- **Estimate**: 1 hour
+
+Add `.overlay(alignment: .top)` with `FileChangeNotificationContainer` to main content area. Queue notifications during focus mode. Add `stopFileWatching()` cleanup in `applicationWillTerminate`.
+
+#### [victor-8cw] Add file watching preference toggle
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: victor-5cl
+- **Files**: `Victor/Views/PreferencesView.swift`, `Victor/AppConstants.swift`
+- **Estimate**: 30 min
+
+Add "File Watching" section to PreferencesView with two toggles:
+1. `isFileWatchingEnabled` — master toggle, starts/stops FileWatcherService
+2. `autoReloadUnchangedFiles` — if true, silently reload; if false, show notification for all changes
+
+#### [victor-8u1] Handle file watcher edge cases
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: victor-5cl
+- **Files**: `Victor/ViewModels/SiteViewModel.swift`, `Victor/Services/FileWatcherService.swift`
+- **Estimate**: 3-4 hours
+
+Edge cases to handle:
+1. **Deleted files**: alert with Save to New Location / Close Without Saving
+2. **Renamed files**: FSEvents renamed pairs, update FileNode.url
+3. **New files**: trigger sidebar refresh, "N new file(s) detected" notification
+4. **Batch operations** (git checkout): coalesce into single "15 files changed" notification with Reload All
+5. **Directory changes**: remove deleted folders from tree, refresh for new folders
+6. **Focus mode**: queue notifications, display on exit
+7. **App in background**: process queued events on activation
+
+#### [victor-rey] Add test coverage for file watcher
+- **Status**: open
+- **Priority**: P2
+- **Type**: task
+- **Blocked by**: victor-u5y, victor-8cw, victor-8u1
+- **Files**: `VictorTests/FileWatcherServiceTests.swift` (new), `VictorTests/FileWatcherIntegrationTests.swift` (new)
+- **Estimate**: 3-4 hours
+
+Test categories:
+- Save intent registry (add, expire, clear on match)
+- Event coalescing (batch, window, quiet period, cancel)
+- Event classification (modified, created, deleted, renamed)
+- Delegate callbacks (batched events, skip own saves, main thread)
+- Lifecycle (create stream, release, clear state, restart)
+- Conflict detection (external + local changes, auto-reload)
+- Notification management (auto-dismiss, user action, queue)
+- Preferences (disabled = no events, auto-reload toggle, restart on change)
+
+Uses `MockFileWatcherService` injected via protocol.
 
 ---
 
-## Other Features (P3)
+### Git Integration
 
-### victor-ayz: GH#1: Load CSS from Hugo theme for realistic preview
-Feature: Load CSS from Hugo theme so preview matches final published output.
+Epic: **victor-edf** — View git status and commit changes from within Victor. P3 feature set, all tasks depend on victor-04m (GitService).
 
-**Implementation considerations**:
-- Detect theme configured in hugo.toml/config.toml
-- Parse theme's CSS files (may need SCSS/Sass compilation)
-- Handle themes with multiple CSS files or build systems
-- Cache compiled CSS for performance
-- Fallback to built-in styles if theme CSS unavailable
+#### [victor-04m] Create GitService for git operations
+- **Status**: open
+- **Priority**: P3
+- **Type**: task
+- **Blocked by**: none (entry point for git work)
+- **Blocks**: victor-cit, victor-7zv, victor-agi, victor-95t, victor-2d4
+- **Files**: `Victor/Services/GitService.swift` (new)
+- **Estimate**: 2-3 hours
 
-**Acceptance criteria**:
-- Preview styling matches Hugo theme output
-- Fallback to default styles when theme CSS unavailable
-- No significant performance impact on preview updates
+Service layer using `Process` to shell out to git:
+- `status()` -> parsed file statuses (modified, staged, untracked)
+- `stage(_ files:)`, `unstage(_ files:)`
+- `commit(message:)`, `push()`, `pull()`
+- Error handling for missing git, not a repo, conflicts
 
-**Files**: Victor/Services/MarkdownRenderer.swift (wrapInHTMLTemplate method)
+#### [victor-cit] Git status display in sidebar
+- **Status**: open
+- **Priority**: P3
+- **Type**: task
+- **Blocked by**: victor-04m
+- **Files**: `Victor/Views/MainWindow/FileListView.swift`, `Victor/ViewModels/SiteViewModel.swift`
+- **Estimate**: 2 hours
 
-**GitHub Issue**: https://github.com/karanj/victor/issues/1
+Show color-coded badges/icons for modified, staged, untracked files in sidebar.
 
-**Note**: Implementation attempt findings (2026-01-13) - Direct CSS loading doesn't work for most themes. Most themes use SCSS/Sass in assets/scss/ which requires Hugo's Sass compiler. Theme CSS depends on Hugo's template output. The only practical way to get theme-accurate previews is Hugo Server Integration (see comments in beads issue for details).
+#### [victor-7zv] Commit dialog with file staging
+- **Status**: open
+- **Priority**: P3
+- **Type**: task
+- **Blocked by**: victor-04m
+- **Files**: `Victor/Views/Git/CommitDialog.swift` (new)
+- **Estimate**: 2-3 hours
 
-### victor-1o0: Syntax highlighting for code blocks in markdown preview
-Add syntax highlighting for code blocks in the markdown preview panel.
+File list with checkboxes for staging, commit message field, validation.
 
-**Implementation**:
-- Integrate highlight.js or Prism.js into preview WebView
-- Support common languages (Swift, JavaScript, Python, Go, etc.)
-- Auto-detect language from fence info string
-- Theme selection (light/dark mode support)
-- Line numbers option
+#### [victor-agi] Push/Pull functionality
+- **Status**: open
+- **Priority**: P3
+- **Type**: feature
+- **Blocked by**: victor-04m
+- **Files**: Toolbar view, `Victor/Services/GitService.swift`
+- **Estimate**: 2 hours
 
-**Files**: PreviewWebView.swift, MarkdownRenderer.swift (modified)
-**Estimated**: 2-3 hours
+Push/pull toolbar buttons with progress indicators. Handle SSH keys / credential helper. Error handling for conflicts.
+
+#### [victor-95t] Branch display and switching
+- **Status**: open
+- **Priority**: P3
+- **Type**: task
+- **Blocked by**: victor-04m
+- **Files**: `Victor/Views/Git/GitStatusView.swift` (new), `Victor/Services/GitService.swift`
+- **Estimate**: 2 hours
+
+Current branch name display, branch picker/dropdown, create new branch, handle uncommitted changes on switch.
+
+#### [victor-2d4] Diff viewer for changed files
+- **Status**: open
+- **Priority**: P3
+- **Type**: task
+- **Blocked by**: victor-04m
+- **Files**: `Victor/Views/Git/DiffViewer.swift` (new)
+- **Estimate**: 3-4 hours
+
+Side-by-side or inline diff view with syntax highlighting and hunk navigation.
 
 ---
 
-## Accessibility (P4)
+### Preview Enhancements
 
-### victor-3l6: VoiceOver improvements for accessibility
-Improve VoiceOver support and accessibility throughout the app.
+#### [victor-1o0] Syntax highlighting for code blocks in preview
+- **Status**: open
+- **Priority**: P3
+- **Type**: task
+- **Blocked by**: none
+- **Files**: `Victor/Views/Preview/PreviewWebView.swift`, `Victor/Services/MarkdownRenderer.swift`
+- **Estimate**: 2-3 hours
 
-**Implementation**:
-- Add proper accessibility labels to all buttons and controls
-- Improve navigation hints for complex views
-- Add accessibility traits to custom views
-- Keyboard navigation improvements
-- Screen reader announcements for important state changes
-- Test with VoiceOver enabled
-- Follow Apple Accessibility Guidelines
+Integrate highlight.js or Prism.js into preview WebView. Support common languages (Swift, JS, Python, Go, etc.), auto-detect from fence info string, light/dark theme, optional line numbers.
 
-**Files**: All views (accessibilityLabel, accessibilityHint, accessibilityTraits)
-**Estimated**: 3-4 hours
+#### [victor-ayz] GH#1: Load CSS from Hugo theme for preview
+- **Status**: open
+- **Priority**: P3
+- **Type**: feature
+- **Blocked by**: none
+- **Files**: `Victor/Services/MarkdownRenderer.swift`
+- **GitHub**: https://github.com/karanj/victor/issues/1
+
+Load Hugo theme CSS so preview matches published output. Fallback to built-in styles when unavailable.
+
+**Known blocker** (2026-01-13): Direct CSS loading doesn't work for most themes. Themes use SCSS/Sass in `assets/scss/` requiring Hugo's Sass compiler. Theme CSS depends on Hugo's template output. Only practical approach is piping through Hugo Server Integration.
 
 ---
 
-## Notes
+### Accessibility
 
-- **Priority Legend**: P0 (Critical) → P1 (High) → P2 (Medium) → P3 (Low) → P4 (Backlog)
-- Tasks are organized by epic/feature area
-- Dependencies noted where applicable
-- Estimated effort included where available
-- See Docs/CODE-REVIEW-PLAN.md for additional code review items tracked under victor-oci epic
+#### [victor-3l6] VoiceOver improvements
+- **Status**: open
+- **Priority**: P4
+- **Type**: task
+- **Blocked by**: none
+- **Files**: All view files
+- **Estimate**: 3-4 hours
+
+Add accessibility labels/hints to all buttons and controls, improve navigation hints for complex views, add accessibility traits to custom views, keyboard navigation improvements, screen reader announcements for state changes. Test with VoiceOver enabled.
+
+Note: Icon-only buttons already have labels (victor-0qe, done). This covers the remaining audit.
+
+---
+
+## Done Tickets
+
+### Code Review 2026-01 (victor-oci) — All Complete Except ARCH-2
+
+| ID | Title | Priority | Closed |
+|----|-------|----------|--------|
+| victor-cz6 | SEC-1: Validate Hugo binary path locations | P0 | 2026-01-19 |
+| victor-0d0 | SEC-2: Path traversal protection | P0 | 2026-01-19 |
+| victor-rbe | SEC-3: Content Security Policy for preview WebView | P0 | 2026-01-19 |
+| victor-45w | ARCH-6: Log successful saves after file switch | P0 | 2026-01-19 |
+| victor-ynu | UI-1: Extract ConfigEditor tabs to separate files | P1 | 2026-01-19 |
+| victor-8ad | DRY-1: EmptyStateView + LoadingStateView + ErrorStateView | P1 | 2026-02-17 |
+| victor-v51 | DRY-4: Extract parser helpers (TOMLHelper, SerializationHelper) | P1 | 2026-01-19 |
+| victor-6r6 | ARCH-1: Extract SiteViewModel (FileCacheManager, FileOperationsService, SpecializedFileManager) | P1 | 2026-01-22 |
+| victor-0qe | UI-4: Accessibility labels on icon-only buttons | P1 | 2026-01-19 |
+| victor-5ng | UI-2: .equatable() on FileListView rows | P2 | 2026-01-22 |
+| victor-669 | UI-3: Optimize AssetBrowserView filtering | P2 | 2026-01-22 |
+| victor-5zp | ARCH-3: Evaluate struct vs class for models (kept classes, documented) | P2 | 2026-01-22 |
+| victor-d4p | UI-5: Adjust GlobalSearch debounce timing | P2 | done |
+| victor-jlc | DRY-2: BadgeStyle view modifier | P2 | done |
+| victor-l85 | DRY-3: FormSectionView component | P2 | done |
+| victor-hal | DRY-5: FileStatusBadgeView component | P2 | done |
+| victor-rc5 | MN-1: Centralize remaining magic numbers | P2 | done |
+| victor-2vp | DRY-6: LabeledTextField component | P3 | 2026-01-22 |
+| victor-23p | DRY-7: SF Symbols constants enum | P3 | 2026-01-22 |
+| victor-2ce | DRY-8: Text style view modifiers | P3 | 2026-01-22 |
+| victor-41z | ARCH-5: Document state duplication rationale | P3 | 2026-01-22 |
+| victor-mdk | ARCH-4: Document service actor strategy | P3 | done |
+| victor-bmr | SEC-4: Certificate validation for WebSocket | P3 | done |
+| victor-byt | SEC-5: Consider App Sandbox | P3 | done |
+| victor-d75 | UI-6: Missing preview providers | P3 | done |
+| victor-y1i | UI-7: Semantic font sizes | P3 | done |
+
+### Other Completed Work
+
+| ID | Title | Closed |
+|----|-------|--------|
+| victor-00z | Editor typing lag (5 optimizations) | 2026-01-14 |
+| victor-1z5 | Flash of default content when switching files | 2026-01-12 |
+| victor-1z2 | Hugo server warning vs error badge colors | 2026-01-16 |
+| victor-0fm | Build error popover inconsistency in Live Preview | 2026-01-18 |
+| victor-4wa | App crash on adding tab (disabled native tabbing) | 2026-01-08 |
+| victor-27m | Inspector "no content selected" auto-hide | 2026-01-12 |
+| victor-8u2 | Multi-file search & replace | 2026-01-13 |
+| victor-42t | [EPIC] Phase 8: Hugo Server Integration | 2026-01-13 |
+| victor-4kf | [EPIC] Phase 7: Template Editing | 2026-01-10 |
+| victor-22v | ARCH-1.2: Extract FileOperationsService | 2026-01-20 |
+| victor-49i | ARCH-1.1: Extract FileCacheManager | 2026-01-20 |
+
+---
+
+## Reference
+
+- **Detailed code review findings**: `Docs/CODE-REVIEW-PLAN.md`
+- **Priority legend**: P0 (critical) > P1 (high) > P2 (medium) > P3 (low) > P4 (backlog)
+- **Dependency graph**: FSEvents chain is `bfs + 93p -> 5cl -> (u5y + 8cw + 8u1) -> rey`. Git chain is `04m -> (cit + 7zv + agi + 95t + 2d4)`.
+- **Original issue tracker**: `.beads/issues.jsonl` (archived, no longer updated)

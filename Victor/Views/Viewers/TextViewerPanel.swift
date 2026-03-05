@@ -19,17 +19,12 @@ struct TextViewerPanel: View {
 
             // Content
             if isLoading {
-                ProgressView("Loading file...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingStateView(message: "Loading file...")
             } else if let errorMessage = errorMessage {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text(errorMessage)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ErrorStateView(
+                    title: "Failed to Load File",
+                    message: errorMessage
+                )
             } else {
                 ScrollView {
                     Text(content)

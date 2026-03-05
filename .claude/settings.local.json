@@ -36,7 +36,12 @@
       "Bash(bd epic create:*)",
       "Skill(c4-diagrams)",
       "Bash(python3:*)",
-      "Bash(bd export:*)"
+      "Bash(bd export:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api:*)",
+      "Bash(gh search:*)",
+      "Bash(head:*)"
     ]
   }
 }

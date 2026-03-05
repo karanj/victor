@@ -1,0 +1,504 @@
+# Victor Issue Tracker
+# Last updated: 2026-02-22
+#
+# Schema: id, title, status (open|blocked|done), priority (P0-P4),
+#         type (epic|task|feature|bug), blocked_by, blocks, files, estimate, detail
+#
+# Dependency chains:
+#   FSEvents: bfs + 93p -> 5cl -> (u5y + 8cw + 8u1) -> rey
+#   Git:      04m -> (cit + 7zv + agi + 95t + 2d4)
+#   Settings: stn -> 8cw
+#   Syntax:   t5r -> (t5h + t5g) [ALL CLOSED wont-do]
+#   Tabs:     tab -> trs
+#
+# Source: CodeEdit comparison (2026-02-22)
+#   New tickets from CodeEdit feature gap analysis: lnr, tab, trs, bcr, qop,
+#   t5r, t5h, t5g, thm, cfl. See git log for research details.
+
+issues:
+
+  # ── Architecture ──────────────────────────────────────────────
+
+  - id: victor-zw4
+    title: "ARCH-2: Protocol abstractions for services"
+    status: open
+    priority: P2
+    type: task
+    files: [All service files]
+    estimate: 2d
+    detail: >
+      Services use concrete .shared singletons (212 instances, 41 files).
+      Create protocol abstractions (e.g. FileSystemServicing) and inject
+      via constructor or SwiftUI Environment for testability.
+
+  - id: victor-stn
+    title: "Settings: JSON-based preferences with typed property wrapper"
+    status: open
+    priority: P2
+    type: task
+    blocks: [victor-8cw]
+    files:
+      - Victor/Services/SettingsService.swift (new)
+      - Victor/Models/AppSettings.swift (new)
+      - Victor/Views/PreferencesView.swift
+    estimate: 6h
+    detail: >
+      Replace scattered UserDefaults access with a single JSON file at
+      ~/Library/Application Support/Victor/settings.json. Define typed
+      SettingsData struct (sections: General, Editor, FileWatching, Preview).
+      Generic @AppSettings<T> property wrapper for type-safe access — no magic
+      strings, compile-checked paths. Combine throttle(2s) debounces writes.
+      Enables a clean preferences UI with sidebar categories + detail pane.
+      Inspired by CodeEdit's AppSettings pattern.
+
+  # ── Editor ─────────────────────────────────────────────────────
+
+  - id: victor-lnr
+    title: "Line numbers gutter in editor"
+    status: open
+    priority: P2
+    type: feature
+    files:
+      - Victor/Views/Editor/EditorTextView.swift
+    estimate: 4-6h
+    detail: >
+      Add a line number gutter to the NSTextView-based editor. NSTextView supports
+      this via NSRulerView — subclass NSRulerView to draw line numbers in the gutter
+      aligned with each text line. Account for line wrapping (wrapped lines share the
+      same line number). Use layoutManager.enumerateLineFragments to map visual lines
+      to logical line numbers. Style: monospaced font, dimmed color, right-aligned,
+      current line highlighted. Should respect font size changes. CodeEdit implements
+      this in their CodeEditTextView package via a custom gutter renderer — the
+      NSRulerView approach is simpler and sufficient for Victor's single-editor model.
+
+  - id: victor-tab
+    title: "Tab bar for open files"
+    status: open
+    priority: P2
+    type: feature
+    blocks: [victor-trs]
+    files:
+      - Victor/Views/Editor/TabBarView.swift (new)
+      - Victor/Views/MainWindow/ContentView.swift
+      - Victor/ViewModels/SiteViewModel.swift
+    estimate: 1-2d
+    detail: >
+      Horizontal tab bar above the editor area showing recently-opened files. Each
+      tab shows the filename (with parent folder if ambiguous, e.g. two index.md files).
+      Close button (x) on hover. Active tab visually distinct. Clicking a tab switches
+      selectedNode in SiteViewModel. Tabs persist in openFiles: [FileNode] on
+      SiteViewModel — opening a file adds to the list, closing removes. Limit to ~15
+      tabs, oldest auto-closed. New tabs insert after the currently active tab (CodeEdit
+      pattern). Tab ordering via drag-and-drop is nice-to-have but not required for v1.
+      No split editor support needed — single editor pane with tab switching.
+
+      Data model: Add openTabs: [UUID] and activeTabID: UUID? to SiteViewModel.
+      selectFile() adds to openTabs if not present, sets activeTabID. closeTab(id:)
+      removes from openTabs, selects adjacent tab. Wire into ContentView between
+      toolbar and editor area.
+
+  - id: victor-trs
+    title: "Session restoration (tabs, selected file, window state)"
+    status: blocked
+    priority: P2
+    type: feature
+    blocked_by: [victor-tab]
+    files:
+      - Victor/VictorApp.swift
+      - Victor/ViewModels/SiteViewModel.swift
+      - Victor/Models/SessionState.swift (new)
+    estimate: 4-6h
+    detail: >
+      Persist editor session state across app restarts. Save to JSON at
+      ~/Library/Application Support/Victor/session.json on app termination
+      and periodically (every 30s). Restore on launch if the same site is opened.
+
+      SessionState struct: siteURL, openTabIDs (matched by relative file path since
+      UUIDs regenerate on reload), activeTabRelativePath, per-file cursor positions
+      and scroll offsets (keyed by relative path). On restore: reload site tree,
+      match saved relative paths to new FileNode UUIDs, reopen tabs, restore
+      active selection. Gracefully handle missing files (skip, don't error).
+      Use Codable for serialization. Depends on tab bar (victor-tab) for the
+      open-tabs data model.
+
+  - id: victor-bcr
+    title: "Breadcrumb navigation bar"
+    status: open
+    priority: P2
+    type: feature
+    files:
+      - Victor/Views/Editor/BreadcrumbBarView.swift (new)
+      - Victor/Views/MainWindow/ContentView.swift
+      - Victor/ViewModels/SiteViewModel.swift
+    estimate: 4-6h
+    detail: >
+      Horizontal breadcrumb bar showing the selected file's path within the Hugo site,
+      displayed between the tab bar and editor area. Example: content > posts > 2026 >
+      my-post.md. Each path segment is a clickable button that opens a dropdown menu
+      listing sibling files/folders at that level. Selecting a sibling navigates to it
+      (folders expand in sidebar, files open in editor).
+
+      Implementation: decompose selectedNode's path relative to site root into segments.
+      For each segment, query FileNode tree for siblings. Use SwiftUI Menu or popover
+      for dropdowns. Show file type icons in dropdowns. Truncate long paths from the
+      left with "..." if the breadcrumb overflows. Especially valuable for Hugo sites
+      with deep content/ hierarchies (e.g. content/en/docs/guides/getting-started.md).
+      CodeEdit implements this with folder + symbol navigation — Victor only needs
+      folder/file level since markdown symbols aren't relevant for CMS use.
+
+  - id: victor-qop
+    title: "Quick open file finder (Cmd+P)"
+    status: open
+    priority: P2
+    type: feature
+    files:
+      - Victor/Views/GlobalSearch/QuickOpenView.swift (new)
+      - Victor/Views/MainWindow/ContentView.swift
+      - Victor/ViewModels/SiteViewModel.swift
+    estimate: 4-6h
+    detail: >
+      Keyboard-triggered (Cmd+P or Cmd+Shift+O) floating panel for fuzzy file name
+      search. Shows a text field with results updating as user types. Results ranked by
+      fuzzy match score, showing filename + relative path + file type icon. Enter opens
+      the selected file, Escape dismisses. Arrow keys navigate results.
+
+      Implementation: flatten FileNode tree into [FileNode], fuzzy match against
+      node.name using a simple subsequence scoring algorithm (bonus for consecutive
+      matches, prefix matches, and path segment boundaries). Show top 15 results.
+      Render as a .sheet or floating NSPanel centered in the window. Distinct from
+      GlobalSearchView which searches file *contents* — this searches file *names* only
+      and is optimized for speed (no disk I/O, operates on in-memory tree).
+
+      Fuzzy match algorithm: score each candidate by iterating query chars against
+      filename chars. Award points for: consecutive matches (+2), first-char match (+3),
+      after separator (/ . - _) match (+2), case-exact match (+1). Sort by score desc.
+
+  - id: victor-csr
+    title: "Restore cursor position and scroll offset on file switch"
+    status: open
+    priority: P2
+    type: feature
+    files:
+      - Victor/ViewModels/SiteViewModel.swift
+      - Victor/ViewModels/EditorViewModel.swift
+      - Victor/Views/Editor/EditorTextView.swift
+    estimate: 3h
+    detail: >
+      Store NSRange (cursor) and CGFloat (scroll offset) per file UUID alongside
+      editedContentByFile in SiteViewModel. Persist in EditorViewModel before
+      file switch, restore after load. NSTextView already exposes selectedRange
+      and visibleRect — wire through the existing file-switch coordination.
+      Users currently lose cursor position on every file switch.
+
+  # ── File System Watching (FSEvents) ───────────────────────────
+  # Epic: victor-iv0 — auto-reload on external file changes
+
+  - id: victor-bfs
+    title: "Create FileWatcherService actor"
+    status: open
+    priority: P2
+    type: task
+    blocks: [victor-5cl, victor-so7]
+    files: [Victor/Services/FileWatcherService.swift (new), Victor/AppConstants.swift]
+    estimate: 2-3h
+    detail: >
+      Actor managing FSEventStream lifecycle. startWatching/stopWatching,
+      registerSaveIntent (5s expiry), event coalescing (100ms window in Swift).
+      Define FileChangeEvent, FileChangeBatch, FileWatcherDelegate types.
+      Add FileWatcher constants to AppConstants.
+
+      FSEvents flags: kFSEventStreamCreateFlagFileEvents (file-level granularity)
+      + kFSEventStreamCreateFlagUseExtendedData (metadata) + kFSEventStreamCreateFlagNoDefer
+      (events fire immediately, no FSEvents-side buffering). Apply the 100ms debounce
+      in Swift via a DispatchWorkItem rather than relying on FSEvents' latency param —
+      this gives precise control and avoids the coalescing window eating rapid saves.
+      Validated by CodeEdit's DirectoryEventStream production implementation.
+
+  - id: victor-93p
+    title: "Create FileChangeNotification model"
+    status: open
+    priority: P2
+    type: task
+    blocks: [victor-rpt, victor-5cl]
+    files: [Victor/Models/FileChangeNotification.swift (new)]
+    estimate: 30m
+    detail: >
+      Identifiable struct with type (.conflict/.autoReloaded/.deleted/.created),
+      urls, message, timestamp. Actions: Reload, Keep Editing, Dismiss.
+
+  - id: victor-5cl
+    title: "Wire file watcher into SiteViewModel"
+    status: blocked
+    priority: P2
+    type: task
+    blocked_by: [victor-bfs, victor-93p]
+    blocks: [victor-u5y, victor-8cw, victor-8u1]
+    files: [Victor/ViewModels/SiteViewModel.swift]
+    estimate: 2-3h
+    detail: >
+      Start/stop watcher in loadSite/closeSite. Implement FileWatcherDelegate:
+      filter events, detect conflicts via editedContentByFile, auto-reload
+      unmodified files, manage fileChangeNotifications with auto-dismiss.
+
+  - id: victor-so7
+    title: "Register save intents before writes"
+    status: blocked
+    priority: P2
+    type: task
+    blocked_by: [victor-bfs]
+    files: [Victor/Services/AutoSaveService.swift, Victor/Services/FileSystemService.swift]
+    estimate: 1h
+    detail: >
+      Call registerSaveIntent(for: url) before every disk write in
+      AutoSaveService.performSave, FileSystemService.writeFile/createFile/duplicateFile.
+
+  - id: victor-rpt
+    title: "File change notification UI views"
+    status: blocked
+    priority: P2
+    type: task
+    blocked_by: [victor-93p]
+    blocks: [victor-u5y]
+    files: [Victor/Views/Notifications/FileChangeNotificationView.swift (new), Victor/Views/Notifications/FileChangeNotificationContainer.swift (new)]
+    estimate: 2h
+    detail: >
+      Toast banners: icon + message + action buttons, .ultraThinMaterial bg.
+      Container: max 3 visible, animated entry/exit, 5s auto-dismiss.
+      Tint: orange=conflict, green=reloaded, red=deleted.
+
+  - id: victor-u5y
+    title: "Integrate notifications into ContentView"
+    status: blocked
+    priority: P2
+    type: task
+    blocked_by: [victor-rpt, victor-5cl]
+    files: [Victor/Views/MainWindow/ContentView.swift, Victor/VictorApp.swift]
+    estimate: 1h
+    detail: >
+      .overlay(alignment: .top) with notification container.
+      Queue during focus mode. stopFileWatching in applicationWillTerminate.
+
+  - id: victor-8cw
+    title: "File watching preference toggle"
+    status: blocked
+    priority: P2
+    type: task
+    blocked_by: [victor-5cl, victor-stn]
+    files: [Victor/Views/PreferencesView.swift, Victor/AppConstants.swift]
+    estimate: 30m
+    detail: >
+      Two toggles: isFileWatchingEnabled (master), autoReloadUnchangedFiles.
+      onChange restarts watcher.
+
+  - id: victor-8u1
+    title: "File watcher edge cases"
+    status: blocked
+    priority: P2
+    type: task
+    blocked_by: [victor-5cl]
+    files: [Victor/ViewModels/SiteViewModel.swift, Victor/Services/FileWatcherService.swift]
+    estimate: 3-4h
+    detail: >
+      Handle: deleted files (save-to-new/close alert), renamed (update FileNode.url),
+      new files (sidebar refresh), batch ops (coalesced notification),
+      directory changes, focus mode queuing, background app events.
+
+  - id: victor-rey
+    title: "File watcher test coverage"
+    status: blocked
+    priority: P2
+    type: task
+    blocked_by: [victor-u5y, victor-8cw, victor-8u1]
+    files: [VictorTests/FileWatcherServiceTests.swift (new), VictorTests/FileWatcherIntegrationTests.swift (new)]
+    estimate: 3-4h
+    detail: >
+      Tests for: save intent registry, event coalescing, classification,
+      delegate callbacks, lifecycle, conflict detection, notification mgmt,
+      preferences. Uses MockFileWatcherService via protocol injection.
+
+  # ── Git Integration ───────────────────────────────────────────
+  # Epic: victor-edf — git status, commit, push from within Victor
+
+  - id: victor-04m
+    title: "Create GitService"
+    status: open
+    priority: P3
+    type: task
+    blocks: [victor-cit, victor-7zv, victor-agi, victor-95t, victor-2d4]
+    files: [Victor/Services/GitService.swift (new)]
+    estimate: 2-3h
+    detail: >
+      Shell out to git via Process. Methods: status() -> parsed file statuses,
+      stage/unstage, commit(message:), push(), pull().
+      Error handling for missing git, not a repo, conflicts.
+
+  - id: victor-cit
+    title: "Git status display in sidebar"
+    status: blocked
+    priority: P3
+    type: task
+    blocked_by: [victor-04m]
+    files: [Victor/Views/MainWindow/FileListView.swift, Victor/ViewModels/SiteViewModel.swift]
+    estimate: 2h
+    detail: Color-coded badges for modified, staged, untracked files.
+
+  - id: victor-7zv
+    title: "Commit dialog with file staging"
+    status: blocked
+    priority: P3
+    type: task
+    blocked_by: [victor-04m]
+    files: [Victor/Views/Git/CommitDialog.swift (new)]
+    estimate: 2-3h
+    detail: File list with staging checkboxes, commit message field, validation.
+
+  - id: victor-agi
+    title: "Push/Pull functionality"
+    status: blocked
+    priority: P3
+    type: feature
+    blocked_by: [victor-04m]
+    files: [Toolbar view, Victor/Services/GitService.swift]
+    estimate: 2h
+    detail: Toolbar buttons with progress. SSH/credential helper auth. Conflict handling.
+
+  - id: victor-95t
+    title: "Branch display and switching"
+    status: blocked
+    priority: P3
+    type: task
+    blocked_by: [victor-04m]
+    files: [Victor/Views/Git/GitStatusView.swift (new), Victor/Services/GitService.swift]
+    estimate: 2h
+    detail: Branch name display, picker/dropdown, create new, handle uncommitted changes.
+
+  - id: victor-2d4
+    title: "Diff viewer"
+    status: blocked
+    priority: P3
+    type: task
+    blocked_by: [victor-04m]
+    files: [Victor/Views/Git/DiffViewer.swift (new)]
+    estimate: 3-4h
+    detail: Side-by-side or inline diff with syntax highlighting and hunk navigation.
+
+  # ── Syntax Highlighting (Tree-Sitter) ─────────────────────────
+  # Closed: tree-sitter/Neon adds 9 SPM deps (Neon pre-1.0 on branch:main,
+  # grammar packages with broken Package.swift files). Highlightr is adequate
+  # for a CMS app — the incremental parsing benefit doesn't justify the cost.
+
+  - id: victor-t5r
+    title: "Integrate SwiftTreeSitter for syntax highlighting"
+    status: wont-do
+    priority: P2
+    type: task
+    detail: >
+      Closed: tree-sitter grammar SPM packages have broken conditional scanner.c
+      inclusion (FileManager.default.fileExists fails in Xcode sandbox). Neon is
+      pre-1.0 on branch:main. Highlightr's debounced highlighting is sufficient
+      for Victor's use case as a CMS, not a code editor.
+
+  - id: victor-t5h
+    title: "Syntax highlighting for TextViewerPanel"
+    status: wont-do
+    priority: P2
+    type: task
+    detail: "Closed: parent ticket victor-t5r closed as wont-do."
+
+  - id: victor-t5g
+    title: "Syntax highlighting in markdown editor"
+    status: wont-do
+    priority: P2
+    type: task
+    detail: "Closed: parent ticket victor-t5r closed as wont-do."
+
+  # ── Editor UX ────────────────────────────────────────────────
+
+  - id: victor-thm
+    title: "Editor and preview theme system"
+    status: open
+    priority: P3
+    type: feature
+    files:
+      - Victor/Models/EditorTheme.swift (new)
+      - Victor/Services/ThemeService.swift (new)
+      - Victor/Views/PreferencesView.swift
+      - Victor/Services/MarkdownRenderer.swift
+    estimate: 1-2d
+    detail: >
+      Define EditorTheme model: background, text, cursor colors + per-token-type
+      colors (keyword, string, comment, etc.) + preview CSS overrides. Ship 3 built-in
+      themes: Light (system default colors), Dark (Xcode-dark inspired), Sepia (warm
+      background, dark brown text — popular for writing). Store as JSON in app bundle,
+      user themes in ~/Library/Application Support/Victor/themes/.
+
+      ThemeService: loads built-in + user themes, provides current theme (reactive
+      via @Observable), persists selection in settings. EditorTextView reads token
+      colors from current theme. MarkdownRenderer injects theme's preview CSS into
+      the HTML template. PreferencesView gets a Theme section with theme picker,
+      live preview swatch, and per-token color customization.
+
+      CodeEdit's theme system supports import/export/duplicate and fuzzy search —
+      Victor can start simpler with just a picker and built-in themes, adding
+      customization later.
+
+  - id: victor-cfl
+    title: "Code folding for frontmatter and template blocks"
+    status: open
+    priority: P3
+    type: feature
+    files:
+      - Victor/Views/Editor/EditorTextView.swift
+    estimate: 1d
+    detail: >
+      Add code folding to the editor, initially targeting two cases: (1) YAML/TOML
+      frontmatter blocks (--- to ---) and (2) Go template blocks ({{ define }} to
+      {{ end }}). Show fold indicators in the gutter (requires victor-lnr for gutter
+      infrastructure, though technically independent — can use a minimal fold margin).
+
+      Implementation: use NSTextView's built-in folding support via
+      NSLayoutManager.setTemporaryAttribute(.foldingIndicator) or implement custom
+      folding by replacing folded ranges with a placeholder attachment ("...") and
+      storing the original text. Click gutter indicator or Cmd+Option+[ to fold,
+      Cmd+Option+] to unfold. Folded state per file, persisted in session state.
+
+      CodeEdit implements folding based on indentation with syntax-aware folding
+      planned. For Victor's use case, the two targeted fold points (frontmatter,
+      template blocks) cover the primary needs without full indentation-based folding.
+
+  # ── Preview ───────────────────────────────────────────────────
+
+  - id: victor-1o0
+    title: "Syntax highlighting for code blocks in preview"
+    status: open
+    priority: P3
+    type: task
+    files: [Victor/Views/Preview/PreviewWebView.swift, Victor/Services/MarkdownRenderer.swift]
+    estimate: 2-3h
+    detail: >
+      Integrate highlight.js or Prism.js. Auto-detect language from fence info.
+      Light/dark theme support.
+
+  - id: victor-ayz
+    title: "GH#1: Hugo theme CSS in preview"
+    status: open
+    priority: P3
+    type: feature
+    files: [Victor/Services/MarkdownRenderer.swift]
+    detail: >
+      Load Hugo theme CSS for accurate preview. Known blocker: most themes use
+      SCSS requiring Hugo's Sass compiler. Only practical via Hugo Server pipe.
+
+  # ── Accessibility ─────────────────────────────────────────────
+
+  - id: victor-3l6
+    title: "VoiceOver audit and improvements"
+    status: open
+    priority: P4
+    type: task
+    files: [All view files]
+    estimate: 3-4h
+    detail: >
+      Labels/hints on remaining controls, navigation hints for complex views,
+      accessibility traits, keyboard nav, screen reader announcements.
+      Icon-only buttons already done (victor-0qe).

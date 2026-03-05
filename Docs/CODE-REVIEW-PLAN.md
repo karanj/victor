@@ -363,10 +363,10 @@ struct EmptyStateView: View {
 | ID | Category | Description | File(s) |
 |----|----------|-------------|---------|
 | ARCH-1 | Architecture | Extract SiteViewModel responsibilities | `SiteViewModel.swift` |
-| UI-1 | SwiftUI | Extract ConfigEditor tabs to files | `ConfigEditorView.swift` |
+| UI-1 | SwiftUI | ~~Extract ConfigEditor tabs to files~~ | `ConfigEditorView.swift` | ✅ Done |
 | UI-4 | SwiftUI | Add accessibility labels to icons | Multiple |
-| DRY-1 | Code Quality | Create EmptyStateView component | New file |
-| DRY-4 | Code Quality | Extract parser helpers (~600 lines) | 3 parser files |
+| DRY-1 | Code Quality | ~~Expand EmptyStateView + add LoadingStateView & ErrorStateView~~ | `EmptyStateView.swift` + 5 files | ✅ Done |
+| DRY-4 | Code Quality | ~~Extract parser helpers (~600 lines)~~ | 3 parser files | ✅ Done |
 
 ### P2 - Medium (Backlog)
 

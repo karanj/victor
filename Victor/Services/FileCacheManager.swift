@@ -18,7 +18,7 @@ final class FileCacheManager {
 
     /// Default maximum cached files
     /// Edited content strings are lightweight, so we can cache many
-    private static let defaultMaxCachedFiles = 100
+    private static nonisolated let defaultMaxCachedFiles = 100
 
     /// Callback invoked when a node is evicted from cache
     /// Parameter is the evicted node ID
