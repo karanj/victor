@@ -821,6 +821,41 @@ issues:
       and the server silently drifts to port+1. Set SO_REUSEADDR on the probe
       socket before bind.
 
+  - id: victor-ea5
+    title: "Extend EditorActions to the five specialized editors"
+    status: open
+    priority: P3
+    type: task
+    files:
+      - Victor/Views/Components/EditorToolbarButtons.swift
+      - Victor/Views/ConfigEditor/ConfigEditorView.swift
+      - Victor/Views/DataEditor/DataFileEditorView.swift
+      - Victor/Views/TranslationEditor/TranslationEditorView.swift
+      - Victor/Views/TemplateEditor/TemplateEditorView.swift
+      - Victor/Views/ArchetypeEditor/ArchetypeEditorView.swift
+    estimate: 2-3h
+    detail: >
+      Found during WP1.3 (2026-07-04): Config/Data/Translation/Template/
+      Archetype editors bind Cmd+S locally via EditorToolbarButtons and
+      publish no EditorActions focused value, so File > Save shows disabled
+      there while the local button owns the shortcut (no double-fire, but
+      the menu's validation/confirmation is bypassed). Publish EditorActions
+      (formatting/shortcode nil) from each and drop the local shortcut,
+      making the File menu the single Cmd+S owner everywhere.
+    status: open
+    priority: P4
+    type: bug
+    files: [Victor/Views/MainWindow/ContentView.swift]
+    estimate: 2-3h
+    detail: >
+      Found during WP1.1 (2026-07-04): NavigationSplitView exposes no
+      SwiftUI hook for divider-position autosave (columnVisibility is plain
+      @State; width isn't covered by SceneStorage). Options: bridge to the
+      underlying NSSplitViewController autosaveName via the WindowAccessor
+      introspection point, or persist navigationSplitViewColumnWidth input
+      from a stored AppSettings value. Low priority - window frame,
+      inspector state, and selection all persist already.
+
   - id: victor-ilf
     title: "isLoadingFile flag races across rapid file switches"
     status: open

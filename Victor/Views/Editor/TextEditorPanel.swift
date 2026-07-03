@@ -31,6 +31,22 @@ struct TextEditorPanel: View {
         .onChange(of: textFile.id) { _, _ in
             viewModel.loadFile(textFile)
         }
+        // Publish this editor's actions to the menu bar (File > Save/Revert).
+        // No Markdown formatting or shortcode picker for plain-text files.
+        .focusedValue(\.editorActions, EditorActions(
+            formatting: nil,
+            showShortcodePicker: nil,
+            save: {
+                await viewModel.save()
+                return true
+            },
+            revert: {
+                await viewModel.reloadFromDisk()
+            },
+            hasUnsavedChanges: {
+                viewModel.hasUnsavedChanges
+            }
+        ))
     }
 
     private var textEditorToolbar: some View {
@@ -86,7 +102,8 @@ struct TextEditorPanel: View {
             } label: {
                 Image(systemName: "square.and.arrow.down")
             }
-            .keyboardShortcut("s", modifiers: .command)
+            // No .keyboardShortcut here - File > Save (Cmd+S) is the single owner,
+            // routed through the focusedValue(\.editorActions) published above.
             .disabled(!viewModel.hasUnsavedChanges || viewModel.isSaving)
             .help("Save (⌘S)")
 

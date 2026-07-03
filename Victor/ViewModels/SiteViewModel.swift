@@ -132,6 +132,11 @@ class SiteViewModel {
     /// Whether global search panel is presented
     var isGlobalSearchPresented = false
 
+    /// Whether the "New Post…" sheet (NewContentView) is presented.
+    /// Set by File > New Post… (Cmd+N); the presenting view resolves the
+    /// target directory via `newContentTargetFolder` when it fires.
+    var isNewContentPresented = false
+
     /// Recently opened files (for Quick Open)
     var recentFiles: [FileNode] = []
 
@@ -1300,6 +1305,49 @@ class SiteViewModel {
             errorMessage = "Failed to create folder: \(error.localizedDescription)"
             Logger.shared.error("Error creating folder", error: error)
         }
+    }
+
+    // MARK: - File Menu Target Resolution
+    //
+    // Shared folder-resolution logic for File > New Post… and File > New Folder,
+    // which both need "the selected folder, or a sensible fallback" per
+    // Docs/MAC-POLISH-DESIGN.md W2.1.
+
+    /// The top-level content/ folder node, if the loaded site has one.
+    var contentRootNode: FileNode? {
+        fileNodes.first { $0.hugoRole == .content }
+    }
+
+    /// Target folder for File > New Post…: the selected folder (or the parent
+    /// of a selected file) when it's inside content/, otherwise content/ root.
+    var newContentTargetFolder: FileNode? {
+        if let selectedNode {
+            let candidate = selectedNode.isDirectory ? selectedNode : selectedNode.parent
+            if let candidate, isNode(candidate, descendantOfRole: .content) {
+                return candidate
+            }
+        }
+        return contentRootNode
+    }
+
+    /// Target folder for File > New Folder: the selected folder, or the
+    /// parent of a selected file, falling back to content/ root.
+    var newFolderTargetFolder: FileNode? {
+        if let selectedNode {
+            if selectedNode.isDirectory { return selectedNode }
+            if let parent = selectedNode.parent { return parent }
+        }
+        return contentRootNode
+    }
+
+    /// Walks up from `node` to check whether it (or an ancestor) has the given Hugo role.
+    private func isNode(_ node: FileNode, descendantOfRole role: HugoRole) -> Bool {
+        var current: FileNode? = node
+        while let n = current {
+            if n.hugoRole == role { return true }
+            current = n.parent
+        }
+        return false
     }
 
     // MARK: - Hugo Server Control

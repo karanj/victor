@@ -75,23 +75,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - Focused Values for Editor Commands
 
-struct EditorFormattingKey: FocusedValueKey {
-    typealias Value = (MarkdownFormat) -> Void
+/// Actions the currently focused editor panel exposes to the menu bar.
+///
+/// Replaces the earlier two-key focused-value pattern (`editorFormatting`,
+/// `showShortcodePicker`) so that adding menu-driven editor actions (Save,
+/// Revert) doesn't mean growing more ad-hoc `FocusedValueKey`s (W2.3).
+///
+/// `formatting` and `showShortcodePicker` are optional because not every
+/// editor supports Markdown formatting or shortcodes (e.g. TextEditorPanel
+/// for plain-text files) - the Format menu simply disables those items when
+/// the focused editor doesn't provide them.
+struct EditorActions {
+    /// Apply Markdown formatting at the cursor/selection. `nil` when the
+    /// focused editor doesn't support Markdown formatting.
+    var formatting: ((MarkdownFormat) -> Void)?
+    /// Present the shortcode picker. `nil` when not applicable.
+    var showShortcodePicker: (() -> Void)?
+    /// Save the focused document; returns whether the save succeeded.
+    var save: () async -> Bool
+    /// Reload the focused document from disk, discarding local edits.
+    var revert: () async -> Void
+    /// Whether the focused document currently has unsaved changes.
+    var hasUnsavedChanges: () -> Bool
 }
 
-struct ShortcodePickerKey: FocusedValueKey {
-    typealias Value = () -> Void
+struct EditorActionsKey: FocusedValueKey {
+    typealias Value = EditorActions
 }
 
 extension FocusedValues {
-    var editorFormatting: EditorFormattingKey.Value? {
-        get { self[EditorFormattingKey.self] }
-        set { self[EditorFormattingKey.self] = newValue }
-    }
-
-    var showShortcodePicker: ShortcodePickerKey.Value? {
-        get { self[ShortcodePickerKey.self] }
-        set { self[ShortcodePickerKey.self] = newValue }
+    var editorActions: EditorActionsKey.Value? {
+        get { self[EditorActionsKey.self] }
+        set { self[EditorActionsKey.self] = newValue }
     }
 }
 
@@ -99,14 +114,19 @@ extension FocusedValues {
 struct VictorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var siteViewModel = SiteViewModel()
-    @FocusedValue(\.editorFormatting) private var editorFormatting
-    @FocusedValue(\.showShortcodePicker) private var showShortcodePicker
+    @FocusedValue(\.editorActions) private var editorActions
 
     // Editor preferences (shared with Preferences window via AppSettings)
     @Bindable private var settings = AppSettings.shared
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // File-menu confirmation dialogs. Attached to the window content (not
+    // ContentView itself, which WP1.1 owns concurrently) so they present
+    // against a real window instead of the menu bar's detached view context.
+    @State private var isCloseSiteConfirmationPresented = false
+    @State private var isRevertConfirmationPresented = false
 
     var body: some Scene {
         WindowGroup {
@@ -115,6 +135,53 @@ struct VictorApp: App {
                 .onAppear {
                     // Wire up app delegate to view model for quit confirmation
                     appDelegate.siteViewModel = siteViewModel
+                }
+                .sheet(isPresented: $siteViewModel.isNewContentPresented) {
+                    if let siteURL = siteViewModel.site?.rootURL,
+                       let targetDirectory = siteViewModel.newContentTargetFolder?.url {
+                        NewContentView(
+                            siteURL: siteURL,
+                            targetDirectory: targetDirectory,
+                            onCreated: { fileURL in
+                                Task {
+                                    await siteViewModel.reloadSite()
+                                    if let newNode = siteViewModel.findNode(url: fileURL) {
+                                        siteViewModel.selectNode(newNode)
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+                .confirmationDialog(
+                    "Close Site?",
+                    isPresented: $isCloseSiteConfirmationPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button("Save All and Close") {
+                        Task {
+                            await siteViewModel.saveAllModifiedFiles()
+                            siteViewModel.closeSite()
+                        }
+                    }
+                    Button("Close Without Saving", role: .destructive) {
+                        siteViewModel.closeSite()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This site has unsaved changes. Choose whether to save them before closing.")
+                }
+                .confirmationDialog(
+                    "Revert to the last saved version?",
+                    isPresented: $isRevertConfirmationPresented,
+                    titleVisibility: .visible
+                ) {
+                    Button("Revert", role: .destructive) {
+                        Task { await editorActions?.revert() }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Your changes since the last save will be lost.")
                 }
         }
         .defaultSize(width: AppConstants.Window.defaultWidth, height: AppConstants.Window.defaultHeight)
@@ -158,6 +225,22 @@ struct VictorApp: App {
 
             // File menu commands
             CommandGroup(replacing: .newItem) {
+                Button("New Post...") {
+                    siteViewModel.isNewContentPresented = true
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                .disabled(siteViewModel.site == nil)
+
+                Button("New Folder") {
+                    if let target = siteViewModel.newFolderTargetFolder {
+                        Task { await siteViewModel.createFolder(in: target) }
+                    }
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(siteViewModel.site == nil || siteViewModel.newFolderTargetFolder == nil)
+
+                Divider()
+
                 Button("Open Hugo Site...") {
                     Task {
                         await siteViewModel.openSiteFolder()
@@ -166,49 +249,92 @@ struct VictorApp: App {
                 .keyboardShortcut("o", modifiers: .command)
             }
 
+            CommandGroup(after: .newItem) {
+                Divider()
+
+                Button("Close Site") {
+                    if siteViewModel.hasUnsavedChanges {
+                        isCloseSiteConfirmationPresented = true
+                    } else {
+                        siteViewModel.closeSite()
+                    }
+                }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .disabled(siteViewModel.site == nil)
+            }
+
             CommandGroup(after: .saveItem) {
                 Toggle("Auto-Save", isOn: $settings.isAutoSaveEnabled)
+
+                Divider()
+
+                Button("Save") {
+                    Task { _ = await editorActions?.save() }
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(editorActions == nil || !(editorActions?.hasUnsavedChanges() ?? false))
+
+                Button("Save All") {
+                    Task { await siteViewModel.saveAllModifiedFiles() }
+                }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+                .disabled(!siteViewModel.hasUnsavedChanges)
+
+                Button("Revert to Saved") {
+                    isRevertConfirmationPresented = true
+                }
+                .disabled(editorActions == nil || !(editorActions?.hasUnsavedChanges() ?? false))
+
+                Divider()
+
+                Button("Reveal in Finder") {
+                    if let node = siteViewModel.selectedNode {
+                        siteViewModel.revealInFinder(node: node)
+                    }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .option])
+                .disabled(siteViewModel.selectedNode == nil)
             }
 
             // Format menu - Text formatting
             CommandGroup(after: .textFormatting) {
                 Button("Bold") {
-                    editorFormatting?(.bold)
+                    editorActions?.formatting?(.bold)
                 }
                 .keyboardShortcut("b", modifiers: .command)
-                .disabled(editorFormatting == nil)
+                .disabled(editorActions?.formatting == nil)
 
                 Button("Italic") {
-                    editorFormatting?(.italic)
+                    editorActions?.formatting?(.italic)
                 }
                 .keyboardShortcut("i", modifiers: .command)
-                .disabled(editorFormatting == nil)
+                .disabled(editorActions?.formatting == nil)
 
                 Divider()
 
                 Button("Insert Link") {
-                    editorFormatting?(.link)
+                    editorActions?.formatting?(.link)
                 }
                 .keyboardShortcut("k", modifiers: .command)
-                .disabled(editorFormatting == nil)
+                .disabled(editorActions?.formatting == nil)
 
                 Button("Insert Image") {
-                    editorFormatting?(.image)
+                    editorActions?.formatting?(.image)
                 }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
-                .disabled(editorFormatting == nil)
+                .disabled(editorActions?.formatting == nil)
 
                 Button("Insert Shortcode...") {
-                    showShortcodePicker?()
+                    editorActions?.showShortcodePicker?()
                 }
                 .keyboardShortcut("k", modifiers: [.command, .shift])
-                .disabled(showShortcodePicker == nil)
+                .disabled(editorActions?.showShortcodePicker == nil)
 
                 Button("Block Quote") {
-                    editorFormatting?(.blockquote)
+                    editorActions?.formatting?(.blockquote)
                 }
                 .keyboardShortcut("'", modifiers: .command)
-                .disabled(editorFormatting == nil)
+                .disabled(editorActions?.formatting == nil)
             }
 
             // View menu - Search and Navigation

@@ -305,6 +305,107 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.hasUnsavedChanges)
     }
 
+    // MARK: - File Menu Target Resolution Tests
+    // (WP1.3: File > New Post…, File > New Folder folder-targeting logic)
+
+    func testContentRootNodeFindsTopLevelContentFolder() {
+        let viewModel = SiteViewModel()
+        let content = FileNode(url: URL(fileURLWithPath: "/site/content"), isDirectory: true, hugoRole: .content)
+        let staticDir = FileNode(url: URL(fileURLWithPath: "/site/static"), isDirectory: true, hugoRole: .staticFiles)
+        viewModel.fileNodes = [content, staticDir]
+
+        XCTAssertEqual(viewModel.contentRootNode?.id, content.id)
+    }
+
+    func testContentRootNodeNilWhenNoContentFolder() {
+        let viewModel = SiteViewModel()
+        XCTAssertNil(viewModel.contentRootNode)
+    }
+
+    func testNewContentTargetFolderUsesSelectedFolderInsideContent() {
+        let viewModel = SiteViewModel()
+        let content = FileNode(url: URL(fileURLWithPath: "/site/content"), isDirectory: true, hugoRole: .content)
+        let posts = FileNode(url: URL(fileURLWithPath: "/site/content/posts"), isDirectory: true)
+        content.addChild(posts)
+        viewModel.fileNodes = [content]
+        viewModel.selectedNode = posts
+
+        XCTAssertEqual(viewModel.newContentTargetFolder?.id, posts.id)
+    }
+
+    func testNewContentTargetFolderUsesParentOfSelectedFileInsideContent() {
+        let viewModel = SiteViewModel()
+        let content = FileNode(url: URL(fileURLWithPath: "/site/content"), isDirectory: true, hugoRole: .content)
+        let posts = FileNode(url: URL(fileURLWithPath: "/site/content/posts"), isDirectory: true)
+        let article = FileNode(url: URL(fileURLWithPath: "/site/content/posts/article.md"), isDirectory: false)
+        content.addChild(posts)
+        posts.addChild(article)
+        viewModel.fileNodes = [content]
+        viewModel.selectedNode = article
+
+        XCTAssertEqual(viewModel.newContentTargetFolder?.id, posts.id)
+    }
+
+    func testNewContentTargetFolderFallsBackToContentRootWhenSelectionOutsideContent() {
+        let viewModel = SiteViewModel()
+        let content = FileNode(url: URL(fileURLWithPath: "/site/content"), isDirectory: true, hugoRole: .content)
+        let staticDir = FileNode(url: URL(fileURLWithPath: "/site/static"), isDirectory: true, hugoRole: .staticFiles)
+        viewModel.fileNodes = [content, staticDir]
+        viewModel.selectedNode = staticDir
+
+        XCTAssertEqual(viewModel.newContentTargetFolder?.id, content.id)
+    }
+
+    func testNewContentTargetFolderFallsBackToContentRootWhenNothingSelected() {
+        let viewModel = SiteViewModel()
+        let content = FileNode(url: URL(fileURLWithPath: "/site/content"), isDirectory: true, hugoRole: .content)
+        viewModel.fileNodes = [content]
+        viewModel.selectedNode = nil
+
+        XCTAssertEqual(viewModel.newContentTargetFolder?.id, content.id)
+    }
+
+    func testNewFolderTargetFolderUsesSelectedFolderAnywhere() {
+        let viewModel = SiteViewModel()
+        let staticDir = FileNode(url: URL(fileURLWithPath: "/site/static"), isDirectory: true, hugoRole: .staticFiles)
+        let images = FileNode(url: URL(fileURLWithPath: "/site/static/images"), isDirectory: true)
+        staticDir.addChild(images)
+        viewModel.fileNodes = [staticDir]
+        viewModel.selectedNode = images
+
+        XCTAssertEqual(viewModel.newFolderTargetFolder?.id, images.id)
+    }
+
+    func testNewFolderTargetFolderUsesParentOfSelectedFile() {
+        let viewModel = SiteViewModel()
+        let staticDir = FileNode(url: URL(fileURLWithPath: "/site/static"), isDirectory: true, hugoRole: .staticFiles)
+        let file = FileNode(url: URL(fileURLWithPath: "/site/static/logo.png"), isDirectory: false)
+        staticDir.addChild(file)
+        viewModel.fileNodes = [staticDir]
+        viewModel.selectedNode = file
+
+        XCTAssertEqual(viewModel.newFolderTargetFolder?.id, staticDir.id)
+    }
+
+    func testNewFolderTargetFolderFallsBackToContentRootWhenNothingSelected() {
+        let viewModel = SiteViewModel()
+        let content = FileNode(url: URL(fileURLWithPath: "/site/content"), isDirectory: true, hugoRole: .content)
+        viewModel.fileNodes = [content]
+        viewModel.selectedNode = nil
+
+        XCTAssertEqual(viewModel.newFolderTargetFolder?.id, content.id)
+    }
+
+    // MARK: - New Content Presentation Flag Tests
+
+    func testIsNewContentPresentedDefaultsFalseAndIsSettable() {
+        let viewModel = SiteViewModel()
+        XCTAssertFalse(viewModel.isNewContentPresented)
+
+        viewModel.isNewContentPresented = true
+        XCTAssertTrue(viewModel.isNewContentPresented)
+    }
+
     // MARK: - Toggle Tests
 
     func testToggleInspector() {

@@ -104,14 +104,25 @@ struct EditorPanelView: View {
             viewModel.cleanup()
         }
         .navigationTitle(viewModel.navigationTitle)
-        // Provide formatting function to focused value system for keyboard shortcuts
-        .focusedValue(\.editorFormatting) { format in
-            editorCoordinator?.applyFormat(format)
-        }
-        // Provide shortcode picker toggle for keyboard shortcut
-        .focusedValue(\.showShortcodePicker) {
-            showShortcodePicker = true
-        }
+        // Publish this editor's actions to the menu bar (Format menu, File > Save/Revert).
+        // See EditorActions in VictorApp.swift for the consolidated focused-value shape.
+        .focusedValue(\.editorActions, EditorActions(
+            formatting: { format in
+                editorCoordinator?.applyFormat(format)
+            },
+            showShortcodePicker: {
+                showShortcodePicker = true
+            },
+            save: {
+                await viewModel.save()
+            },
+            revert: {
+                await viewModel.reloadFromDisk()
+            },
+            hasUnsavedChanges: {
+                viewModel.hasUnsavedChanges
+            }
+        ))
         // When the selected file changes, reset the editor view model so it
         // points at the new file node and content instead of the previous one.
         .onChange(of: contentFile.id) { _, _ in
@@ -406,7 +417,8 @@ struct SaveButton: View {
                 .labelStyle(.titleAndIcon)
                 .font(.callout)
         }
-        .keyboardShortcut("s", modifiers: .command)
+        // No .keyboardShortcut here - File > Save (Cmd+S) is the single owner,
+        // routed through the focusedValue(\.editorActions) published above.
         .disabled(!hasUnsavedChanges)
         .buttonStyle(.bordered)
     }

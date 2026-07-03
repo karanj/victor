@@ -31,7 +31,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 1.2 | toolbar(id:) customization, 3 items, stable-identity workaround for conditional items. Verdict: works-with-workaround; interactive persistence check deferred to phase-gate manual list (agent had no TCC perms) | victor-wc1 | **done** | this commit |
 
-**Next up:** WP1.3 (menus agent, in flight) → WP1.4 (Go/Dock menus, same agent) → 1.R Opus review → Phase 1 gate: full suite + USER manual smoke (proxy-icon drag, edited-dot, Customize Toolbar drag + relaunch persistence, toolbar with no site open) → push.
+| 1.3 | EditorActions focused-value struct (formatting/shortcode optional, save/revert/hasUnsavedChanges) published by EditorPanelView + TextEditorPanel; full File menu (New Post ⌘N, New Folder ⇧⌘N, Close Site ⇧⌘W w/ confirm, Save ⌘S single-owner, Save All ⌥⌘S, Revert w/ confirm, Reveal ⌥⌘R) with validation; sheet/dialogs attached at WindowGroup call site (no ContentView edit). Gap filed: victor-ea5 (5 specialized editors keep local ⌘S) | victor-mnu | **done** | this commit |
+
+**Next up:** WP1.4 (Go menu, Open Recent submenu + noteNewRecentDocumentURL, Dock menu — same menus agent) → 1.R Opus review → Phase 1 gate: full suite + USER manual smoke (proxy-icon drag, edited-dot, Customize Toolbar drag + relaunch persistence, toolbar with no site open, File-menu walkthrough from WP1.3 report) → push.
 
 ## Census summary (WP0.1, full table in git history of this file if needed)
 
