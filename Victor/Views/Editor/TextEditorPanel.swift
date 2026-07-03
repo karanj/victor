@@ -4,7 +4,11 @@ import AppKit
 /// Panel for editing plain text files
 struct TextEditorPanel: View {
     let textFile: TextFile
+    /// FileNode.id backing `textFile` - see TextEditorViewModel.nodeID for why
+    /// this (not textFile.id) is what dirty-state reporting keys on.
+    let nodeID: UUID
     @Bindable var viewModel: TextEditorViewModel
+    @Bindable var siteViewModel: SiteViewModel
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -26,10 +30,12 @@ struct TextEditorPanel: View {
             )
         }
         .onAppear {
-            viewModel.loadFile(textFile)
+            viewModel.siteViewModel = siteViewModel
+            viewModel.loadFile(textFile, nodeID: nodeID)
         }
         .onChange(of: textFile.id) { _, _ in
-            viewModel.loadFile(textFile)
+            viewModel.siteViewModel = siteViewModel
+            viewModel.loadFile(textFile, nodeID: nodeID)
         }
         // Publish this editor's actions to the menu bar (File > Save/Revert).
         // No Markdown formatting or shortcode picker for plain-text files.

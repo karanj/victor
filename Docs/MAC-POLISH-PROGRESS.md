@@ -35,7 +35,19 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 1.4 | Open Recent submenu + noteNewRecentDocumentURL; Go menu with ID-based nav history (50-entry, branch-truncating, re-entrancy-guarded, 12 tests) + role-folder jumps; Dock menu on AppDelegate (server toggle + recents) | victor-mnu | **done** | this commit |
 
-**Next up:** 1.R Opus review of ecca34e..HEAD → fix findings → Phase 1 gate: full suite + USER manual smoke (proxy-icon drag, edited-dot, Customize Toolbar drag + relaunch persistence, toolbar with no site open, File/Go/Dock menu walkthrough per WP1.3/1.4 reports) → push.
+| 1.R | Opus review found 2 P0s (nav history dies on reloadSite; TextFile edits invisible to modifiedFileIDs → Cmd+Q data loss) + 1 P1 (recentSitePaths invisible to Observation) — all fixed test-first (19 new tests) by the WP1.3/1.4 agent. Finding #4 (WindowAccessor warning) empirically cleared: 103 = 103, zero from the file. #5 (shared dialog state across windows) pinned to victor-doc. New tickets: victor-lsi (init side-effect test hazard) | — | **done** | this commit |
+
+**Phase 1 COMPLETE** (pending user manual smoke, below).
+
+**Next up:** Phase 2 — WP2.1 (folder document type, victor-doc) ∥ WP2.2 (Quick Look + ShareLink, victor-qlk) ∥ WP2.4 (notifications, victor-ntf), then WP2.3 (drag & drop, victor-dnd), 2.R review.
+
+**USER manual smoke for Phase 1** (agents can't do these headlessly):
+1. Proxy icon: select a file → titlebar "file.md — Site"; Cmd-click title → path menu; drag proxy icon to Finder.
+2. Edited-dot: auto-save off, type → red dot in close button; save → clears. Same for a .css/.js file (TextEditorPanel).
+3. Toolbar: right-click → Customize Toolbar… → drag an item, quit, relaunch → order held; toolbar sane with no site open.
+4. File menu: New Post ⌘N, New Folder ⇧⌘N, Open Recent (+ Clear Menu refreshes immediately), Close Site ⇧⌘W confirm, Save/Save All/Revert, Reveal ⌥⌘R.
+5. Go menu: A→B→C, Back×2 lands A; branch discards forward; delete B → Back skips it in one press; reload site → Back/Forward disabled; Go-to folder jumps.
+6. Dock: right-click icon → server toggle + recents; Cmd+Q with dirty text file → alert; "Save and Quit" actually writes it.
 
 ## Census summary (WP0.1, full table in git history of this file if needed)
 

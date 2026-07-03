@@ -10,6 +10,18 @@ class TextEditorViewModel {
     /// The text file being edited (nil if none selected)
     var textFile: TextFile?
 
+    /// FileNode.id for the current `textFile`. Distinct from `textFile.id` -
+    /// `modifiedFileIDs` and friends on SiteViewModel are keyed by FileNode.id
+    /// everywhere else, so this is what we report dirty state against.
+    private(set) var nodeID: UUID?
+
+    /// Reports dirty/saved state to SiteViewModel (edited-dot, Close Site
+    /// confirmation, applicationShouldTerminate, Save All) - mirrors the
+    /// weak-reference + nodeID pattern EditorViewModel uses for markdown files.
+    /// Weak because this ViewModel is a single reused `@State` instance in
+    /// FileViewerRouter (unlike EditorViewModel, which is recreated per file).
+    weak var siteViewModel: SiteViewModel?
+
     /// Editable content bound to the editor
     var editableContent: String = ""
 
@@ -46,11 +58,12 @@ class TextEditorViewModel {
     // MARK: - Public Methods
 
     /// Load a text file for editing
-    func loadFile(_ file: TextFile) {
+    func loadFile(_ file: TextFile, nodeID: UUID) {
         // Cancel any pending auto-save
         autoSaveTask?.cancel()
 
         self.textFile = file
+        self.nodeID = nodeID
         self.editableContent = file.content
         self.errorMessage = nil
         self.showSavedIndicator = false
@@ -60,6 +73,7 @@ class TextEditorViewModel {
     func contentDidChange() {
         guard let file = textFile else { return }
         file.content = editableContent
+        reportDirtyState()
 
         // Schedule auto-save if enabled
         if isAutoSaveEnabled && hasUnsavedChanges {
@@ -80,6 +94,10 @@ class TextEditorViewModel {
             file.content = editableContent
             file.markAsSaved()
             file.lastModified = Date()
+
+            if let nodeID {
+                siteViewModel?.markFileSaved(nodeID)
+            }
 
             // Show saved indicator
             showSavedIndicatorBriefly()
@@ -103,12 +121,25 @@ class TextEditorViewModel {
             file.originalContent = content
             self.editableContent = content
             self.errorMessage = nil
+            reportDirtyState()
         } catch {
             errorMessage = "Failed to reload: \(error.localizedDescription)"
         }
     }
 
     // MARK: - Private Methods
+
+    /// Push current dirty/clean state to SiteViewModel's modifiedFileIDs, so
+    /// the edited-dot, Close Site confirmation, applicationShouldTerminate,
+    /// and Save All all see plain-text edits (P0 fix - previously invisible).
+    private func reportDirtyState() {
+        guard let nodeID else { return }
+        if hasUnsavedChanges {
+            siteViewModel?.markFileModified(nodeID)
+        } else {
+            siteViewModel?.clearFileModified(nodeID)
+        }
+    }
 
     private func scheduleAutoSave() {
         autoSaveTask?.cancel()

@@ -227,10 +227,15 @@ class SiteViewModel {
     /// Note: This tracks loaded ContentFile/TextFile objects, separate from edited content in FileCacheManager
     private var contentCacheOrder: [UUID] = []
 
-    /// Recently opened sites (paths stored in UserDefaults)
-    var recentSitePaths: [String] {
+    /// Recently opened sites, persisted to UserDefaults on every mutation.
+    /// Stored (not computed from UserDefaults on read) so SwiftUI observation
+    /// actually sees changes - a computed property reading UserDefaults
+    /// directly is invisible to @Observable, which left the File > Open
+    /// Recent submenu stale after Clear Menu (P1, phase-1 review).
+    /// All mutations go through addRecentSite/removeRecentSite/clearRecentSites,
+    /// which update this property and persist together.
+    var recentSitePaths: [String] =
         UserDefaults.standard.stringArray(forKey: AppConstants.UserDefaultsKeys.recentSitePaths) ?? []
-    }
 
     /// Maximum number of recent sites to track
     private let maxRecentSites = 5
@@ -480,20 +485,14 @@ class SiteViewModel {
 
     /// Add a site to the recent sites list
     private func addRecentSite(_ path: String) {
-        var paths = recentSitePaths
+        recentSitePaths.removeAll { $0 == path }
+        recentSitePaths.insert(path, at: 0)
 
-        // Remove if already exists (to move to front)
-        paths.removeAll { $0 == path }
-
-        // Add to front
-        paths.insert(path, at: 0)
-
-        // Trim to max size
-        if paths.count > maxRecentSites {
-            paths = Array(paths.prefix(maxRecentSites))
+        if recentSitePaths.count > maxRecentSites {
+            recentSitePaths = Array(recentSitePaths.prefix(maxRecentSites))
         }
 
-        UserDefaults.standard.set(paths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
+        persistRecentSitePaths()
     }
 
     /// Open a recent site by path
@@ -503,9 +502,8 @@ class SiteViewModel {
         // Check if the path still exists
         guard FileManager.default.fileExists(atPath: path) else {
             // Remove from recent sites if it no longer exists
-            var paths = recentSitePaths
-            paths.removeAll { $0 == path }
-            UserDefaults.standard.set(paths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
+            recentSitePaths.removeAll { $0 == path }
+            persistRecentSitePaths()
             errorMessage = "Site folder no longer exists at: \(path)"
             return
         }
@@ -515,14 +513,20 @@ class SiteViewModel {
 
     /// Clear recent sites list
     func clearRecentSites() {
-        UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
+        recentSitePaths = []
+        persistRecentSitePaths()
     }
 
     /// Remove a single site from the recent sites list
     func removeRecentSite(_ path: String) {
-        var paths = recentSitePaths
-        paths.removeAll { $0 == path }
-        UserDefaults.standard.set(paths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
+        recentSitePaths.removeAll { $0 == path }
+        persistRecentSitePaths()
+    }
+
+    /// Persist the current `recentSitePaths` to UserDefaults. All mutators
+    /// call this after updating the observable property so the two never drift.
+    private func persistRecentSitePaths() {
+        UserDefaults.standard.set(recentSitePaths, forKey: AppConstants.UserDefaultsKeys.recentSitePaths)
     }
 
     /// Restore last selected file from UserDefaults
@@ -1178,6 +1182,11 @@ class SiteViewModel {
         guard let site = site else { return }
         // Clear status metadata cache so it reloads fresh
         loadedStatusFolderIDs.removeAll()
+        // FileNode UUIDs regenerate on every rescan, so every navigation-history
+        // entry is about to become unresolvable at once - reset outright rather
+        // than letting Back/Forward discover that one dead entry at a time.
+        navigationHistory = []
+        navigationHistoryCursor = -1
         await loadSite(from: site.rootURL)
     }
 
@@ -1374,9 +1383,14 @@ class SiteViewModel {
     // Back/Forward (Go menu, W2.2) need an ordered history with a cursor,
     // distinct from `recentFiles` (a most-recent-first MRU list with no
     // concept of "current position"). Node IDs are stored rather than
-    // FileNode references so a stale entry (e.g. after a site reload
-    // recreates the tree) just fails `findNode(id:)` and is skipped instead
-    // of holding a dangling reference.
+    // FileNode references so a stale entry (e.g. a node deleted/moved out
+    // of the tree) just fails `findNode(id:)`; navigateBack()/navigateForward()
+    // actively prune such dead entries and continue in the same direction
+    // to the next live one, rather than silently consuming a Back/Forward
+    // press with no visible effect. A full site reload invalidates every
+    // entry at once (all FileNode UUIDs regenerate on rescan), so
+    // `reloadSite()` resets the history outright instead of relying on
+    // one-at-a-time pruning.
 
     /// Ordered navigation history of selected node IDs.
     private var navigationHistory: [UUID] = []
@@ -1427,27 +1441,47 @@ class SiteViewModel {
         }
     }
 
-    /// Navigate to the node currently at `navigationHistoryCursor`, if it still resolves.
-    private func navigateToCurrentHistoryEntry() {
-        guard navigationHistoryCursor >= 0, navigationHistoryCursor < navigationHistory.count else { return }
-        guard let node = findNode(id: navigationHistory[navigationHistoryCursor]) else { return }
-        isNavigatingHistory = true
-        selectAndRevealNode(node)
-        isNavigatingHistory = false
+    /// Moves the cursor one step in `direction` (-1 for Back, +1 for Forward),
+    /// pruning any dead entries (nodes no longer resolvable via `findNode(id:)`)
+    /// encountered along the way and selecting the first live entry found.
+    /// If no live entry exists in that direction, the cursor is left exactly
+    /// where it started - no silent no-op step, and no landing on a dead entry.
+    private func navigate(direction: Int) {
+        while true {
+            let candidateCursor = navigationHistoryCursor + direction
+            guard candidateCursor >= 0, candidateCursor < navigationHistory.count else {
+                return
+            }
+
+            guard let node = findNode(id: navigationHistory[candidateCursor]) else {
+                // Dead entry - prune it and keep looking in the same direction.
+                navigationHistory.remove(at: candidateCursor)
+                if candidateCursor <= navigationHistoryCursor {
+                    // Removed an entry at-or-before the cursor: everything from
+                    // there on shifted left by one, so the cursor must follow.
+                    navigationHistoryCursor -= 1
+                }
+                continue
+            }
+
+            navigationHistoryCursor = candidateCursor
+            isNavigatingHistory = true
+            selectAndRevealNode(node)
+            isNavigatingHistory = false
+            return
+        }
     }
 
     /// Go menu > Back: select the previously-selected file.
     func navigateBack() {
         guard canNavigateBack else { return }
-        navigationHistoryCursor -= 1
-        navigateToCurrentHistoryEntry()
+        navigate(direction: -1)
     }
 
     /// Go menu > Forward: re-select the file navigated away from by the last Back.
     func navigateForward() {
         guard canNavigateForward else { return }
-        navigationHistoryCursor += 1
-        navigateToCurrentHistoryEntry()
+        navigate(direction: 1)
     }
 
     // MARK: - Hugo Server Control

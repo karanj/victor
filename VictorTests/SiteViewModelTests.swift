@@ -5,6 +5,20 @@ import XCTest
 @MainActor
 final class SiteViewModelTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        // SiteViewModel.init() unconditionally kicks off a background Task that
+        // restores whatever real Hugo site is bookmarked in UserDefaults on this
+        // machine (SiteViewModel.loadSavedSite()). In synchronous tests that Task
+        // never gets a chance to run, but any test with an `await` after
+        // constructing SiteViewModel() yields control back to the scheduler and
+        // lets it interleave, silently overwriting fileNodes/selectedNode with a
+        // real site out from under the test. Clearing the bookmark key makes
+        // loadSavedSite() a guaranteed no-op regardless of what's persisted
+        // locally, so async tests are deterministic.
+        UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.hugoSiteBookmark)
+    }
+
     // MARK: - EditorLayoutMode Tests
 
     func testEditorLayoutModeDisplayNames() {
@@ -162,6 +176,24 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.recentFiles.count, 10, "Recent files should be limited to 10")
     }
 
+    // MARK: - Recent Sites Tests
+    // (Phase-1 review P1: recentSitePaths was a computed UserDefaults read,
+    // invisible to @Observable - the Open Recent submenu never refreshed
+    // after Clear Menu. Now a stored property that mutators update directly.)
+
+    func testClearRecentSitesEmptiesObservableProperty() {
+        let viewModel = SiteViewModel()
+        viewModel.recentSitePaths = ["/one", "/two"]
+        XCTAssertFalse(viewModel.recentSitePaths.isEmpty)
+
+        viewModel.clearRecentSites()
+
+        XCTAssertTrue(
+            viewModel.recentSitePaths.isEmpty,
+            "recentSitePaths must be an observable stored property that Clear Menu actually updates"
+        )
+    }
+
     // MARK: - Search Filtering Tests
 
     func testFilteredNodesEmptySearch() {
@@ -274,6 +306,41 @@ final class SiteViewModelTests: XCTestCase {
         let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
         XCTAssertEqual(onDisk, "edited content",
                        "Save All (used by Save-and-Quit) must write the user's edits, not the stale loaded content")
+        XCTAssertFalse(viewModel.isFileModified(node.id))
+    }
+
+    /// Phase-1 review P0: TextFile-backed edits (css/js/yaml routed to
+    /// TextEditorPanel) never reached modifiedFileIDs, so this branch of
+    /// saveAllModifiedFiles was unreachable in practice and Cmd+Q / Save All
+    /// silently discarded dirty plain-text files. Now that
+    /// TextEditorViewModel reports dirty state (see TextEditorViewModelTests),
+    /// this confirms the save side actually persists once marked.
+    func testSaveAllModifiedFilesWritesDirtyTextFileToDisk() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("style.css")
+        try "body { color: red; }".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel()
+        let node = FileNode(url: fileURL, isDirectory: false)
+        let textFile = TextFile(url: fileURL, content: "body { color: red; }", lastModified: Date())
+        // Unlike markdown, TextFile edits live directly on the shared TextFile
+        // object (TextEditorViewModel.contentDidChange writes file.content),
+        // not in a separate per-file edit cache.
+        textFile.content = "body { color: blue; }"
+        node.textFile = textFile
+        viewModel.fileNodes = [node]
+
+        viewModel.markFileModified(node.id)
+
+        await viewModel.saveAllModifiedFiles()
+
+        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertEqual(onDisk, "body { color: blue; }",
+                       "Save All must reach and persist the textFile branch, not silently skip dirty plain-text files")
         XCTAssertFalse(viewModel.isFileModified(node.id))
     }
 
@@ -563,6 +630,103 @@ final class SiteViewModelTests: XCTestCase {
 
         XCTAssertFalse(viewModel.canNavigateBack)
         XCTAssertFalse(viewModel.canNavigateForward)
+    }
+
+    // MARK: - Navigation History Reload/Prune Tests
+    // (Phase-1 review P0: FileNode UUIDs regenerate on every rescan, so
+    // reloadSite() must reset history outright rather than let stale IDs
+    // linger; separately, navigateBack()/navigateForward() must prune any
+    // other dead entry - e.g. a node deleted or moved out of the tree
+    // without a full reload - and continue to the next live one instead of
+    // silently consuming a Back/Forward press with no visible effect.)
+
+    func testReloadSiteResetsNavigationHistory() async {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        XCTAssertTrue(viewModel.canNavigateBack)
+
+        // `site` only needs to be non-nil to pass reloadSite()'s guard; this
+        // rootURL doesn't exist so the reload itself fails validation and
+        // bails out harmlessly afterward (before ever touching the security-
+        // scoped bookmark) - irrelevant here, since the history reset this
+        // test checks happens before that reload attempt.
+        let nonexistentRoot = URL(fileURLWithPath: "/nonexistent/site-\(UUID().uuidString)")
+        viewModel.site = await HugoSite.create(rootURL: nonexistentRoot)
+
+        await viewModel.reloadSite()
+
+        XCTAssertFalse(viewModel.canNavigateBack, "All FileNode IDs die on rescan - history must not survive reloadSite()")
+        XCTAssertFalse(viewModel.canNavigateForward)
+    }
+
+    func testNavigateBackPrunesDeadEntryAndContinuesToNextValidEntry() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let urlB = tempDir.appendingPathComponent("b.md")
+        try "b".write(to: urlB, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: urlB, isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB, nodeC]
+
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        viewModel.selectNode(nodeC)
+
+        // Actually delete nodeB through the real removal path - this both drops
+        // it from the tree and purges SiteViewModel's node-lookup cache
+        // (nodeByID), exactly like a user deleting a file via the sidebar would.
+        // (A direct `fileNodes = [...]` reassignment isn't equivalent: findNode(id:)
+        // checks nodeByID first, and selectNode's selectedFileID didSet had
+        // already opportunistically cached nodeB there before this point.)
+        await viewModel.moveToTrash(node: nodeB)
+
+        viewModel.navigateBack()
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id,
+                        "One Back press should skip the dead B entry entirely and land on A, not silently no-op")
+        XCTAssertFalse(viewModel.canNavigateBack, "B should have been pruned, leaving only A behind the cursor")
+    }
+
+    func testNavigateForwardPrunesDeadEntryAndContinuesToNextValidEntry() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let urlB = tempDir.appendingPathComponent("b.md")
+        try "b".write(to: urlB, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: urlB, isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB, nodeC]
+
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        viewModel.selectNode(nodeC)
+        viewModel.navigateBack()
+        viewModel.navigateBack()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+
+        // Delete nodeB (the entry between the cursor and nodeC) via the real
+        // removal path - see comment above for why this (not a direct
+        // `fileNodes = [...]` reassignment) is what actually makes it dead.
+        await viewModel.moveToTrash(node: nodeB)
+
+        viewModel.navigateForward()
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeC.id,
+                        "One Forward press should skip the dead B entry entirely and land on C, not silently no-op")
+        XCTAssertFalse(viewModel.canNavigateForward, "B should have been pruned, leaving only C ahead of the cursor")
     }
 
     // MARK: - Go Menu Top-Level Folder Lookup Tests

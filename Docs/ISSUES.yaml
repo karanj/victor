@@ -526,7 +526,7 @@ issues:
 
   - id: victor-wc1
     title: "W1: Window chrome - proxy icon, subtitle, edited-dot, customizable toolbar"
-    status: open
+    status: done
     priority: P2
     type: feature
     files:
@@ -543,7 +543,7 @@ issues:
 
   - id: victor-mnu
     title: "W2: Menu bar completeness - File/Go/Dock menus, validation"
-    status: open
+    status: done
     priority: P2
     type: feature
     blocked_by: [victor-stn]
@@ -571,6 +571,10 @@ issues:
       CFBundleDocumentTypes, handle onOpenURL/application(_:open:) ->
       validate Hugo site -> loadSite. Verify sandbox bookmark minting for
       Dock-dropped URLs on a clean install (design risk 5).
+      From Phase 1 review (P2): Close Site / Revert confirmationDialog
+      state lives on the App struct, shared across all WindowGroup windows.
+      Currently unreachable (single window), but any work here that opens a
+      second window must first move that state per-window.
 
   - id: victor-qlk
     title: "W3.2+W3.6: Real Quick Look for assets; ShareLink"
@@ -820,6 +824,23 @@ issues:
       port in TIME_WAIT (e.g. right after stopping the server) reads as taken
       and the server silently drifts to port+1. Set SO_REUSEADDR on the probe
       socket before bind.
+
+  - id: victor-lsi
+    title: "SiteViewModel.init side effect: unconditional loadSavedSite Task"
+    status: open
+    priority: P4
+    type: task
+    files: [Victor/ViewModels/SiteViewModel.swift]
+    estimate: 1-2h
+    detail: >
+      Found during Phase 1 review fixes (2026-07-04): init() spawns a
+      background Task restoring the bookmarked site from real UserDefaults.
+      Any async test constructing SiteViewModel on a machine with a
+      bookmarked site can have fileNodes/selectedNode silently overwritten
+      mid-test (both new test files now clear hugoSiteBookmark in setUp as
+      a workaround). Move the restore call out of init to an explicit
+      onLaunch entry point (VictorApp calls it once), removing the
+      init-time I/O side effect. Related: victor-zw4 (DI would also solve).
 
   - id: victor-ea5
     title: "Extend EditorActions to the five specialized editors"

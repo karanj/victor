@@ -60,7 +60,9 @@ struct FileViewerRouter: View {
                     if let textFile = node.textFile {
                         TextEditorPanel(
                             textFile: textFile,
-                            viewModel: textEditorViewModel
+                            nodeID: node.id,
+                            viewModel: textEditorViewModel,
+                            siteViewModel: siteViewModel
                         )
                     } else {
                         // Fallback to read-only viewer while loading
@@ -72,10 +74,14 @@ struct FileViewerRouter: View {
                 }
             }
         }
+        .onAppear {
+            textEditorViewModel.siteViewModel = siteViewModel
+        }
         .onChange(of: node.id) { _, _ in
             // Reset view model when switching files
+            textEditorViewModel.siteViewModel = siteViewModel
             if let textFile = node.textFile {
-                textEditorViewModel.loadFile(textFile)
+                textEditorViewModel.loadFile(textFile, nodeID: node.id)
             }
         }
     }
