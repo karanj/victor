@@ -104,7 +104,7 @@ struct VictorApp: App {
 
     // Editor preferences (using @AppStorage for sync with Preferences window)
     @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
-    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = false
+    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = AppConstants.AutoSave.defaultEnabled
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

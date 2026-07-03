@@ -55,6 +55,26 @@ struct HugoServerConfig: Equatable {
 
     /// Disable live browser reload
     var disableLiveReload: Bool = false
+
+    /// Build a config seeded from the user's Preferences ("Server Defaults").
+    /// Only keys the user has actually set override the built-in defaults.
+    static func fromUserDefaults(_ defaults: UserDefaults = .standard) -> HugoServerConfig {
+        var config = HugoServerConfig()
+        if let port = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerPort) as? Int,
+           (1024...65535).contains(port) {
+            config.port = port
+        }
+        if let drafts = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerBuildDrafts) as? Bool {
+            config.buildDrafts = drafts
+        }
+        if let future = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerBuildFuture) as? Bool {
+            config.buildFuture = future
+        }
+        if let expired = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerBuildExpired) as? Bool {
+            config.buildExpired = expired
+        }
+        return config
+    }
 }
 
 // MARK: - Build Error
@@ -93,7 +113,7 @@ actor HugoServerService {
     // MARK: - Published State (accessed via async getters)
 
     private(set) var status: HugoServerStatus = .stopped
-    private(set) var config: HugoServerConfig = HugoServerConfig()
+    private(set) var config: HugoServerConfig = HugoServerConfig.fromUserDefaults()
     private(set) var buildErrors: [HugoBuildError] = []
     private(set) var serverOutput: [String] = []
     private(set) var serverURL: URL?
@@ -396,15 +416,20 @@ actor HugoServerService {
 
         Logger.shared.info("[HugoServer] Stopping server...")
 
+        // Stop pumping output before tearing down, so the pipes' file handles
+        // are released and no stray reads fire after stop
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+
         // Send SIGTERM for graceful shutdown
         process.terminate()
 
         // Wait briefly for graceful shutdown
         try? await Task.sleep(for: .milliseconds(500))
 
-        // Force kill if still running
+        // Force kill if still running (SIGINT would be weaker than the SIGTERM already sent)
         if process.isRunning {
-            process.interrupt()
+            kill(process.processIdentifier, SIGKILL)
         }
 
         self.process = nil
@@ -501,6 +526,8 @@ actor HugoServerService {
         let wasRunning = status.isRunning
         let previousSiteURL = siteRootURL
 
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
         process = nil
         outputPipe = nil
         errorPipe = nil

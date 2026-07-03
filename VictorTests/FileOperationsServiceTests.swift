@@ -134,6 +134,25 @@ final class FileOperationsServiceTests: XCTestCase {
         }
     }
 
+    func testValidatePathRejectsSiblingDirectoryWithRootPrefix() throws {
+        // "/tmp/.../site-evil" shares a string prefix with "/tmp/.../site" but is outside it.
+        // A plain hasPrefix check wrongly accepts it.
+        let siteRoot = tempDirectory.appendingPathComponent("site")
+        let sibling = tempDirectory.appendingPathComponent("site-evil").appendingPathComponent("file.md")
+        try FileManager.default.createDirectory(at: siteRoot, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(
+            try FileSystemService.shared.validatePathWithinSite(sibling, siteRoot: siteRoot),
+            "A sibling directory sharing the site root's name prefix must be rejected"
+        )
+
+        // Sanity: paths genuinely inside the root still validate
+        XCTAssertNoThrow(
+            try FileSystemService.shared.validatePathWithinSite(
+                siteRoot.appendingPathComponent("content/post.md"), siteRoot: siteRoot)
+        )
+    }
+
     func testRenameFileRejectsEscapingSiteRoot() async throws {
         // Create a subdirectory as the "site root" and a file inside it
         let siteRoot = tempDirectory.appendingPathComponent("mysite")

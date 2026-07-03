@@ -4,8 +4,18 @@ import Foundation
 actor AutoSaveService {
     static let shared = AutoSaveService()
 
-    private var saveTask: Task<Void, Never>?
-    private let debounceInterval: TimeInterval = AppConstants.AutoSave.debounceInterval
+    /// Pending debounced saves keyed by file URL.
+    /// Per-file tasks so editing one file never cancels another file's pending save.
+    private var saveTasks: [URL: Task<Void, Never>] = [:]
+
+    /// Current generation token per file (see clearFinishedTask)
+    private var saveTokens: [URL: UUID] = [:]
+
+    /// Debounce interval honors the user's "Save after:" preference
+    private var debounceInterval: TimeInterval {
+        UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) as? Double
+            ?? AppConstants.AutoSave.debounceInterval
+    }
 
     private init() {}
 
@@ -25,11 +35,16 @@ actor AutoSaveService {
         onSuccess: @escaping @MainActor (Date) -> Void,
         onError: @escaping @MainActor (Error) -> Void
     ) {
-        // Cancel any pending save
-        saveTask?.cancel()
+        // Cancel any pending save for this file only
+        saveTasks[fileURL]?.cancel()
+
+        // Generation token so a finished task only cleans up its own dictionary
+        // entry, never a newer task scheduled for the same file
+        let token = UUID()
+        saveTokens[fileURL] = token
 
         // Schedule new save after debounce interval
-        saveTask = Task {
+        let task = Task {
             do {
                 // Wait for debounce interval
                 try await Task.sleep(for: .seconds(debounceInterval))
@@ -53,13 +68,32 @@ actor AutoSaveService {
                 // Notify error on main actor
                 await onError(error)
             }
+            clearFinishedTask(for: fileURL, token: token)
         }
+        saveTasks[fileURL] = task
     }
 
-    /// Cancel any pending auto-save
+    /// Remove the completed task entry unless it was already replaced by a newer schedule
+    private func clearFinishedTask(for fileURL: URL, token: UUID) {
+        guard saveTokens[fileURL] == token else { return }
+        saveTokens.removeValue(forKey: fileURL)
+        saveTasks.removeValue(forKey: fileURL)
+    }
+
+    /// Cancel the pending auto-save for a specific file
+    func cancelAutoSave(for fileURL: URL) {
+        saveTasks[fileURL]?.cancel()
+        saveTasks.removeValue(forKey: fileURL)
+        saveTokens.removeValue(forKey: fileURL)
+    }
+
+    /// Cancel all pending auto-saves
     func cancelAutoSave() {
-        saveTask?.cancel()
-        saveTask = nil
+        for task in saveTasks.values {
+            task.cancel()
+        }
+        saveTasks.removeAll()
+        saveTokens.removeAll()
     }
 
     /// Perform the actual save operation with conflict detection

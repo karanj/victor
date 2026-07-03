@@ -634,6 +634,7 @@ class SiteViewModel {
         }
         site = nil
         fileNodes = []
+        nodeByID.removeAll()
         invalidateFilterCache()
         selectedNode = nil
         selectedFileID = nil
@@ -664,9 +665,31 @@ class SiteViewModel {
         }
     }
 
-    /// Find a node by ID using O(1) lookup instead of O(n) tree traversal
+    /// Find a node by ID using O(1) lookup, falling back to tree traversal.
+    /// The fallback covers nodes added after the lookup table was built
+    /// (new files, duplicates) so Save All and status checks never skip them.
     func findNode(id: UUID) -> FileNode? {
-        return nodeByID[id]
+        if let node = nodeByID[id] {
+            return node
+        }
+        if let node = FileNode.findNode(id: id, in: fileNodes) {
+            nodeByID[id] = node
+            return node
+        }
+        return nil
+    }
+
+    /// Register a node created after the initial site scan in the lookup table
+    private func registerNode(_ node: FileNode) {
+        nodeByID[node.id] = node
+    }
+
+    /// Remove a node (and its subtree) from the lookup table
+    private func unregisterNode(_ node: FileNode) {
+        nodeByID.removeValue(forKey: node.id)
+        for child in node.children {
+            unregisterNode(child)
+        }
     }
 
     // MARK: - File Row View Models
@@ -894,6 +917,12 @@ class SiteViewModel {
 
             if node.isMarkdownFile, let contentFile = node.contentFile {
                 do {
+                    // Unsaved edits live in the per-file cache, not on contentFile
+                    // (contentFile.markdownContent only updates on explicit save) -
+                    // sync before writing or Save-and-Quit persists stale content
+                    if let editedContent = fileCacheManager.getContent(for: nodeID) {
+                        contentFile.markdownContent = editedContent
+                    }
                     try await fileSystemService.saveContentFile(contentFile)
                     clearFileModified(nodeID)
                     Logger.shared.info("Saved: \(node.name)")
@@ -1004,25 +1033,27 @@ class SiteViewModel {
         contentCacheOrder.removeAll { $0 == accessedNodeID }
         contentCacheOrder.insert(accessedNodeID, at: 0)
 
-        // Evict old entries if over limit
-        while contentCacheOrder.count > maxCachedContentFiles {
-            let oldestID = contentCacheOrder.removeLast()
+        var overflow = contentCacheOrder.count - maxCachedContentFiles
+        guard overflow > 0 else { return }
 
-            // Don't evict the currently selected file
-            guard oldestID != selectedNode?.id else {
-                // Put it back and try the next oldest
-                contentCacheOrder.insert(oldestID, at: contentCacheOrder.count)
-                continue
-            }
+        // Walk from the least-recently-used end, skipping protected entries.
+        // Single pass guarantees termination - re-inserting protected entries and
+        // looping would spin forever on the main thread once the tail of the list
+        // is a selected/modified file.
+        var evicted: [UUID] = []
+        for candidate in contentCacheOrder.reversed() {
+            guard overflow > 0 else { break }
+            if candidate == selectedNode?.id || modifiedFileIDs.contains(candidate) { continue }
+            evicted.append(candidate)
+            overflow -= 1
+        }
 
-            // Don't evict files with unsaved changes
-            guard !modifiedFileIDs.contains(oldestID) else {
-                contentCacheOrder.insert(oldestID, at: contentCacheOrder.count)
-                continue
-            }
+        guard !evicted.isEmpty else { return }
 
-            // Find the node and release its content
-            if let node = FileNode.findNode(id: oldestID, in: fileNodes) {
+        let evictedSet = Set(evicted)
+        contentCacheOrder.removeAll { evictedSet.contains($0) }
+        for id in evicted {
+            if let node = findNode(id: id) {
                 node.contentFile = nil
                 node.textFile = nil
                 Logger.shared.debug("Cache eviction: released content for \(node.name)")
@@ -1177,6 +1208,7 @@ class SiteViewModel {
             // Build a FileNode for the new file and insert it into the tree
             let newNode = FileNode(url: newFileURL, isDirectory: false, isPageBundle: false)
             folder.addChild(newNode)
+            registerNode(newNode)
 
             // Invalidate filter cache since tree changed
             invalidateFilterCache()
@@ -1249,6 +1281,7 @@ class SiteViewModel {
 
             // Create a new FileNode for the duplicate
             let newNode = FileNode(url: newURL, isDirectory: node.isDirectory, isPageBundle: node.isPageBundle)
+            registerNode(newNode)
 
             // Add to parent's children
             if let parent = node.parent {
@@ -1279,6 +1312,7 @@ class SiteViewModel {
     func moveToTrash(node: FileNode) async {
         do {
             try await fileOperationsService.moveToTrash(at: node.url)
+            unregisterNode(node)
 
             // Remove from parent's children
             if let parent = node.parent {
@@ -1323,6 +1357,7 @@ class SiteViewModel {
             // Create a FileNode for the new folder
             let newNode = FileNode(url: newURL, isDirectory: true, isPageBundle: false)
             parent.addChild(newNode)
+            registerNode(newNode)
 
             // Invalidate filter cache since tree changed
             invalidateFilterCache()

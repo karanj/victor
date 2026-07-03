@@ -1,5 +1,5 @@
 # Victor Issue Tracker
-# Last updated: 2026-02-22
+# Last updated: 2026-07-03
 #
 # Schema: id, title, status (open|blocked|done), priority (P0-P4),
 #         type (epic|task|feature|bug), blocked_by, blocks, files, estimate, detail
@@ -502,3 +502,81 @@ issues:
       Labels/hints on remaining controls, navigation hints for complex views,
       accessibility traits, keyboard nav, screen reader announcements.
       Icon-only buttons already done (victor-0qe).
+
+  # ── Code Health (from 2026-07-03 critical analysis) ───────────
+  # Significant findings from this pass were fixed directly (see
+  # Docs/CODE-ANALYSIS-2026-07-03.md). These are the low-priority leftovers.
+
+  - id: victor-u16
+    title: "EditorTextView: UTF-16 vs grapheme-count mismatches"
+    status: open
+    priority: P3
+    type: bug
+    files: [Victor/Views/Editor/EditorTextView.swift]
+    estimate: 3h
+    detail: >
+      NSRange locations (UTF-16 offsets) are mixed with String.count (grapheme
+      clusters) throughout the wrapper: performDragOperation clamps charIndex
+      with string.count, applyMarkdownFormat computes selection offsets with
+      .count, updateNSView validates the restored cursor with text.count.
+      Documents containing emoji/multibyte characters get wrong cursor and
+      selection placement. Fix by using (text as NSString).length and
+      utf16-based arithmetic consistently. Same file: Coordinator.parent is
+      never refreshed in updateNSView (stale struct copy; bindings still work
+      but callbacks like onCursorPositionChange can go stale) - set
+      context.coordinator.parent = self in updateNSView.
+
+  - id: victor-lru
+    title: "Wire up FileCacheManager.evictIfNeeded and onEviction"
+    status: open
+    priority: P3
+    type: task
+    files: [Victor/ViewModels/SiteViewModel.swift, Victor/Services/FileCacheManager.swift]
+    estimate: 1h
+    detail: >
+      FileCacheManager supports eviction (evictIfNeeded, onEviction callback)
+      but SiteViewModel never calls it, so the edited-content string cache
+      grows unbounded across a long session. SiteViewModel keeps a second,
+      separate LRU (contentCacheOrder) for ContentFile/TextFile objects -
+      consolidate the two so there is one eviction policy.
+
+  - id: victor-rbo
+    title: "LiveReloadClient: cap/backoff reconnect attempts"
+    status: open
+    priority: P4
+    type: task
+    files: [Victor/Services/LiveReloadClient.swift]
+    estimate: 1h
+    detail: >
+      scheduleReconnect retries every 2s forever after a WebSocket failure.
+      If the Hugo server is gone for good this spins indefinitely (each retry
+      now tears down the old session, so no leak, but it is still wasted work
+      and log noise). Add exponential backoff with a cap, and stop retrying
+      once the server status is .stopped.
+
+  - id: victor-prt
+    title: "isPortAvailable: bind without SO_REUSEADDR gives false negatives"
+    status: open
+    priority: P4
+    type: bug
+    files: [Victor/Services/HugoServerService.swift]
+    estimate: 30m
+    detail: >
+      The availability probe binds a test socket without SO_REUSEADDR, so a
+      port in TIME_WAIT (e.g. right after stopping the server) reads as taken
+      and the server silently drifts to port+1. Set SO_REUSEADDR on the probe
+      socket before bind.
+
+  - id: victor-ilf
+    title: "isLoadingFile flag races across rapid file switches"
+    status: open
+    priority: P4
+    type: bug
+    files: [Victor/ViewModels/SiteViewModel.swift]
+    estimate: 30m
+    detail: >
+      selectNode sets isLoadingFile=true per load but any finishing load sets
+      it back to false, even if a newer load is still in flight - switching
+      files quickly can briefly show unloaded content without the loading
+      state. Guard the reset with a nodeID check like the content updates,
+      or track a loading generation counter.

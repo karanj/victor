@@ -147,6 +147,7 @@
 		F966E817EFAA14C6B9DBA440 /* EditableEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C818F251294236FA7BAA7BD3 /* EditableEditorTests.swift */; };
 		FA9870EBF3AEABAADAC7CAF7 /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83C6A730A22D17CDD281C5A4 /* AppConstants.swift */; };
 		FADAC08182B4EE7E9D92C63F /* Frontmatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF6A7DA5111F18A8F66A828 /* Frontmatter.swift */; };
+		FCA0A8EFC7B3A53F725E7FE8 /* AutoSaveServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD065A15BEF162C0514544D /* AutoSaveServiceTests.swift */; };
 		FCFFCC21FFC297D199295FAF /* ConfigEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B079A275E62933402BD92F8 /* ConfigEditorView.swift */; };
 		FFA06B7F848E9ED44017C62E /* LivePreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B232752B56CDA179C8F4AC /* LivePreviewPanel.swift */; };
 /* End PBXBuildFile section */
@@ -205,6 +206,7 @@
 		567B4F249410EB4B5B88B633 /* ServerLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerLogView.swift; sourceTree = "<group>"; };
 		5A4E0C63BBBB1D0B56822873 /* SerializationHelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerializationHelperTests.swift; sourceTree = "<group>"; };
 		5A60C1F2652073E3CDEEA5BD /* PreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewPanel.swift; sourceTree = "<group>"; };
+		5AD065A15BEF162C0514544D /* AutoSaveServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSaveServiceTests.swift; sourceTree = "<group>"; };
 		5BB26FAC09B1B52CECEE9937 /* BuildErrorParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildErrorParser.swift; sourceTree = "<group>"; };
 		60652C9B093349D58726B929 /* Victor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Victor.entitlements; sourceTree = "<group>"; };
 		680F7EDAF5888EB9CCCD2CC3 /* BadgeStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeStyle.swift; sourceTree = "<group>"; };
@@ -507,6 +509,7 @@
 			children = (
 				1BA8BB843F3E8E092985F4DA /* ArchetypeManagerTests.swift */,
 				84D0FD1175E8EB9D0D6867A9 /* ArchetypeTemplateGenerationTests.swift */,
+				5AD065A15BEF162C0514544D /* AutoSaveServiceTests.swift */,
 				3CA78287241B161C53327133 /* DataFileParserTests.swift */,
 				C818F251294236FA7BAA7BD3 /* EditableEditorTests.swift */,
 				C6D5B5E71B8E3101729B548D /* EditorViewModelTests.swift */,
@@ -817,6 +820,7 @@
 				1EFA41719CE1ADAB8DD3C8D9 /* XCRemoteSwiftPackageReference "Yams" */,
 			);
 			preferredProjectObjectVersion = 77;
+			productRefGroup = CBF6B64E9DB7B76DD9589781 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -969,6 +973,7 @@
 			files = (
 				A0D05E0C4A813EB3572AA068 /* ArchetypeManagerTests.swift in Sources */,
 				95A360256947190F4809CED1 /* ArchetypeTemplateGenerationTests.swift in Sources */,
+				FCA0A8EFC7B3A53F725E7FE8 /* AutoSaveServiceTests.swift in Sources */,
 				DD891B78440979B155AD97EC /* DataFileParserTests.swift in Sources */,
 				F966E817EFAA14C6B9DBA440 /* EditableEditorTests.swift in Sources */,
 				300C54B2B9F453BF45D16635 /* EditorViewModelTests.swift in Sources */,

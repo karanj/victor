@@ -113,7 +113,8 @@ class EditorViewModel {
 
         // Schedule auto-save if enabled and there are unsaved changes
         // Read directly from UserDefaults for immediate effect from Preferences changes
-        let autoSaveEnabled = UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? false
+        let autoSaveEnabled = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled) as? Bool
+            ?? AppConstants.AutoSave.defaultEnabled
         if hasUnsavedChanges && autoSaveEnabled {
             scheduleAutoSave()
         }

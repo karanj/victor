@@ -18,8 +18,9 @@ class FileSystemService {
         let canonicalPath = url.standardized.path
         let canonicalSiteRoot = siteRoot.standardized.path
 
-        // Ensure the path starts with the site root
-        guard canonicalPath.hasPrefix(canonicalSiteRoot) else {
+        // Compare on a directory boundary: a bare hasPrefix check would accept
+        // sibling directories like "/site-evil" for root "/site"
+        guard isPath(canonicalPath, within: canonicalSiteRoot) else {
             Logger.shared.warning("[Security] Path traversal attempt blocked: \(url.path) outside \(siteRoot.path)")
             throw FileError.accessDenied
         }
@@ -27,12 +28,23 @@ class FileSystemService {
         // Check for symlink attacks - resolve symlinks and verify again
         let fileManager = FileManager.default
         if let resolvedPath = try? fileManager.destinationOfSymbolicLink(atPath: canonicalPath) {
-            let resolvedURL = URL(fileURLWithPath: resolvedPath).standardized
-            guard resolvedURL.path.hasPrefix(canonicalSiteRoot) else {
+            // Symlink destinations may be relative to the link's directory
+            let resolvedURL = URL(
+                fileURLWithPath: resolvedPath,
+                relativeTo: url.deletingLastPathComponent()
+            ).standardized
+            guard isPath(resolvedURL.path, within: canonicalSiteRoot) else {
                 Logger.shared.warning("[Security] Symlink traversal attempt blocked: \(resolvedPath) outside \(siteRoot.path)")
                 throw FileError.accessDenied
             }
         }
+    }
+
+    /// True if `path` equals `root` or is contained inside it (directory-boundary aware)
+    private func isPath(_ path: String, within root: String) -> Bool {
+        if path == root { return true }
+        let rootWithSeparator = root.hasSuffix("/") ? root : root + "/"
+        return path.hasPrefix(rootWithSeparator)
     }
 
     /// Check if a filename contains path traversal sequences

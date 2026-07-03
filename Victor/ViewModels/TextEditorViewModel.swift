@@ -34,12 +34,14 @@ class TextEditorViewModel {
 
     /// Whether auto-save is enabled (reads from UserDefaults)
     private var isAutoSaveEnabled: Bool {
-        UserDefaults.standard.object(forKey: "isAutoSaveEnabled") as? Bool ?? false
+        UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled) as? Bool
+            ?? AppConstants.AutoSave.defaultEnabled
     }
 
     /// Auto-save delay in seconds (reads from UserDefaults)
     private var autoSaveDelay: Double {
-        UserDefaults.standard.object(forKey: "autoSaveDelay") as? Double ?? 2.0
+        UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) as? Double
+            ?? AppConstants.AutoSave.debounceInterval
     }
     private var savedIndicatorTask: Task<Void, Never>?
 

@@ -7,18 +7,19 @@ struct PreferencesView: View {
     @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
     @AppStorage("editorFontSize") private var editorFontSize = 13.0
     @AppStorage("editorFontName") private var editorFontName = "SF Mono"
-    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = false
-    @AppStorage("autoSaveDelay") private var autoSaveDelay = 2.0
+    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = AppConstants.AutoSave.defaultEnabled
+    @AppStorage("autoSaveDelay") private var autoSaveDelay = AppConstants.AutoSave.debounceInterval
 
     // Badge color preferences (stored as hex strings)
     @AppStorage("badgeColorDraft") private var draftColorHex = Color.BadgeColorKey.draft.defaultHex
     @AppStorage("badgeColorScheduled") private var scheduledColorHex = Color.BadgeColorKey.scheduled.defaultHex
     @AppStorage("badgeColorExpired") private var expiredColorHex = Color.BadgeColorKey.expired.defaultHex
 
-    // Hugo server preferences
+    // Hugo server preferences - displayed defaults must match HugoServerConfig's
+    // built-in defaults, since fromUserDefaults() only overrides keys the user set
     @AppStorage("hugoServerPort") private var serverPort = 1313
-    @AppStorage("hugoServerBuildDrafts") private var buildDrafts = false
-    @AppStorage("hugoServerBuildFuture") private var buildFuture = false
+    @AppStorage("hugoServerBuildDrafts") private var buildDrafts = true
+    @AppStorage("hugoServerBuildFuture") private var buildFuture = true
     @AppStorage("hugoServerBuildExpired") private var buildExpired = false
 
     // Hugo version (loaded on appear)

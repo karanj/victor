@@ -131,6 +131,13 @@ actor LiveReloadClient {
     private func establishConnection() {
         guard let serverURL = serverURL else { return }
 
+        // Tear down any previous connection first - reconnect attempts would
+        // otherwise leak a URLSession (and its delegate) per attempt
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        session?.invalidateAndCancel()
+        session = nil
+
         // Build WebSocket URL: ws://localhost:1313/livereload
         var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false)
         components?.scheme = serverURL.scheme == "https" ? "wss" : "ws"

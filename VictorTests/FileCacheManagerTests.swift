@@ -206,6 +206,25 @@ final class FileCacheManagerTests: XCTestCase {
         XCTAssertLessThanOrEqual(normalCount, 1)
     }
 
+    func testEvictIfNeededTerminatesWhenAllEntriesProtected() {
+        let manager = FileCacheManager(maxCachedFiles: 2)
+        let node1 = UUID()
+        let node2 = UUID()
+        let node3 = UUID()
+
+        manager.setContent("1", for: node1)
+        manager.setContent("2", for: node2)
+        manager.setContent("3", for: node3)
+
+        // Over limit, but every entry is protected - must return without spinning forever
+        let evicted = manager.evictIfNeeded(excluding: node3, modified: [node1, node2])
+
+        XCTAssertTrue(evicted.isEmpty, "No protected entry may be evicted")
+        XCTAssertNotNil(manager.getContent(for: node1))
+        XCTAssertNotNil(manager.getContent(for: node2))
+        XCTAssertNotNil(manager.getContent(for: node3))
+    }
+
     // MARK: - Cache Count Tests
 
     func testCachedCountReflectsStoredItems() {

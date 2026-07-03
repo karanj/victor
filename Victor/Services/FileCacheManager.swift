@@ -89,32 +89,28 @@ final class FileCacheManager {
     /// - Returns: Array of evicted node IDs (for logging or cleanup)
     @discardableResult
     func evictIfNeeded(excluding selectedID: UUID?, modified modifiedIDs: Set<UUID>) -> [UUID] {
+        var overflow = _cacheOrder.count - maxCachedFiles
+        guard overflow > 0 else { return [] }
+
+        // Walk from the least-recently-used end, skipping protected entries.
+        // A single pass guarantees termination even when every entry is protected
+        // (selected or modified) - rotating protected entries back into the list
+        // would loop forever in that case.
         var evicted: [UUID] = []
+        for candidate in _cacheOrder.reversed() {
+            guard overflow > 0 else { break }
+            if candidate == selectedID || modifiedIDs.contains(candidate) { continue }
+            evicted.append(candidate)
+            overflow -= 1
+        }
 
-        while _cacheOrder.count > maxCachedFiles {
-            guard let oldestID = _cacheOrder.last else { break }
+        guard !evicted.isEmpty else { return [] }
 
-            // Don't evict selected node
-            if oldestID == selectedID {
-                // Move to front and try next
-                _cacheOrder.removeLast()
-                _cacheOrder.insert(oldestID, at: 0)
-                continue
-            }
-
-            // Don't evict modified nodes
-            if modifiedIDs.contains(oldestID) {
-                // Move to front and try next
-                _cacheOrder.removeLast()
-                _cacheOrder.insert(oldestID, at: 0)
-                continue
-            }
-
-            // Evict this node
-            _cacheOrder.removeLast()
-            contentByFile.removeValue(forKey: oldestID)
-            evicted.append(oldestID)
-            onEviction?(oldestID)
+        let evictedSet = Set(evicted)
+        _cacheOrder.removeAll { evictedSet.contains($0) }
+        for id in evicted {
+            contentByFile.removeValue(forKey: id)
+            onEviction?(id)
         }
 
         return evicted

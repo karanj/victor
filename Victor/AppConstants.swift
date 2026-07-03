@@ -8,8 +8,11 @@ enum AppConstants {
 
     /// Auto-save related constants
     enum AutoSave {
-        /// Debounce interval for auto-save (wait time after last edit before saving)
+        /// Fallback debounce interval when no autoSaveDelay preference is set
         static let debounceInterval: TimeInterval = 2.0
+        /// Whether auto-save is enabled when no preference is set.
+        /// Every reader of the isAutoSaveEnabled key must use this same default.
+        static let defaultEnabled = true
     }
 
     /// Preview panel related constants
@@ -181,5 +184,10 @@ enum AppConstants {
         static let isInspectorVisible = "isInspectorVisible"
         static let recentSitePaths = "recentSitePaths"
         static let lastSelectedFilePath = "lastSelectedFilePath"
+        static let editorFontName = "editorFontName"
+        static let hugoServerPort = "hugoServerPort"
+        static let hugoServerBuildDrafts = "hugoServerBuildDrafts"
+        static let hugoServerBuildFuture = "hugoServerBuildFuture"
+        static let hugoServerBuildExpired = "hugoServerBuildExpired"
     }
 }

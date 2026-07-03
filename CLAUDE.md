@@ -2,7 +2,7 @@
 
 Native macOS application (SwiftUI) serving as a CMS for Hugo static sites. Provides markdown editing with live preview, frontmatter editing, Hugo config GUI, asset management, and Hugo server integration.
 
-**Status**: Production ready | **Build**: Clean | **Size**: 91 Swift files, ~25k LOC | **Updated**: 2026-01-16
+**Status**: Production ready | **Build**: Clean | **Size**: 91 Swift files, ~25k LOC | **Updated**: 2026-07-03
 
 ## Technical Stack
 
@@ -172,10 +172,10 @@ Models use `@Observable class` pattern by design. Evaluation of struct alternati
 
 ## Outstanding Work
 
-Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, 18 open tickets). Key areas:
+Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, 20 open tickets). Key areas:
 - **P2**: Protocol abstractions for services (ARCH-2), FSEvents file watching (9 tickets, dependency chain)
-- **P3**: Git integration (6 tickets), preview syntax highlighting, Hugo theme CSS
-- **P4**: VoiceOver audit
+- **P3**: Git integration (6 tickets), preview syntax highlighting, Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru)
+- **P4**: VoiceOver audit, code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`)
 
 To find work ready to start: look for `status: open` (no blockers). `status: blocked` tickets list their `blocked_by` dependencies.
 
@@ -183,6 +183,7 @@ To find work ready to start: look for `status: open` (no blockers). `status: blo
 
 - `Docs/ISSUES.yaml` - Issue tracker (open work items)
 - `Docs/CODE-REVIEW-PLAN.md` - Code review findings and status
+- `Docs/CODE-ANALYSIS-2026-07-03.md` - Critical analysis session: 10 fixes (data loss, hang, dead prefs) + leftovers
 - `Docs/HUGO-SERVER-INTEGRATION.md` - Hugo server integration
 - `Docs/DATA-ARCHETYPES-GUIDE.md` - Data files and archetypes
 - `Docs/TODO.md` - Detailed ticket descriptions (reference/archive)

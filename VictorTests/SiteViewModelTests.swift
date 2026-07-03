@@ -255,14 +255,39 @@ final class SiteViewModelTests: XCTestCase {
         // The lookup table is built when fileNodes is set via loadSite
         // For this test, we'll use a workaround
 
-        // Actually, findNode uses the private nodeByID dictionary which is built in buildNodeLookupTable
-        // Since we're setting fileNodes directly, the lookup table won't be built
-        // Let's verify the findNode behavior when lookup table is empty (falls back to tree traversal)
-
-        // findNode uses nodeByID which is empty, so it will return nil
-        // This is testing the current behavior
+        // The lookup table is empty (it's built during loadSite), but findNode must
+        // fall back to tree traversal so nodes added after site load are still found.
+        // Otherwise Save All / isFileModified silently skip newly created files.
         let found = viewModel.findNode(id: node1.id)
-        XCTAssertNil(found, "findNode returns nil when lookup table is not built")
+        XCTAssertIdentical(found, node1, "findNode must fall back to tree traversal when the lookup table misses")
+    }
+
+    // MARK: - Save All Modified Files Tests
+
+    func testSaveAllModifiedFilesWritesEditedContentNotStaleContent() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "original content".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel()
+        let node = FileNode(url: fileURL, isDirectory: false)
+        node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "original content")
+        viewModel.fileNodes = [node]
+
+        // Simulate unsaved editor state: edits live in the per-file cache, not on contentFile
+        viewModel.setEditedContent("edited content", for: node.id)
+        viewModel.markFileModified(node.id)
+
+        await viewModel.saveAllModifiedFiles()
+
+        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertEqual(onDisk, "edited content",
+                       "Save All (used by Save-and-Quit) must write the user's edits, not the stale loaded content")
+        XCTAssertFalse(viewModel.isFileModified(node.id))
     }
 
     // MARK: - Close Site Tests
