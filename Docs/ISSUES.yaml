@@ -40,7 +40,7 @@ issues:
 
   - id: victor-stn
     title: "Settings: typed @Observable AppSettings layer (UserDefaults-backed)"
-    status: open
+    status: done
     priority: P2
     type: task
     blocks: [victor-8cw]

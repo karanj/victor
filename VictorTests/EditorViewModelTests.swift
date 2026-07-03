@@ -561,10 +561,10 @@ final class EditorViewModelTests: XCTestCase {
     /// The debounce interval is 2 seconds, so this test takes ~3 seconds to run.
     func testAutoSaveUsesCorrectContentAfterFileSwitchDuringDebounce() async throws {
         // Ensure auto-save is enabled for this test
-        UserDefaults.standard.set(true, forKey: "isAutoSaveEnabled")
+        UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         defer {
             // Reset to default after test
-            UserDefaults.standard.removeObject(forKey: "isAutoSaveEnabled")
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         }
 
         // Create actual test files on disk

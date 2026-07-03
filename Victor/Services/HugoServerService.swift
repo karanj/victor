@@ -60,19 +60,13 @@ struct HugoServerConfig: Equatable {
     /// Only keys the user has actually set override the built-in defaults.
     static func fromUserDefaults(_ defaults: UserDefaults = .standard) -> HugoServerConfig {
         var config = HugoServerConfig()
-        if let port = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerPort) as? Int,
-           (1024...65535).contains(port) {
+        let port = AppSettings.currentHugoServerPort()
+        if (1024...65535).contains(port) {
             config.port = port
         }
-        if let drafts = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerBuildDrafts) as? Bool {
-            config.buildDrafts = drafts
-        }
-        if let future = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerBuildFuture) as? Bool {
-            config.buildFuture = future
-        }
-        if let expired = defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerBuildExpired) as? Bool {
-            config.buildExpired = expired
-        }
+        config.buildDrafts = AppSettings.currentHugoServerBuildDrafts()
+        config.buildFuture = AppSettings.currentHugoServerBuildFuture()
+        config.buildExpired = AppSettings.currentHugoServerBuildExpired()
         return config
     }
 }

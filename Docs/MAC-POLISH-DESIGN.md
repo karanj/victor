@@ -79,6 +79,9 @@ user-editable themes.
 - Tests: one round-trip test per property group + a defaults-coherence test
   asserting AppSettings and any remaining direct readers agree (replaces the
   AppConstants.Defaults discipline added 2026-07-03).
+- As built (2026-07-04): `AppSettings` has `private init()`; a DEBUG-only
+  `makeForTesting()` factory lets tests exercise default-loading/round-trips
+  on disposable instances instead of polluting the process-wide `.shared`.
 
 *Estimate: 4–6h including view migration. No dependencies; do first.*
 

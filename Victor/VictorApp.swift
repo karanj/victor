@@ -102,9 +102,8 @@ struct VictorApp: App {
     @FocusedValue(\.editorFormatting) private var editorFormatting
     @FocusedValue(\.showShortcodePicker) private var showShortcodePicker
 
-    // Editor preferences (using @AppStorage for sync with Preferences window)
-    @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
-    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = AppConstants.AutoSave.defaultEnabled
+    // Editor preferences (shared with Preferences window via AppSettings)
+    @Bindable private var settings = AppSettings.shared
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -168,7 +167,7 @@ struct VictorApp: App {
             }
 
             CommandGroup(after: .saveItem) {
-                Toggle("Auto-Save", isOn: $isAutoSaveEnabled)
+                Toggle("Auto-Save", isOn: $settings.isAutoSaveEnabled)
             }
 
             // Format menu - Text formatting
@@ -233,23 +232,23 @@ struct VictorApp: App {
                 Divider()
 
                 Button("Editor Only") {
-                    siteViewModel.layoutMode = .editor
+                    settings.layoutMode = .editor
                 }
                 .keyboardShortcut("1", modifiers: .command)
 
                 Button("Preview Only") {
-                    siteViewModel.layoutMode = .preview
+                    settings.layoutMode = .preview
                 }
                 .keyboardShortcut("2", modifiers: .command)
 
                 Button("Split View") {
-                    siteViewModel.layoutMode = .split
+                    settings.layoutMode = .split
                 }
                 .keyboardShortcut("3", modifiers: .command)
 
                 Divider()
 
-                Button(siteViewModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
+                Button(settings.isInspectorVisible ? "Hide Inspector" : "Show Inspector") {
                     if reduceMotion {
                         siteViewModel.toggleInspector()
                     } else {
@@ -276,7 +275,7 @@ struct VictorApp: App {
 
                 Divider()
 
-                Toggle("Highlight Current Line", isOn: $highlightCurrentLine)
+                Toggle("Highlight Current Line", isOn: $settings.highlightCurrentLine)
             }
         }
 

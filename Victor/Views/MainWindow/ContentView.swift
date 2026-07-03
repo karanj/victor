@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var siteViewModel: SiteViewModel
+    @Bindable private var settings = AppSettings.shared
     @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     // Accessibility
@@ -60,7 +61,7 @@ struct ContentView: View {
                         layoutContent(for: selectedNode)
                             .id(selectedNode.id)  // Force view recreation on file switch
                             .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
-                            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.layoutMode)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.layoutMode)
                     } else {
                         noFileSelectedView
                             .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
@@ -69,7 +70,7 @@ struct ContentView: View {
                 .frame(minWidth: AppConstants.Content.minWidth)
 
                 // Inspector panel (right side)
-                if siteViewModel.isInspectorVisible {
+                if settings.isInspectorVisible {
                     InspectorPanel(
                         contentFile: siteViewModel.selectedNode?.contentFile,
                         fileNode: siteViewModel.selectedNode,
@@ -78,7 +79,7 @@ struct ContentView: View {
                     .transition(.move(edge: .trailing))
                 }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: siteViewModel.isInspectorVisible)
+            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.isInspectorVisible)
         }
         .navigationTitle(siteViewModel.site?.displayName ?? "Victor")
         .toolbar {
@@ -114,7 +115,7 @@ struct ContentView: View {
                         }
                     } label: {
                         Label(
-                            siteViewModel.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
+                            settings.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
                             systemImage: "sidebar.right"
                         )
                     }
@@ -140,13 +141,13 @@ struct ContentView: View {
     /// Non-markdown files always use editor-only mode (no preview)
     private var effectiveLayoutMode: EditorLayoutMode {
         guard let node = siteViewModel.selectedNode else {
-            return siteViewModel.layoutMode
+            return settings.layoutMode
         }
         // Only markdown files with content get preview
         if node.fileType != .markdown || node.contentFile == nil {
             return .editor
         }
-        return siteViewModel.layoutMode
+        return settings.layoutMode
     }
 
     /// Returns the appropriate view based on the current layout mode

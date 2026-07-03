@@ -94,32 +94,21 @@ extension Color {
 
 extension Color {
     /// Colors for content status badges (customizable via Preferences)
+    @MainActor
     enum Badge {
         /// Draft content badge color
         static var draft: Color {
-            if let hex = UserDefaults.standard.string(forKey: BadgeColorKey.draft.rawValue),
-               let color = Color(hex: hex) {
-                return color
-            }
-            return BadgeColorKey.draft.defaultColor
+            Color(hex: AppSettings.shared.badgeColorDraftHex) ?? BadgeColorKey.draft.defaultColor
         }
 
         /// Scheduled content badge color
         static var scheduled: Color {
-            if let hex = UserDefaults.standard.string(forKey: BadgeColorKey.scheduled.rawValue),
-               let color = Color(hex: hex) {
-                return color
-            }
-            return BadgeColorKey.scheduled.defaultColor
+            Color(hex: AppSettings.shared.badgeColorScheduledHex) ?? BadgeColorKey.scheduled.defaultColor
         }
 
         /// Expired content badge color
         static var expired: Color {
-            if let hex = UserDefaults.standard.string(forKey: BadgeColorKey.expired.rawValue),
-               let color = Color(hex: hex) {
-                return color
-            }
-            return BadgeColorKey.expired.defaultColor
+            Color(hex: AppSettings.shared.badgeColorExpiredHex) ?? BadgeColorKey.expired.defaultColor
         }
 
         /// Page bundle badge color (not customizable)

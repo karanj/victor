@@ -18,16 +18,16 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 | WP | Scope | Ticket | Status | Commit |
 |----|-------|--------|--------|--------|
 | 0.1 | Haiku census of UserDefaults/@AppStorage (52 sites, 2 keys newly surfaced: frontmatterPanelHeight, per-view editorFontSize/Name copies) | victor-stn | **done** | census table embedded in WP0.2 work order; summary below |
-| 0.2 | AppSettings class + tests (TDD) | victor-stn | **in progress** (Sonnet agent) | — |
-| 0.3 | Migrate all readers; delete SiteViewModel settings props | victor-stn | **in progress** (same agent) | — |
-| 0.4 | SWIFT_STRICT_CONCURRENCY=complete + baseline snapshot | victor-sc6 s1 | **done** (verified: touched file emits warnings; null-build shows none — expected) | this commit |
-| 0.G | Phase 0 gate: full suite, ticket flip, push | — | pending | — |
+| 0.2 | AppSettings class + 15 tests (TDD; DEBUG-only makeForTesting factory — documented in design doc W0) | victor-stn | **done** | this commit |
+| 0.3 | All 52 census sites migrated (18 files); SiteViewModel settings props deleted; ContentView/TabBarView repointed; Color.Badge made @MainActor (census-missed site, agent-caught); warning count unchanged vs baseline | victor-stn | **done** | this commit |
+| 0.4 | SWIFT_STRICT_CONCURRENCY=complete + baseline snapshot | victor-sc6 s1 | **done** | f718683 |
+| 0.G | Phase 0 gate: full suite green, victor-stn → done, push | — | **done** | this commit |
 | 1.x | W1 chrome + W2 menus | victor-wc1, victor-mnu | pending | — |
 | 2.x | W3 integration | victor-doc/qlk/dnd/ntf | pending | — |
 | 3.x | W4/W5 + M-series burn-down + Swift 6 flip | victor-vis/kbd/sc6/str/tdt/mod | pending | — |
 | 4.x | Optional: mbe, 3l6, icn | — | pending | — |
 
-**Next up:** WP0.2/0.3 agent returns → orchestrator runs Phase 0 gate (0.G).
+**Next up:** Phase 1 — spawn WP1.1 (chrome: navigationDocument/WindowAccessor/edited-dot, victor-wc1) and WP1.3 (EditorActions + File menu, victor-mnu) in parallel (disjoint files); then WP1.2 (toolbar prototype), WP1.4 (Go/Dock menus), 1.R Opus review.
 
 ## Census summary (WP0.1, full table in git history of this file if needed)
 

@@ -13,8 +13,7 @@ actor AutoSaveService {
 
     /// Debounce interval honors the user's "Save after:" preference
     private var debounceInterval: TimeInterval {
-        UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) as? Double
-            ?? AppConstants.AutoSave.debounceInterval
+        AppSettings.currentAutoSaveDelay()
     }
 
     private init() {}

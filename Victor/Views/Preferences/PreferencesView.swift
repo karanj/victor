@@ -3,24 +3,8 @@ import AppKit
 
 /// Main preferences view with all settings in a single pane
 struct PreferencesView: View {
-    /// Use AppStorage for preferences that need to be accessible without SiteViewModel
-    @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
-    @AppStorage("editorFontSize") private var editorFontSize = 13.0
-    @AppStorage("editorFontName") private var editorFontName = "SF Mono"
-    @AppStorage("isAutoSaveEnabled") private var isAutoSaveEnabled = AppConstants.AutoSave.defaultEnabled
-    @AppStorage("autoSaveDelay") private var autoSaveDelay = AppConstants.AutoSave.debounceInterval
-
-    // Badge color preferences (stored as hex strings)
-    @AppStorage("badgeColorDraft") private var draftColorHex = Color.BadgeColorKey.draft.defaultHex
-    @AppStorage("badgeColorScheduled") private var scheduledColorHex = Color.BadgeColorKey.scheduled.defaultHex
-    @AppStorage("badgeColorExpired") private var expiredColorHex = Color.BadgeColorKey.expired.defaultHex
-
-    // Hugo server preferences - displayed defaults must match HugoServerConfig's
-    // built-in defaults, since fromUserDefaults() only overrides keys the user set
-    @AppStorage("hugoServerPort") private var serverPort = 1313
-    @AppStorage("hugoServerBuildDrafts") private var buildDrafts = true
-    @AppStorage("hugoServerBuildFuture") private var buildFuture = true
-    @AppStorage("hugoServerBuildExpired") private var buildExpired = false
+    /// Shared settings instance - the File-menu toggle and this window observe each other
+    @Bindable private var settings = AppSettings.shared
 
     // Hugo version (loaded on appear)
     @State private var hugoVersion: String = "Checking..."
@@ -29,22 +13,22 @@ struct PreferencesView: View {
     /// Binding to convert hex string to Color for ColorPicker
     private var draftColor: Binding<Color> {
         Binding(
-            get: { Color(hex: draftColorHex) ?? Color.BadgeColorKey.draft.defaultColor },
-            set: { draftColorHex = $0.hexString }
+            get: { Color(hex: settings.badgeColorDraftHex) ?? Color.BadgeColorKey.draft.defaultColor },
+            set: { settings.badgeColorDraftHex = $0.hexString }
         )
     }
 
     private var scheduledColor: Binding<Color> {
         Binding(
-            get: { Color(hex: scheduledColorHex) ?? Color.BadgeColorKey.scheduled.defaultColor },
-            set: { scheduledColorHex = $0.hexString }
+            get: { Color(hex: settings.badgeColorScheduledHex) ?? Color.BadgeColorKey.scheduled.defaultColor },
+            set: { settings.badgeColorScheduledHex = $0.hexString }
         )
     }
 
     private var expiredColor: Binding<Color> {
         Binding(
-            get: { Color(hex: expiredColorHex) ?? Color.BadgeColorKey.expired.defaultColor },
-            set: { expiredColorHex = $0.hexString }
+            get: { Color(hex: settings.badgeColorExpiredHex) ?? Color.BadgeColorKey.expired.defaultColor },
+            set: { settings.badgeColorExpiredHex = $0.hexString }
         )
     }
 
@@ -78,8 +62,8 @@ struct PreferencesView: View {
     /// Validated font name - ensures the selection exists in available fonts
     private var validatedFontName: Binding<String> {
         Binding(
-            get: { availableFonts.contains(editorFontName) ? editorFontName : "SF Mono" },
-            set: { editorFontName = $0 }
+            get: { availableFonts.contains(settings.editorFontName) ? settings.editorFontName : "SF Mono" },
+            set: { settings.editorFontName = $0 }
         )
     }
 
@@ -135,25 +119,25 @@ struct PreferencesView: View {
                 }
                 .pickerStyle(.menu)
 
-                Picker("Font Size:", selection: $editorFontSize) {
+                Picker("Font Size:", selection: $settings.editorFontSize) {
                     ForEach(fontSizes, id: \.self) { size in
                         Text("\(Int(size)) pt").tag(size)
                     }
                 }
                 .pickerStyle(.menu)
 
-                Toggle("Highlight current line", isOn: $highlightCurrentLine)
+                Toggle("Highlight current line", isOn: $settings.highlightCurrentLine)
                     .toggleStyle(.checkbox)
             } header: {
                 Text("Editor")
             }
 
             Section {
-                Toggle("Enable auto-save", isOn: $isAutoSaveEnabled)
+                Toggle("Enable auto-save", isOn: $settings.isAutoSaveEnabled)
                     .toggleStyle(.checkbox)
 
-                if isAutoSaveEnabled {
-                    Picker("Save after:", selection: $autoSaveDelay) {
+                if settings.isAutoSaveEnabled {
+                    Picker("Save after:", selection: $settings.autoSaveDelay) {
                         ForEach(delayOptions, id: \.value) { option in
                             Text(option.label).tag(option.value)
                         }
@@ -163,7 +147,7 @@ struct PreferencesView: View {
             } header: {
                 Text("Auto-Save")
             } footer: {
-                Text(isAutoSaveEnabled
+                Text(settings.isAutoSaveEnabled
                     ? "Files are automatically saved after you stop typing."
                     : "Use Command+S to save manually.")
                     .font(.caption)
@@ -171,7 +155,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .animation(.easeInOut(duration: 0.2), value: isAutoSaveEnabled)
+        .animation(.easeInOut(duration: 0.2), value: settings.isAutoSaveEnabled)
     }
 
     // MARK: - Appearance Tab
@@ -184,9 +168,9 @@ struct PreferencesView: View {
                 ColorPicker("Expired:", selection: expiredColor, supportsOpacity: false)
 
                 Button("Reset to Defaults") {
-                    draftColorHex = Color.BadgeColorKey.draft.defaultHex
-                    scheduledColorHex = Color.BadgeColorKey.scheduled.defaultHex
-                    expiredColorHex = Color.BadgeColorKey.expired.defaultHex
+                    settings.badgeColorDraftHex = Color.BadgeColorKey.draft.defaultHex
+                    settings.badgeColorScheduledHex = Color.BadgeColorKey.scheduled.defaultHex
+                    settings.badgeColorExpiredHex = Color.BadgeColorKey.expired.defaultHex
                 }
                 .buttonStyle(.link)
             } header: {
@@ -243,7 +227,7 @@ struct PreferencesView: View {
                 HStack {
                     Text("Default Port:")
                     Spacer()
-                    TextField("", value: $serverPort,
+                    TextField("", value: $settings.hugoServerPort,
                               format: .number.grouping(.never),
                               prompt: Text("(1024-65535)"))
                         .textFieldStyle(.roundedBorder)
@@ -251,13 +235,13 @@ struct PreferencesView: View {
                         .multilineTextAlignment(.trailing)
                 }
 
-                Toggle("Build drafts", isOn: $buildDrafts)
+                Toggle("Build drafts", isOn: $settings.hugoServerBuildDrafts)
                     .toggleStyle(.checkbox)
 
-                Toggle("Build future posts", isOn: $buildFuture)
+                Toggle("Build future posts", isOn: $settings.hugoServerBuildFuture)
                     .toggleStyle(.checkbox)
 
-                Toggle("Build expired posts", isOn: $buildExpired)
+                Toggle("Build expired posts", isOn: $settings.hugoServerBuildExpired)
                     .toggleStyle(.checkbox)
             } header: {
                 Text("Server Defaults")

@@ -80,6 +80,9 @@ enum ContentStatus: Equatable {
         }
     }
 
+    // Reads customizable badge colors from AppSettings (MainActor-isolated);
+    // both call sites (FileListView) are Views, which infer MainActor already.
+    @MainActor
     var badgeColor: Color {
         switch self {
         case .published: return .clear

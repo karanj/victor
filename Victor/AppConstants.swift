@@ -189,5 +189,9 @@ enum AppConstants {
         static let hugoServerBuildDrafts = "hugoServerBuildDrafts"
         static let hugoServerBuildFuture = "hugoServerBuildFuture"
         static let hugoServerBuildExpired = "hugoServerBuildExpired"
+        static let badgeColorDraft = "badgeColorDraft"
+        static let badgeColorScheduled = "badgeColorScheduled"
+        static let badgeColorExpired = "badgeColorExpired"
+        static let frontmatterPanelHeight = "frontmatterPanelHeight"
     }
 }

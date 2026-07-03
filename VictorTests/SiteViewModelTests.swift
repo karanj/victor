@@ -30,24 +30,11 @@ final class SiteViewModelTests: XCTestCase {
     // MARK: - Initialization Tests
 
     func testInitialStateWithNoUserDefaults() {
-        // Clear relevant UserDefaults
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
-        defaults.removeObject(forKey: AppConstants.UserDefaultsKeys.editorLayoutMode)
-        defaults.removeObject(forKey: AppConstants.UserDefaultsKeys.highlightCurrentLine)
-        defaults.removeObject(forKey: AppConstants.UserDefaultsKeys.editorFontSize)
-        defaults.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
-        defaults.removeObject(forKey: AppConstants.UserDefaultsKeys.isInspectorVisible)
-
+        // Note: preference defaults (auto-save, layout mode, highlight line, font size,
+        // inspector visibility) moved to AppSettings and are covered by AppSettingsTests.
         let viewModel = SiteViewModel()
 
         // Check defaults
-        XCTAssertTrue(viewModel.isAutoSaveEnabled, "Auto-save should default to true")
-        XCTAssertEqual(viewModel.layoutMode, .split, "Layout mode should default to split")
-        XCTAssertTrue(viewModel.highlightCurrentLine, "Highlight current line should default to true")
-        XCTAssertEqual(viewModel.editorFontSize, 13.0, "Font size should default to 13")
-        XCTAssertEqual(viewModel.autoSaveDelay, 2.0, "Auto-save delay should default to 2 seconds")
-        XCTAssertFalse(viewModel.isInspectorVisible, "Inspector should default to hidden")
         XCTAssertNil(viewModel.site, "No site should be loaded initially")
         XCTAssertTrue(viewModel.fileNodes.isEmpty, "File nodes should be empty initially")
         XCTAssertNil(viewModel.selectedNode, "No node should be selected initially")
@@ -322,13 +309,13 @@ final class SiteViewModelTests: XCTestCase {
 
     func testToggleInspector() {
         let viewModel = SiteViewModel()
-        let initial = viewModel.isInspectorVisible
+        let initial = AppSettings.shared.isInspectorVisible
 
         viewModel.toggleInspector()
-        XCTAssertEqual(viewModel.isInspectorVisible, !initial)
+        XCTAssertEqual(AppSettings.shared.isInspectorVisible, !initial)
 
         viewModel.toggleInspector()
-        XCTAssertEqual(viewModel.isInspectorVisible, initial)
+        XCTAssertEqual(AppSettings.shared.isInspectorVisible, initial)
     }
 
     func testToggleFocusMode() {
@@ -357,27 +344,27 @@ final class SiteViewModelTests: XCTestCase {
     }
 
     // MARK: - Preferences Persistence Tests
+    //
+    // Preference persistence (auto-save, layout mode, highlight line, font size,
+    // inspector visibility) moved to AppSettings (see AppSettingsTests). These
+    // tests confirm SiteViewModel now reads/writes through the shared instance.
 
     func testAutoSaveEnabledPersistence() {
-        let viewModel = SiteViewModel()
-
-        viewModel.isAutoSaveEnabled = false
+        AppSettings.shared.isAutoSaveEnabled = false
         XCTAssertFalse(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled))
 
-        viewModel.isAutoSaveEnabled = true
+        AppSettings.shared.isAutoSaveEnabled = true
         XCTAssertTrue(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled))
     }
 
     func testLayoutModePersistence() {
-        let viewModel = SiteViewModel()
-
-        viewModel.layoutMode = .editor
+        AppSettings.shared.layoutMode = .editor
         XCTAssertEqual(
             UserDefaults.standard.string(forKey: AppConstants.UserDefaultsKeys.editorLayoutMode),
             EditorLayoutMode.editor.rawValue
         )
 
-        viewModel.layoutMode = .preview
+        AppSettings.shared.layoutMode = .preview
         XCTAssertEqual(
             UserDefaults.standard.string(forKey: AppConstants.UserDefaultsKeys.editorLayoutMode),
             EditorLayoutMode.preview.rawValue
@@ -385,19 +372,15 @@ final class SiteViewModelTests: XCTestCase {
     }
 
     func testHighlightCurrentLinePersistence() {
-        let viewModel = SiteViewModel()
-
-        viewModel.highlightCurrentLine = false
+        AppSettings.shared.highlightCurrentLine = false
         XCTAssertFalse(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.highlightCurrentLine))
 
-        viewModel.highlightCurrentLine = true
+        AppSettings.shared.highlightCurrentLine = true
         XCTAssertTrue(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.highlightCurrentLine))
     }
 
     func testEditorFontSizePersistence() {
-        let viewModel = SiteViewModel()
-
-        viewModel.editorFontSize = 16.0
+        AppSettings.shared.editorFontSize = 16.0
         XCTAssertEqual(
             UserDefaults.standard.double(forKey: AppConstants.UserDefaultsKeys.editorFontSize),
             16.0
@@ -405,9 +388,7 @@ final class SiteViewModelTests: XCTestCase {
     }
 
     func testAutoSaveDelayPersistence() {
-        let viewModel = SiteViewModel()
-
-        viewModel.autoSaveDelay = 5.0
+        AppSettings.shared.autoSaveDelay = 5.0
         XCTAssertEqual(
             UserDefaults.standard.double(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay),
             5.0
@@ -415,12 +396,10 @@ final class SiteViewModelTests: XCTestCase {
     }
 
     func testInspectorVisiblePersistence() {
-        let viewModel = SiteViewModel()
-
-        viewModel.isInspectorVisible = true
+        AppSettings.shared.isInspectorVisible = true
         XCTAssertTrue(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.isInspectorVisible))
 
-        viewModel.isInspectorVisible = false
+        AppSettings.shared.isInspectorVisible = false
         XCTAssertFalse(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.isInspectorVisible))
     }
 

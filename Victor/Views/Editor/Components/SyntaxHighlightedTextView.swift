@@ -7,7 +7,7 @@ struct SyntaxHighlightedTextView: NSViewRepresentable {
     let language: String
     let onTextChange: () -> Void
 
-    @AppStorage("editorFontSize") private var editorFontSize: Double = 13.0
+    private let settings = AppSettings.shared
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -24,7 +24,7 @@ struct SyntaxHighlightedTextView: NSViewRepresentable {
         textView.isSelectable = true
         textView.allowsUndo = true
         textView.isRichText = false
-        textView.font = NSFont.monospacedSystemFont(ofSize: editorFontSize, weight: .regular)
+        textView.font = NSFont.monospacedSystemFont(ofSize: settings.editorFontSize, weight: .regular)
         textView.backgroundColor = NSColor.textBackgroundColor
         textView.textColor = NSColor.textColor
         textView.autoresizingMask = [.width]
@@ -56,7 +56,7 @@ struct SyntaxHighlightedTextView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NSTextView else { return }
 
         // Update font size if changed
-        textView.font = NSFont.monospacedSystemFont(ofSize: editorFontSize, weight: .regular)
+        textView.font = NSFont.monospacedSystemFont(ofSize: settings.editorFontSize, weight: .regular)
 
         // Update language if changed
         context.coordinator.language = language

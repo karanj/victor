@@ -5,10 +5,11 @@ import SwiftUI
 /// Tab bar for switching between Editor, Preview, and Split layout modes
 struct TabBarView: View {
     @Bindable var viewModel: SiteViewModel
+    @Bindable private var settings = AppSettings.shared
 
     var body: some View {
         HStack {
-            Picker("Layout Mode", selection: $viewModel.layoutMode) {
+            Picker("Layout Mode", selection: $settings.layoutMode) {
                 ForEach(EditorLayoutMode.allCases, id: \.self) { mode in
                     Label(mode.displayName, systemImage: mode.iconName)
                         .tag(mode)
@@ -22,7 +23,7 @@ struct TabBarView: View {
             Spacer()
 
             // Live Preview toggle (shown when Hugo server is running and in preview/split mode)
-            if viewModel.isHugoServerRunning && viewModel.layoutMode != .editor {
+            if viewModel.isHugoServerRunning && settings.layoutMode != .editor {
                 livePreviewToggle
             }
         }

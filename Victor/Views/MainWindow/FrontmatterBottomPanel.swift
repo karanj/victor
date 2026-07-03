@@ -16,8 +16,8 @@ struct FrontmatterBottomPanel: View {
     @State private var rawText: String = ""
     @State private var parseError: String?
 
-    /// Panel height - stored in AppStorage for persistence
-    @AppStorage("frontmatterPanelHeight") private var panelHeight: Double = 300
+    /// Panel height - persisted via AppSettings
+    @Bindable private var settings = AppSettings.shared
 
     /// Minimum and maximum heights for the panel
     private let minHeight: CGFloat = 150
@@ -84,7 +84,7 @@ struct FrontmatterBottomPanel: View {
                 if viewMode == .form {
                     // Form view - FrontmatterEditorView has its own ScrollView
                     FrontmatterEditorView(frontmatter: frontmatter)
-                        .frame(height: panelHeight)
+                        .frame(height: settings.frontmatterPanelHeight)
                         .background(Color(nsColor: .textBackgroundColor))
                 } else {
                     // Raw view
@@ -114,7 +114,7 @@ struct FrontmatterBottomPanel: View {
                             .padding(8)
                             .background(Color(nsColor: .textBackgroundColor))
                     }
-                    .frame(height: panelHeight)
+                    .frame(height: settings.frontmatterPanelHeight)
                 }
             }
         }
@@ -162,8 +162,8 @@ struct FrontmatterBottomPanel: View {
                 DragGesture()
                     .onChanged { value in
                         // Dragging up increases height (negative translation)
-                        let newHeight = panelHeight - value.translation.height
-                        panelHeight = min(maxHeight, max(minHeight, newHeight))
+                        let newHeight = settings.frontmatterPanelHeight - value.translation.height
+                        settings.frontmatterPanelHeight = min(maxHeight, max(minHeight, newHeight))
                     }
             )
             .onHover { hovering in

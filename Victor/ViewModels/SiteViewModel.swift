@@ -92,48 +92,6 @@ class SiteViewModel {
     /// Live preview enabled state (controls real-time updates in split view)
     var isLivePreviewEnabled: Bool = true
 
-    /// Auto-save enabled state (persisted)
-    var isAutoSaveEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(isAutoSaveEnabled, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
-        }
-    }
-
-    /// Editor layout mode: editor only, preview only, or split (persisted)
-    var layoutMode: EditorLayoutMode {
-        didSet {
-            UserDefaults.standard.set(layoutMode.rawValue, forKey: AppConstants.UserDefaultsKeys.editorLayoutMode)
-        }
-    }
-
-    /// Highlight current line in editor (persisted)
-    var highlightCurrentLine: Bool {
-        didSet {
-            UserDefaults.standard.set(highlightCurrentLine, forKey: AppConstants.UserDefaultsKeys.highlightCurrentLine)
-        }
-    }
-
-    /// Editor font size (persisted)
-    var editorFontSize: Double {
-        didSet {
-            UserDefaults.standard.set(editorFontSize, forKey: AppConstants.UserDefaultsKeys.editorFontSize)
-        }
-    }
-
-    /// Auto-save delay in seconds (persisted)
-    var autoSaveDelay: Double {
-        didSet {
-            UserDefaults.standard.set(autoSaveDelay, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
-        }
-    }
-
-    /// Inspector panel visibility (persisted)
-    var isInspectorVisible: Bool {
-        didSet {
-            UserDefaults.standard.set(isInspectorVisible, forKey: AppConstants.UserDefaultsKeys.isInspectorVisible)
-        }
-    }
-
     /// Focus mode active state (not persisted - always starts inactive)
     var isFocusModeActive: Bool = false
 
@@ -445,29 +403,6 @@ class SiteViewModel {
     }
 
     init() {
-        // Load auto-save preference (default: true)
-        self.isAutoSaveEnabled = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled) as? Bool ?? true
-
-        // Load layout mode preference (default: .split for backwards compatibility)
-        if let savedMode = UserDefaults.standard.string(forKey: AppConstants.UserDefaultsKeys.editorLayoutMode),
-           let mode = EditorLayoutMode(rawValue: savedMode) {
-            self.layoutMode = mode
-        } else {
-            self.layoutMode = .split
-        }
-
-        // Load current line highlighting preference (default: true)
-        self.highlightCurrentLine = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.highlightCurrentLine) as? Bool ?? true
-
-        // Load editor font size preference (default: 13)
-        self.editorFontSize = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.editorFontSize) as? Double ?? 13.0
-
-        // Load auto-save delay preference (default: 2 seconds)
-        self.autoSaveDelay = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) as? Double ?? 2.0
-
-        // Load inspector visibility preference (default: false)
-        self.isInspectorVisible = UserDefaults.standard.object(forKey: AppConstants.UserDefaultsKeys.isInspectorVisible) as? Bool ?? false
-
         // Try to load previously opened site
         Task { [weak self] in
             await self?.loadSavedSite()
@@ -722,8 +657,8 @@ class SiteViewModel {
         // Auto-hide inspector when switching to a non-markdown file
         // (The inspector toolbar button is only shown for markdown files,
         // so we need to auto-dismiss to prevent the user being stuck)
-        if isInspectorVisible && (actualNode == nil || !actualNode!.isMarkdownFile) {
-            isInspectorVisible = false
+        if AppSettings.shared.isInspectorVisible && (actualNode == nil || !actualNode!.isMarkdownFile) {
+            AppSettings.shared.isInspectorVisible = false
         }
 
         // Only set selectedFileID if it's different to avoid triggering didSet again
@@ -815,7 +750,7 @@ class SiteViewModel {
 
     /// Toggle Inspector panel
     func toggleInspector() {
-        isInspectorVisible.toggle()
+        AppSettings.shared.isInspectorVisible.toggle()
     }
 
     /// Toggle Focus Mode

@@ -16,10 +16,8 @@ struct EditorPanelView: View {
     @State private var contentOpacity: Double = 0
     @State private var showShortcodePicker = false
 
-    // Editor preferences (using @AppStorage for live updates from Preferences window)
-    @AppStorage("highlightCurrentLine") private var highlightCurrentLine = true
-    @AppStorage("editorFontSize") private var editorFontSize: Double = 13.0
-    @AppStorage("editorFontName") private var editorFontName: String = "SF Mono"
+    // Editor preferences (shared with Preferences window via AppSettings)
+    @Bindable private var settings = AppSettings.shared
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -62,9 +60,9 @@ struct EditorPanelView: View {
             // Markdown Editor (takes priority)
             EditorTextView(
                 text: $viewModel.editableContent,
-                highlightCurrentLine: highlightCurrentLine,
-                fontSize: editorFontSize,
-                fontName: editorFontName,
+                highlightCurrentLine: settings.highlightCurrentLine,
+                fontSize: settings.editorFontSize,
+                fontName: settings.editorFontName,
                 onCoordinatorReady: { coordinator in
                     editorCoordinator = coordinator
                 },
