@@ -33,7 +33,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 1.3 | EditorActions focused-value struct (formatting/shortcode optional, save/revert/hasUnsavedChanges) published by EditorPanelView + TextEditorPanel; full File menu (New Post ⌘N, New Folder ⇧⌘N, Close Site ⇧⌘W w/ confirm, Save ⌘S single-owner, Save All ⌥⌘S, Revert w/ confirm, Reveal ⌥⌘R) with validation; sheet/dialogs attached at WindowGroup call site (no ContentView edit). Gap filed: victor-ea5 (5 specialized editors keep local ⌘S) | victor-mnu | **done** | this commit |
 
-**Next up:** WP1.4 (Go menu, Open Recent submenu + noteNewRecentDocumentURL, Dock menu — same menus agent) → 1.R Opus review → Phase 1 gate: full suite + USER manual smoke (proxy-icon drag, edited-dot, Customize Toolbar drag + relaunch persistence, toolbar with no site open, File-menu walkthrough from WP1.3 report) → push.
+| 1.4 | Open Recent submenu + noteNewRecentDocumentURL; Go menu with ID-based nav history (50-entry, branch-truncating, re-entrancy-guarded, 12 tests) + role-folder jumps; Dock menu on AppDelegate (server toggle + recents) | victor-mnu | **done** | this commit |
+
+**Next up:** 1.R Opus review of ecca34e..HEAD → fix findings → Phase 1 gate: full suite + USER manual smoke (proxy-icon drag, edited-dot, Customize Toolbar drag + relaunch persistence, toolbar with no site open, File/Go/Dock menu walkthrough per WP1.3/1.4 reports) → push.
 
 ## Census summary (WP0.1, full table in git history of this file if needed)
 

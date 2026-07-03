@@ -406,6 +406,178 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isNewContentPresented)
     }
 
+    // MARK: - Go Menu Navigation History Tests
+    // (WP1.4: Back/Forward through selectNode history)
+
+    func testNavigationCannotGoBackOrForwardInitially() {
+        let viewModel = SiteViewModel()
+        XCTAssertFalse(viewModel.canNavigateBack)
+        XCTAssertFalse(viewModel.canNavigateForward)
+    }
+
+    func testNavigationCannotGoBackAfterSingleSelection() {
+        let viewModel = SiteViewModel()
+        let node = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        viewModel.fileNodes = [node]
+
+        viewModel.selectNode(node)
+
+        XCTAssertFalse(viewModel.canNavigateBack, "Only one history entry - nowhere to go back to")
+        XCTAssertFalse(viewModel.canNavigateForward)
+    }
+
+    func testNavigationBackReturnsToPreviouslySelectedNode() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        XCTAssertTrue(viewModel.canNavigateBack)
+
+        viewModel.navigateBack()
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        XCTAssertFalse(viewModel.canNavigateBack)
+        XCTAssertTrue(viewModel.canNavigateForward)
+    }
+
+    func testNavigationForwardReturnsToNodeNavigatedAwayFrom() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        viewModel.navigateBack()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+
+        viewModel.navigateForward()
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id)
+        XCTAssertTrue(viewModel.canNavigateBack)
+        XCTAssertFalse(viewModel.canNavigateForward)
+    }
+
+    func testNavigationBackForwardRoundTripThroughThreeNodes() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB, nodeC]
+
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        viewModel.selectNode(nodeC)
+
+        viewModel.navigateBack()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id)
+
+        viewModel.navigateBack()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        XCTAssertFalse(viewModel.canNavigateBack)
+
+        viewModel.navigateForward()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id)
+
+        viewModel.navigateForward()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeC.id)
+        XCTAssertFalse(viewModel.canNavigateForward)
+    }
+
+    func testNavigationSelectingNewNodeAfterBackDiscardsForwardHistory() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB, nodeC]
+
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        viewModel.navigateBack()
+        XCTAssertTrue(viewModel.canNavigateForward)
+
+        // Branching off from history's middle should drop the stale "forward" entry (B)
+        viewModel.selectNode(nodeC)
+
+        XCTAssertFalse(viewModel.canNavigateForward, "Selecting a new node should discard forward history")
+        XCTAssertTrue(viewModel.canNavigateBack)
+
+        viewModel.navigateBack()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+    }
+
+    func testNavigateBackNoOpWhenAtStartOfHistory() {
+        let viewModel = SiteViewModel()
+        let node = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        viewModel.fileNodes = [node]
+        viewModel.selectNode(node)
+
+        viewModel.navigateBack()
+
+        XCTAssertEqual(viewModel.selectedNode?.id, node.id, "Should remain on the only history entry")
+    }
+
+    func testNavigateForwardNoOpWhenAtEndOfHistory() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+
+        viewModel.navigateForward()
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id, "Should remain on the most recent selection")
+    }
+
+    func testReselectingSameNodeDoesNotGrowHistory() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        // Re-selecting the currently-selected node is already a no-op in selectNode(_:);
+        // history should not grow, so a single Back still lands on nodeA.
+        viewModel.selectNode(nodeB)
+
+        viewModel.navigateBack()
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        XCTAssertFalse(viewModel.canNavigateBack)
+    }
+
+    func testNavigationHistoryResetOnCloseSite() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+        viewModel.selectNode(nodeA)
+        viewModel.selectNode(nodeB)
+        XCTAssertTrue(viewModel.canNavigateBack)
+
+        viewModel.closeSite()
+
+        XCTAssertFalse(viewModel.canNavigateBack)
+        XCTAssertFalse(viewModel.canNavigateForward)
+    }
+
+    // MARK: - Go Menu Top-Level Folder Lookup Tests
+
+    func testTopLevelFolderFindsMatchingRole() {
+        let viewModel = SiteViewModel()
+        let content = FileNode(url: URL(fileURLWithPath: "/site/content"), isDirectory: true, hugoRole: .content)
+        let staticDir = FileNode(url: URL(fileURLWithPath: "/site/static"), isDirectory: true, hugoRole: .staticFiles)
+        viewModel.fileNodes = [content, staticDir]
+
+        XCTAssertEqual(viewModel.topLevelFolder(for: .content)?.id, content.id)
+        XCTAssertEqual(viewModel.topLevelFolder(for: .staticFiles)?.id, staticDir.id)
+        XCTAssertNil(viewModel.topLevelFolder(for: .layouts))
+    }
+
     // MARK: - Toggle Tests
 
     func testToggleInspector() {

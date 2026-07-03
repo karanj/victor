@@ -36,6 +36,56 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = false
     }
 
+    // MARK: - Dock Menu (W2.4)
+
+    /// Dock icon right-click menu: server toggle + recent sites.
+    /// Plain AppKit (NSMenu/NSMenuItem) since there's no SwiftUI entry point
+    /// for the Dock menu - target/action call back into `siteViewModel`,
+    /// which this delegate already holds a weak reference to.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        guard let viewModel = siteViewModel else { return menu }
+
+        if viewModel.site != nil {
+            let serverTitle = viewModel.isHugoServerRunning ? "Stop Hugo Server" : "Start Hugo Server"
+            let serverItem = NSMenuItem(title: serverTitle, action: #selector(dockToggleHugoServer), keyEquivalent: "")
+            serverItem.target = self
+            menu.addItem(serverItem)
+        }
+
+        let recentPaths = viewModel.recentSitePaths
+        if !recentPaths.isEmpty {
+            if !menu.items.isEmpty {
+                menu.addItem(.separator())
+            }
+            for path in recentPaths {
+                let item = NSMenuItem(
+                    title: URL(fileURLWithPath: path).lastPathComponent,
+                    action: #selector(dockOpenRecentSite(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = path
+                menu.addItem(item)
+            }
+        }
+
+        return menu
+    }
+
+    @objc private func dockToggleHugoServer() {
+        Task { @MainActor [weak siteViewModel] in
+            await siteViewModel?.toggleHugoServer()
+        }
+    }
+
+    @objc private func dockOpenRecentSite(_ sender: NSMenuItem) {
+        guard let path = sender.representedObject as? String else { return }
+        Task { @MainActor [weak siteViewModel] in
+            await siteViewModel?.openRecentSite(path)
+        }
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         // Check if there are unsaved changes
         guard let viewModel = siteViewModel, viewModel.hasUnsavedChanges else {
@@ -247,6 +297,23 @@ struct VictorApp: App {
                     }
                 }
                 .keyboardShortcut("o", modifiers: .command)
+
+                Menu("Open Recent") {
+                    ForEach(siteViewModel.recentSitePaths, id: \.self) { path in
+                        Button(URL(fileURLWithPath: path).lastPathComponent) {
+                            Task { await siteViewModel.openRecentSite(path) }
+                        }
+                    }
+
+                    if !siteViewModel.recentSitePaths.isEmpty {
+                        Divider()
+
+                        Button("Clear Menu") {
+                            siteViewModel.clearRecentSites()
+                        }
+                    }
+                }
+                .disabled(siteViewModel.recentSitePaths.isEmpty)
             }
 
             CommandGroup(after: .newItem) {
@@ -403,6 +470,28 @@ struct VictorApp: App {
 
                 Toggle("Highlight Current Line", isOn: $settings.highlightCurrentLine)
             }
+
+            // Go menu (W2.2) - file navigation history + jumps to top-level Hugo folders
+            CommandMenu("Go") {
+                Button("Back") {
+                    siteViewModel.navigateBack()
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .control])
+                .disabled(!siteViewModel.canNavigateBack)
+
+                Button("Forward") {
+                    siteViewModel.navigateForward()
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .control])
+                .disabled(!siteViewModel.canNavigateForward)
+
+                Divider()
+
+                goToFolderButton(title: "Go to content/", role: .content)
+                goToFolderButton(title: "Go to static/", role: .staticFiles)
+                goToFolderButton(title: "Go to layouts/", role: .layouts)
+                goToFolderButton(title: "Go to data/", role: .data)
+            }
         }
 
         // Preferences window (Cmd+,)
@@ -413,5 +502,17 @@ struct VictorApp: App {
         Window("Server Logs",id: "server-logs") {
             ServerLogView()
         }
+    }
+
+    /// A Go menu "Go to <role>/" item: selects and reveals the site's
+    /// top-level folder for `role`, disabled when the loaded site has none.
+    @ViewBuilder
+    private func goToFolderButton(title: String, role: HugoRole) -> some View {
+        Button(title) {
+            if let folder = siteViewModel.topLevelFolder(for: role) {
+                siteViewModel.selectAndRevealNode(folder)
+            }
+        }
+        .disabled(siteViewModel.topLevelFolder(for: role) == nil)
     }
 }

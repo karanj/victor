@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -456,8 +457,12 @@ class SiteViewModel {
             invalidateFilterCache()
             buildNodeLookupTable()
 
-            // Track this site in recent sites
+            // Track this site in recent sites (our own File > Open Recent submenu)
             addRecentSite(url.path)
+
+            // Also register with the system so the site shows up in the Dock icon's
+            // right-click menu and App Exposé, even though we render our own submenu.
+            NSDocumentController.shared.noteNewRecentDocumentURL(url)
 
             // Restore last selected file if it exists in this site
             restoreLastSelectedFile()
@@ -585,6 +590,8 @@ class SiteViewModel {
         modifiedFileIDs = []
         recentlySavedFileIDs = [:]
         loadedStatusFolderIDs = []
+        navigationHistory = []
+        navigationHistoryCursor = -1
     }
 
     // MARK: - Node Lookup
@@ -658,6 +665,11 @@ class SiteViewModel {
 
         // OPTIMISTIC UPDATE: Update UI immediately, before any loading
         selectedNode = actualNode
+
+        // Record for Go > Back/Forward (no-ops while replaying history itself)
+        if let actualNode {
+            pushNavigationHistory(actualNode)
+        }
 
         // Auto-hide inspector when switching to a non-markdown file
         // (The inspector toolbar button is only shown for markdown files,
@@ -1313,9 +1325,16 @@ class SiteViewModel {
     // which both need "the selected folder, or a sensible fallback" per
     // Docs/MAC-POLISH-DESIGN.md W2.1.
 
+    /// The top-level folder node with the given Hugo role (content/, static/,
+    /// layouts/, data/, etc.), if the loaded site has one. Used by File menu
+    /// target resolution and the Go menu's "Go to <role>/" jump items.
+    func topLevelFolder(for role: HugoRole) -> FileNode? {
+        fileNodes.first { $0.hugoRole == role }
+    }
+
     /// The top-level content/ folder node, if the loaded site has one.
     var contentRootNode: FileNode? {
-        fileNodes.first { $0.hugoRole == .content }
+        topLevelFolder(for: .content)
     }
 
     /// Target folder for File > New Post…: the selected folder (or the parent
@@ -1348,6 +1367,87 @@ class SiteViewModel {
             current = n.parent
         }
         return false
+    }
+
+    // MARK: - Go Menu Navigation History
+    //
+    // Back/Forward (Go menu, W2.2) need an ordered history with a cursor,
+    // distinct from `recentFiles` (a most-recent-first MRU list with no
+    // concept of "current position"). Node IDs are stored rather than
+    // FileNode references so a stale entry (e.g. after a site reload
+    // recreates the tree) just fails `findNode(id:)` and is skipped instead
+    // of holding a dangling reference.
+
+    /// Ordered navigation history of selected node IDs.
+    private var navigationHistory: [UUID] = []
+
+    /// Index into `navigationHistory` representing "here". -1 means empty.
+    private var navigationHistoryCursor: Int = -1
+
+    /// Set while `navigateBack()`/`navigateForward()` are driving `selectNode(_:)`,
+    /// so that call doesn't itself push a new history entry.
+    private var isNavigatingHistory = false
+
+    /// Maximum number of entries retained in the navigation history.
+    private let maxNavigationHistory = 50
+
+    /// Whether Go > Back has anywhere to go.
+    var canNavigateBack: Bool {
+        navigationHistoryCursor > 0
+    }
+
+    /// Whether Go > Forward has anywhere to go.
+    var canNavigateForward: Bool {
+        navigationHistoryCursor >= 0 && navigationHistoryCursor < navigationHistory.count - 1
+    }
+
+    /// Record a newly selected node into the navigation history. Called from
+    /// `selectNode(_:)`. No-ops while replaying history (back/forward) and
+    /// when the node is already the current history entry (avoids duplicate
+    /// consecutive entries e.g. from `handleContentChange` re-selecting).
+    private func pushNavigationHistory(_ node: FileNode) {
+        guard !isNavigatingHistory else { return }
+        if navigationHistoryCursor >= 0, navigationHistory[navigationHistoryCursor] == node.id {
+            return
+        }
+
+        // Selecting a new node while sitting in the middle of history (after
+        // going back) branches - discard the stale "forward" entries.
+        if navigationHistoryCursor < navigationHistory.count - 1 {
+            navigationHistory.removeSubrange((navigationHistoryCursor + 1)...)
+        }
+
+        navigationHistory.append(node.id)
+        navigationHistoryCursor = navigationHistory.count - 1
+
+        if navigationHistory.count > maxNavigationHistory {
+            let overflow = navigationHistory.count - maxNavigationHistory
+            navigationHistory.removeFirst(overflow)
+            navigationHistoryCursor -= overflow
+        }
+    }
+
+    /// Navigate to the node currently at `navigationHistoryCursor`, if it still resolves.
+    private func navigateToCurrentHistoryEntry() {
+        guard navigationHistoryCursor >= 0, navigationHistoryCursor < navigationHistory.count else { return }
+        guard let node = findNode(id: navigationHistory[navigationHistoryCursor]) else { return }
+        isNavigatingHistory = true
+        selectAndRevealNode(node)
+        isNavigatingHistory = false
+    }
+
+    /// Go menu > Back: select the previously-selected file.
+    func navigateBack() {
+        guard canNavigateBack else { return }
+        navigationHistoryCursor -= 1
+        navigateToCurrentHistoryEntry()
+    }
+
+    /// Go menu > Forward: re-select the file navigated away from by the last Back.
+    func navigateForward() {
+        guard canNavigateForward else { return }
+        navigationHistoryCursor += 1
+        navigateToCurrentHistoryEntry()
     }
 
     // MARK: - Hugo Server Control
