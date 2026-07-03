@@ -39,7 +39,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 **Phase 1 COMPLETE** (pending user manual smoke, below).
 
-**Next up:** Phase 2 — WP2.1 (folder document type, victor-doc) ∥ WP2.2 (Quick Look + ShareLink, victor-qlk) ∥ WP2.4 (notifications, victor-ntf), then WP2.3 (drag & drop, victor-dnd), 2.R review.
+| 2.2 | Real Quick Look (.quickLookPreview) in asset panel/grid/list + sidebar file list (Space, non-editable files only, .ignored fall-through for editable); ShareLink in asset panel. NSWorkspace.open fake deleted | victor-qlk | **done** | this commit |
+
+**Next up:** WP2.1 (folder document type, in flight) → WP2.4 (notifications; waits on 2.1 for xcodegen serialization) → WP2.3 (drag & drop) → orchestrator adds File-menu ShareLink (snippet in WP2.2 report; VictorApp owned by 2.1 right now) → 2.R review → Phase 2 gate.
 
 **USER manual smoke for Phase 1** (agents can't do these headlessly):
 1. Proxy icon: select a file → titlebar "file.md — Site"; Cmd-click title → path menu; drag proxy icon to Finder.

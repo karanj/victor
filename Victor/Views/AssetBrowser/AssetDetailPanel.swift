@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import QuickLook
 
 /// Detail panel showing asset info and actions
 struct AssetDetailPanel: View {
@@ -7,6 +8,7 @@ struct AssetDetailPanel: View {
     let onInsert: ((String) -> Void)?
 
     @State private var copyFeedback: String?
+    @State private var quickLookURL: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,6 +82,7 @@ struct AssetDetailPanel: View {
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
+        .quickLookPreview($quickLookURL)
     }
 
     // MARK: - Preview Section
@@ -193,11 +196,17 @@ struct AssetDetailPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .help("Reveal in Finder")
+
+                ShareLink(item: asset.url) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+                .help("Share this file")
             }
 
             // Quick Look preview
             Button {
-                quickLookPreview()
+                quickLookURL = asset.url
             } label: {
                 Label("Quick Look", systemImage: "eye")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,13 +245,6 @@ struct AssetDetailPanel: View {
                 copyFeedback = nil
             }
         }
-    }
-
-    private func quickLookPreview() {
-        // Use QLPreviewPanel for Quick Look
-        // This is a simplified version - for full Quick Look support,
-        // you'd need to implement QLPreviewPanelDataSource
-        NSWorkspace.shared.open(asset.url)
     }
 }
 

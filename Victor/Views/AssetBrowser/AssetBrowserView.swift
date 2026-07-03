@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import QuickLook
 
 /// Main view for browsing and managing assets
 struct AssetBrowserView: View {
@@ -15,6 +16,7 @@ struct AssetBrowserView: View {
     @State private var filterType: AssetFilterType = .all
     @State private var searchText = ""
     @State private var sortOrder: AssetSortOrder = .name
+    @State private var quickLookURL: URL?
 
     /// Updates filteredAssets based on current filter/search/sort criteria
     /// Called only when inputs change, not on every view update
@@ -39,6 +41,18 @@ struct AssetBrowserView: View {
     }
 
     var body: some View {
+        splitContent
+            .quickLookPreview($quickLookURL)
+            .task {
+                await loadAssets()
+            }
+            .onChange(of: assets) { _, _ in updateFilteredAssets() }
+            .onChange(of: searchText) { _, _ in updateFilteredAssets() }
+            .onChange(of: filterType) { _, _ in updateFilteredAssets() }
+            .onChange(of: sortOrder) { _, _ in updateFilteredAssets() }
+    }
+
+    private var splitContent: some View {
         HSplitView {
             // Asset browser
             VStack(spacing: 0) {
@@ -53,6 +67,16 @@ struct AssetBrowserView: View {
                     noResultsView
                 } else {
                     assetContent
+                        // Space Quick Looks the selected asset. Grid mode has no
+                        // built-in selection focus like List, so this container
+                        // is made focusable to receive the key press regardless
+                        // of view mode (grid/list share this handler).
+                        .focusable()
+                        .onKeyPress(.space) {
+                            guard let asset = selectedAsset else { return .ignored }
+                            quickLookURL = asset.url
+                            return .handled
+                        }
                 }
             }
 
@@ -62,13 +86,6 @@ struct AssetBrowserView: View {
                     .frame(minWidth: 250, maxWidth: 300)
             }
         }
-        .task {
-            await loadAssets()
-        }
-        .onChange(of: assets) { _, _ in updateFilteredAssets() }
-        .onChange(of: searchText) { _, _ in updateFilteredAssets() }
-        .onChange(of: filterType) { _, _ in updateFilteredAssets() }
-        .onChange(of: sortOrder) { _, _ in updateFilteredAssets() }
     }
 
     // MARK: - Toolbar

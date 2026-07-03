@@ -1,9 +1,12 @@
 import SwiftUI
+import QuickLook
 
 // MARK: - File List View
 
 struct FileListView: View {
     @Bindable var siteViewModel: SiteViewModel
+
+    @State private var quickLookURL: URL?
 
     var body: some View {
         List(siteViewModel.filteredNodes, selection: $siteViewModel.selectedFileID) { node in
@@ -37,6 +40,21 @@ struct FileListView: View {
             }
         }
         .listStyle(.sidebar)
+        // Space Quick Looks the selected file, but only when it's not an
+        // editable text type (markdown, config, code, etc). Editable files
+        // route Space through to the editor's NSTextView for typing, so we
+        // deliberately don't intercept it here for those - only non-editable
+        // files (images, PDFs, binaries) get Quick Look on Space.
+        .onKeyPress(.space) {
+            guard let node = siteViewModel.selectedNode,
+                  !node.isDirectory,
+                  !node.isEditable else {
+                return .ignored
+            }
+            quickLookURL = node.url
+            return .handled
+        }
+        .quickLookPreview($quickLookURL)
     }
 }
 
