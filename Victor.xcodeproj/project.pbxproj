@@ -1046,6 +1046,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.victor.Victor;
 				SDKROOT = macosx;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.9;
 			};
 			name = Debug;
@@ -1148,6 +1149,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.victor.Victor;
 				SDKROOT = macosx;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 5.9;
 			};
 			name = Release;
