@@ -29,7 +29,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 1.1 | Chrome: navigationDocument proxy (file-level), title/subtitle, WindowAccessor + edited-dot via onChange(hasUnsavedChanges). Audit: sidebar width does NOT persist (no SwiftUI hook) — filed as follow-up | victor-wc1 | **done** | this commit |
 
-**Next up:** WP1.2 (toolbar prototype, chrome agent continues) + WP1.3 (menus agent, in flight) → WP1.4 (Go/Dock menus) → 1.R Opus review → Phase 1 gate (full suite + manual smoke checklist from WP1.1/1.3 reports) → push.
+| 1.2 | toolbar(id:) customization, 3 items, stable-identity workaround for conditional items. Verdict: works-with-workaround; interactive persistence check deferred to phase-gate manual list (agent had no TCC perms) | victor-wc1 | **done** | this commit |
+
+**Next up:** WP1.3 (menus agent, in flight) → WP1.4 (Go/Dock menus, same agent) → 1.R Opus review → Phase 1 gate: full suite + USER manual smoke (proxy-icon drag, edited-dot, Customize Toolbar drag + relaunch persistence, toolbar with no site open) → push.
 
 ## Census summary (WP0.1, full table in git history of this file if needed)
 

@@ -126,19 +126,28 @@ struct ContentView: View {
         }
         .navigationTitle(windowTitle)
         .navigationSubtitle(windowSubtitle)
-        .toolbar {
+        // Customizable toolbar (W1.3). Item *identity* (the ToolbarItem/id pair) is
+        // always emitted every render; only the item's *content* is conditional
+        // (real view vs. EmptyView). This is deliberate: toggling whether a
+        // ToolbarItem with a given id is present at all (wrapping the ToolbarItem
+        // itself in `if`) is what causes toolbar(id:)'s placement persistence to
+        // reset/duplicate across launches. Keeping the id stable and only hiding
+        // content works around that. All three items are core (situational, not
+        // opt-in) so all default to visible; none is rare/destructive enough to
+        // warrant `showsByDefault: false`.
+        .toolbar(id: "com.victor.mainToolbar") {
             // Note: NavigationSplitView automatically provides a sidebar toggle button
             // so we don't need to add our own
 
             // Hugo server controls (only when a site is loaded)
-            if siteViewModel.site != nil {
-                ToolbarItem(placement: .automatic) {
+            ToolbarItem(id: "serverControls", placement: .automatic, showsByDefault: true) {
+                if siteViewModel.site != nil {
                     ServerControlView(siteViewModel: siteViewModel)
                 }
             }
 
-            if siteViewModel.isLoading || siteViewModel.isLoadingFile {
-                ToolbarItem {
+            ToolbarItem(id: "loadingIndicator", placement: .automatic, showsByDefault: true) {
+                if siteViewModel.isLoading || siteViewModel.isLoadingFile {
                     ProgressView()
                         .controlSize(.small)
                         .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
@@ -147,8 +156,8 @@ struct ContentView: View {
 
             // Only show inspector toggle for markdown content files
             // (Assets have their own built-in detail panel)
-            if siteViewModel.selectedNode?.contentFile != nil {
-                ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "inspectorToggle", placement: .primaryAction, showsByDefault: true) {
+                if siteViewModel.selectedNode?.contentFile != nil {
                     Button {
                         if reduceMotion {
                             siteViewModel.toggleInspector()
