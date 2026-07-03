@@ -1,12 +1,35 @@
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @Bindable var siteViewModel: SiteViewModel
     @Bindable private var settings = AppSettings.shared
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    @State private var window: NSWindow?
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // MARK: - Titlebar
+
+    /// URL driving the titlebar proxy icon: the selected file, falling back to the
+    /// site root when nothing is selected. Nil when no site is open (no proxy icon).
+    private var navigationDocumentURL: URL? {
+        siteViewModel.selectedNode?.url ?? siteViewModel.site?.rootURL
+    }
+
+    /// Window title: selected file's display name, falling back to the site's
+    /// display name, then "Victor" when no site is open.
+    private var windowTitle: String {
+        siteViewModel.selectedNode?.name ?? siteViewModel.site?.displayName ?? "Victor"
+    }
+
+    /// Window subtitle: the site's display name, shown only when a file is selected
+    /// (matches the "file.md — Site Name" convention).
+    private var windowSubtitle: String {
+        guard siteViewModel.selectedNode != nil else { return "" }
+        return siteViewModel.site?.displayName ?? ""
+    }
 
     var body: some View {
         ZStack {
@@ -32,12 +55,32 @@ struct ContentView: View {
         .onAppear {
             siteViewModel.setupHugoServerObservers()
         }
+        .background(
+            WindowAccessor { newWindow in
+                window = newWindow
+                window?.isDocumentEdited = siteViewModel.hasUnsavedChanges
+            }
+        )
+        .onChange(of: siteViewModel.hasUnsavedChanges) { _, newValue in
+            window?.isDocumentEdited = newValue
+        }
     }
 
     // MARK: - Main Content
 
     @ViewBuilder
     private var mainContent: some View {
+        // navigationDocument requires a non-optional URL; skip the modifier
+        // entirely when no site is open rather than passing a placeholder URL.
+        if let documentURL = navigationDocumentURL {
+            navigationSplitView
+                .navigationDocument(documentURL)
+        } else {
+            navigationSplitView
+        }
+    }
+
+    private var navigationSplitView: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar - File navigation
             SidebarView(siteViewModel: siteViewModel)
@@ -81,7 +124,8 @@ struct ContentView: View {
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.isInspectorVisible)
         }
-        .navigationTitle(siteViewModel.site?.displayName ?? "Victor")
+        .navigationTitle(windowTitle)
+        .navigationSubtitle(windowSubtitle)
         .toolbar {
             // Note: NavigationSplitView automatically provides a sidebar toggle button
             // so we don't need to add our own

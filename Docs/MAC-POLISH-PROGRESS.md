@@ -27,7 +27,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 | 3.x | W4/W5 + M-series burn-down + Swift 6 flip | victor-vis/kbd/sc6/str/tdt/mod | pending | — |
 | 4.x | Optional: mbe, 3l6, icn | — | pending | — |
 
-**Next up:** Phase 1 — spawn WP1.1 (chrome: navigationDocument/WindowAccessor/edited-dot, victor-wc1) and WP1.3 (EditorActions + File menu, victor-mnu) in parallel (disjoint files); then WP1.2 (toolbar prototype), WP1.4 (Go/Dock menus), 1.R Opus review.
+| 1.1 | Chrome: navigationDocument proxy (file-level), title/subtitle, WindowAccessor + edited-dot via onChange(hasUnsavedChanges). Audit: sidebar width does NOT persist (no SwiftUI hook) — filed as follow-up | victor-wc1 | **done** | this commit |
+
+**Next up:** WP1.2 (toolbar prototype, chrome agent continues) + WP1.3 (menus agent, in flight) → WP1.4 (Go/Dock menus) → 1.R Opus review → Phase 1 gate (full suite + manual smoke checklist from WP1.1/1.3 reports) → push.
 
 ## Census summary (WP0.1, full table in git history of this file if needed)
 
