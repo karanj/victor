@@ -172,10 +172,11 @@ Models use `@Observable class` pattern by design. Evaluation of struct alternati
 
 ## Outstanding Work
 
-Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, 20 open tickets). Key areas:
-- **P2**: Protocol abstractions for services (ARCH-2), FSEvents file watching (9 tickets, dependency chain)
-- **P3**: Git integration (6 tickets), preview syntax highlighting, Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru)
-- **P4**: VoiceOver audit, code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`)
+Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, 34 open tickets). Key areas:
+- **Active program**: Mac polish + modernisation — design in `Docs/MAC-POLISH-DESIGN.md`, phased subagent execution plan in `Docs/MAC-POLISH-IMPLEMENTATION-PLAN.md` (Phase 0 = settings layer + strict-concurrency baseline)
+- **P2**: Settings layer (victor-stn), Swift 6 strict concurrency burn-down (victor-sc6, 103 warnings), AsyncStream observation (victor-str), DI for fakeable services (victor-zw4, re-scoped), FSEvents file watching (9 tickets, dependency chain)
+- **P3**: Git integration (6 tickets), preview syntax highlighting, Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), Task.detached audit (victor-tdt)
+- **P4**: VoiceOver audit, code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), modernisation grab-bag (victor-mod)
 
 To find work ready to start: look for `status: open` (no blockers). `status: blocked` tickets list their `blocked_by` dependencies.
 
@@ -184,6 +185,8 @@ To find work ready to start: look for `status: open` (no blockers). `status: blo
 - `Docs/ISSUES.yaml` - Issue tracker (open work items)
 - `Docs/CODE-REVIEW-PLAN.md` - Code review findings and status
 - `Docs/CODE-ANALYSIS-2026-07-03.md` - Critical analysis session: 10 fixes (data loss, hang, dead prefs) + leftovers
+- `Docs/MAC-POLISH-DESIGN.md` - Mac polish design: window chrome, menus, system integration, modernisation track (approved 2026-07-04)
+- `Docs/MAC-POLISH-IMPLEMENTATION-PLAN.md` - Phased subagent orchestration plan for the above
 - `Docs/HUGO-SERVER-INTEGRATION.md` - Hugo server integration
 - `Docs/DATA-ARCHETYPES-GUIDE.md` - Data files and archetypes
 - `Docs/TODO.md` - Detailed ticket descriptions (reference/archive)
