@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 // MARK: - Hugo Server Status
 
@@ -509,9 +510,38 @@ actor HugoServerService {
 
         // Use BuildErrorParser for error/warning detection
         if let error = BuildErrorParser.parseLine(line) {
+            let hadFailureBefore = buildErrors.contains { $0.level == .error }
             buildErrors.append(error)
             await notifyBuildErrorsChange()
+
+            // New failing build: the first `.error`-level line since the
+            // last rebuild cleared `buildErrors` (see isRebuildingLine
+            // above). Warnings alone don't count as a "failure".
+            if error.level == .error && !hadFailureBefore {
+                await notifyBackgroundBuildFailureIfNeeded()
+            }
         }
+    }
+
+    /// Post a background build-failure notification if: the setting is on,
+    /// Victor isn't the active app, and this is a new failure (see call
+    /// site). Foreground failures rely on `BuildErrorOverlay` instead
+    /// (Docs/MAC-POLISH-DESIGN.md W3.4).
+    private func notifyBackgroundBuildFailureIfNeeded() async {
+        guard AppSettings.currentNotifyOnBuildFailure() else { return }
+
+        let errorCount = buildErrors.filter { $0.level == .error }.count
+        guard let firstError = buildErrors.first(where: { $0.level == .error }) else { return }
+
+        // NSApp.isActive is main-actor state; hop to read it rather than
+        // assuming this actor's execution context.
+        let isActive = await MainActor.run { NSApp.isActive }
+        guard !isActive else { return }
+
+        // Provisional auth is requested here, on the first background
+        // failure, not at app launch - see NotificationService's doc comment.
+        await NotificationService.shared.requestAuthorizationIfNeeded()
+        await NotificationService.shared.postBuildFailure(errorCount: errorCount, firstMessage: firstError.message)
     }
 
     private func handleProcessTermination(exitCode: Int32) async {

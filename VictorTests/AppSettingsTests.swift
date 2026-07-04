@@ -28,7 +28,8 @@ final class AppSettingsTests: XCTestCase {
         AppConstants.UserDefaultsKeys.hugoServerPort,
         AppConstants.UserDefaultsKeys.hugoServerBuildDrafts,
         AppConstants.UserDefaultsKeys.hugoServerBuildFuture,
-        AppConstants.UserDefaultsKeys.hugoServerBuildExpired
+        AppConstants.UserDefaultsKeys.hugoServerBuildExpired,
+        AppConstants.UserDefaultsKeys.notifyOnBuildFailure
     ]
 
     override func setUp() {
@@ -67,6 +68,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(settings.hugoServerBuildFuture)
         XCTAssertFalse(settings.hugoServerBuildExpired)
         XCTAssertEqual(settings.frontmatterPanelHeight, 300.0)
+        XCTAssertTrue(settings.notifyOnBuildFailure, "notifyOnBuildFailure should default to true")
     }
 
     // MARK: - Round-trip: set -> UserDefaults -> fresh read
@@ -162,6 +164,13 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(fresh.hugoServerBuildExpired)
     }
 
+    func testRoundTripNotifyOnBuildFailure() {
+        let settings = AppSettings.makeForTesting()
+        settings.notifyOnBuildFailure = false
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.notifyOnBuildFailure))
+        XCTAssertFalse(AppSettings.makeForTesting().notifyOnBuildFailure)
+    }
+
     // MARK: - layoutMode invalid rawValue fallback
 
     func testLayoutModeFallsBackToSplitOnInvalidRawValue() {
@@ -187,6 +196,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(AppSettings.currentHugoServerBuildDrafts(), settings.hugoServerBuildDrafts)
         XCTAssertEqual(AppSettings.currentHugoServerBuildFuture(), settings.hugoServerBuildFuture)
         XCTAssertEqual(AppSettings.currentHugoServerBuildExpired(), settings.hugoServerBuildExpired)
+        XCTAssertEqual(AppSettings.currentNotifyOnBuildFailure(), settings.notifyOnBuildFailure)
     }
 
     func testStaticAccessorsAgreeWithInstanceAfterSetting() {
@@ -197,6 +207,7 @@ final class AppSettingsTests: XCTestCase {
         settings.hugoServerBuildDrafts = false
         settings.hugoServerBuildFuture = false
         settings.hugoServerBuildExpired = true
+        settings.notifyOnBuildFailure = false
 
         XCTAssertEqual(AppSettings.currentIsAutoSaveEnabled(), false)
         XCTAssertEqual(AppSettings.currentAutoSaveDelay(), 7.5)
@@ -204,6 +215,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(AppSettings.currentHugoServerBuildDrafts(), false)
         XCTAssertEqual(AppSettings.currentHugoServerBuildFuture(), false)
         XCTAssertEqual(AppSettings.currentHugoServerBuildExpired(), true)
+        XCTAssertEqual(AppSettings.currentNotifyOnBuildFailure(), false)
 
         // And a fresh instance constructed after the writes agrees too.
         let fresh = AppSettings.makeForTesting()
@@ -213,5 +225,6 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(fresh.hugoServerBuildDrafts, AppSettings.currentHugoServerBuildDrafts())
         XCTAssertEqual(fresh.hugoServerBuildFuture, AppSettings.currentHugoServerBuildFuture())
         XCTAssertEqual(fresh.hugoServerBuildExpired, AppSettings.currentHugoServerBuildExpired())
+        XCTAssertEqual(fresh.notifyOnBuildFailure, AppSettings.currentNotifyOnBuildFailure())
     }
 }

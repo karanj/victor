@@ -43,7 +43,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 2.1 | Folder document type (info: plist merge w/ INFOPLIST_KEY_*, versions pinned to build settings, LSHandlerRank Alternate); onOpenURL + application(_:open:) routing to single window; restore-race fix (initialSiteRestoreTask) + filteredNodes render-loop fix (pre-existing, exposed). Discoveries: entitlements empty → sandbox OFF (victor-sbx filed); agent claims SC6 baseline may undercount (~24) — RE-VERIFY AT GATE (conflicts with orchestrator's clean-build 103=103 measurement) | victor-doc | **done** | this commit |
 
-**Next up:** WP2.3 (drag & drop) ∥ WP2.4 (notifications) — disjoint files, only 2.4 runs xcodegen → orchestrator adds File-menu ShareLink → 2.R review → Phase 2 gate (incl. SC6 baseline re-verification + manual: real Dock-drop, Open With, confirm-dialog flow).
+| 2.4 | NotificationService (@MainActor class, NSObjectProtocol forces non-actor; nonisolated delegate methods); background build-failure notification on error empty→non-empty transition, coalesced per burst; provisional auth on first background failure; notifyOnBuildFailure setting + Preferences row + tests (16/16). Deep-link to Build Issues popover deliberately skipped (would need new cross-view plumbing; idea documented in service doc comment) | victor-ntf | **done** | this commit |
+
+**Next up:** WP2.3 (drag & drop, in flight) → orchestrator adds File-menu ShareLink → 2.R review → Phase 2 gate (incl. SC6 baseline re-verification + manual: real Dock-drop, Open With, confirm-dialog flow, notification flow steps in WP2.4 report).
 
 **USER manual smoke for Phase 1** (agents can't do these headlessly):
 1. Proxy icon: select a file → titlebar "file.md — Site"; Cmd-click title → path menu; drag proxy icon to Finder.

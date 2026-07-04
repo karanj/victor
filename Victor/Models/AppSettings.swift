@@ -132,6 +132,15 @@ final class AppSettings {
         }
     }
 
+    /// Whether to post a system notification when a Hugo build fails while
+    /// Victor isn't the active app (Docs/MAC-POLISH-DESIGN.md W3.4). In-app
+    /// failures always show in `BuildErrorOverlay` regardless of this setting.
+    var notifyOnBuildFailure: Bool {
+        didSet {
+            UserDefaults.standard.set(notifyOnBuildFailure, forKey: AppConstants.UserDefaultsKeys.notifyOnBuildFailure)
+        }
+    }
+
     // MARK: - Initialization
 
     private init() {
@@ -162,6 +171,7 @@ final class AppSettings {
         hugoServerBuildDrafts = Self.readHugoServerBuildDrafts(from: defaults)
         hugoServerBuildFuture = Self.readHugoServerBuildFuture(from: defaults)
         hugoServerBuildExpired = Self.readHugoServerBuildExpired(from: defaults)
+        notifyOnBuildFailure = Self.readNotifyOnBuildFailure(from: defaults)
     }
 
     #if DEBUG
@@ -206,6 +216,13 @@ final class AppSettings {
         readHugoServerBuildExpired(from: .standard)
     }
 
+    /// Read by `HugoServerService` (an actor) at the empty -> non-empty
+    /// build-error transition, before deciding whether to post a
+    /// notification.
+    nonisolated static func currentNotifyOnBuildFailure() -> Bool {
+        readNotifyOnBuildFailure(from: .standard)
+    }
+
     // MARK: - Shared Key/Default Definitions
 
     private nonisolated static func readIsAutoSaveEnabled(from defaults: UserDefaults) -> Bool {
@@ -230,5 +247,9 @@ final class AppSettings {
 
     private nonisolated static func readHugoServerBuildExpired(from defaults: UserDefaults) -> Bool {
         defaults.object(forKey: AppConstants.UserDefaultsKeys.hugoServerBuildExpired) as? Bool ?? false
+    }
+
+    private nonisolated static func readNotifyOnBuildFailure(from defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: AppConstants.UserDefaultsKeys.notifyOnBuildFailure) as? Bool ?? true
     }
 }

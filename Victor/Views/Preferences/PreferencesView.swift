@@ -250,6 +250,17 @@ struct PreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                Toggle("Notify when a build fails in the background", isOn: $settings.notifyOnBuildFailure)
+                    .toggleStyle(.checkbox)
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Shows a notification if a Hugo build fails while Victor isn't the active app. Failures while you're working in Victor still appear inline.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
