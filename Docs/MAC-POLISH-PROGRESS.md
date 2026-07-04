@@ -64,7 +64,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 3.5b | Steps 9-10: AsyncStream conversion (per-consumer factories w/ replay-on-subscribe, 5 new stream tests; LiveReloadEvent stream; bytes.lines pipes) + verification sweep. **0 warnings, 2 consecutive clean builds, 476/476 full suite.** 6 undocumented gaps fixed w/ reasoning; latent bug fixed (LivePreviewPanel serverURL stuck nil after late server start); Cluster 1 ordering verified 2 ways; readContentFile keeps Task.detached (recorded decision: blocking I/O off-main). Closes victor-str. Manual checklist items added to USER list | victor-sc6/str | **done** | this commit |
 
-**Next up:** WP3.7 (orchestrator: Swift 6 flip — verify 0-warning clean build, SWIFT_VERSION 6.0, xcodegen, clean build 0 errors, full suite) → WP3.6 (Task.detached audit + M4 grab-bag, Sonnet) → 3.R (Opus; scrutinize FileRowView nonisolated(unsafe) + AsyncStream behavior) → Phase 3 gate.
+| 3.7 | **SWIFT_VERSION = 6.0.** Orchestrator-gated: independent 0-warning clean-build verification, flip, clean build 0 errors, full suite green. Data-race safety is now a compile error. victor-sc6 + victor-str closed (29 open) | victor-sc6 | **done** | this commit |
+
+**Next up:** WP3.6 (Task.detached audit + M4 grab-bag, Sonnet — now under Swift 6 errors) → 3.R (Opus; scrutinize FileRowView nonisolated(unsafe) + AsyncStream behavior + WP3.5's undocumented-gap fixes) → Phase 3 gate (full suite + USER manual: server-lifecycle stream checks, asset-grid scroll, visual light/dark/reduce-motion passes).
 
 **USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
 7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.

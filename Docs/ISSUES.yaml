@@ -683,7 +683,7 @@ issues:
 
   - id: victor-sc6
     title: "Swift 6 strict concurrency: enable checking, burn down, flip language mode"
-    status: open
+    status: done
     priority: P2
     type: task
     files: [project.yml, "hotspots: EditorTextView, AssetService, SiteViewModel, LivePreviewPanel"]
@@ -705,7 +705,7 @@ issues:
 
   - id: victor-str
     title: "AsyncStream observation for HugoServerService/LiveReloadClient; bytes.lines for pipes"
-    status: open
+    status: done
     priority: P2
     type: task
     files:

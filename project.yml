@@ -69,10 +69,10 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Victor
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.developer-tools"
-        SWIFT_VERSION: "5.9"
-        # Swift 6 readiness (victor-sc6): surface data-race issues as warnings now;
-        # burn down per Docs/MAC-POLISH-IMPLEMENTATION-PLAN.md, then flip SWIFT_VERSION to 6
-        SWIFT_STRICT_CONCURRENCY: complete
+        # Swift 6 language mode (victor-sc6, flipped 2026-07-05 after the
+        # strict-concurrency burn-down reached zero warnings - see
+        # Docs/SC6-BURNDOWN-MEMO.md). Data-race safety is now a compile error.
+        SWIFT_VERSION: "6.0"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         ENABLE_PREVIEWS: YES
       configs:
