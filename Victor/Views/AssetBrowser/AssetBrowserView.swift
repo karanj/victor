@@ -213,7 +213,7 @@ struct AssetBrowserView: View {
                             selectedAsset = asset
                         }
                         .onDrag {
-                            NSItemProvider(object: asset.markdownSyntax as NSString)
+                            assetDragItemProvider(for: asset)
                         }
                         .task {
                             // Load metadata lazily
@@ -231,7 +231,7 @@ struct AssetBrowserView: View {
         List(filteredAssets, selection: $selectedAsset) { asset in
             AssetListRow(asset: asset, onInsert: onInsert)
                 .onDrag {
-                    NSItemProvider(object: asset.markdownSyntax as NSString)
+                    assetDragItemProvider(for: asset)
                 }
                 .task {
                     if !asset.isMetadataLoaded {
@@ -259,6 +259,23 @@ struct AssetBrowserView: View {
             print("Failed to load assets: \(error)")
             assets = []
         }
+    }
+
+    // MARK: - Drag Out
+
+    /// Build the drag payload for an asset: the file itself (so dropping on Finder or
+    /// another app performs a real file copy - `NSItemProvider(contentsOf:)` is what
+    /// registers the file-promise/`public.file-url` representation Finder accepts for
+    /// a copy) plus the existing markdown-syntax string representation, so dropping
+    /// back into Victor's own editor still inserts `![alt](path)` exactly as before
+    /// (EditorTextView's `performDragOperation` reads the `NSString` representation
+    /// first). `.draggable(asset.url)` was considered but its `Transferable`
+    /// conformance for `URL` also exports a plain `absoluteString` representation,
+    /// which would have replaced the markdown-insert behavior with a raw `file://` path.
+    private func assetDragItemProvider(for asset: Asset) -> NSItemProvider {
+        let provider = NSItemProvider(contentsOf: asset.url) ?? NSItemProvider()
+        provider.registerObject(asset.markdownSyntax as NSString, visibility: .all)
+        return provider
     }
 }
 

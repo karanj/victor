@@ -514,6 +514,91 @@ class FileSystemService {
         }
     }
 
+    /// Import an external file (e.g. dropped from Finder, the sidebar, or the editor)
+    /// into the site by copying it into `directory`, choosing a collision-free
+    /// destination name. This is the single copy path for all drag-and-drop import
+    /// flows (W3.3/victor-dnd) - the sidebar folder drop and the editor's image drop
+    /// both call this rather than each inventing their own `copyItem` logic.
+    ///
+    /// Deliberately synchronous (unlike `duplicateFile`/`createMarkdownFile`, which wrap
+    /// the same `NSFileCoordinator` call in `withCheckedThrowingContinuation` purely for
+    /// `async` call-site sugar): `NSFileCoordinator.coordinate` itself already blocks
+    /// until the accessor completes, so there's no real asynchrony to expose. Keeping
+    /// this one synchronous lets drop handlers (SwiftUI `.dropDestination`,
+    /// `NSTextView.performDragOperation`) call it directly without an intervening
+    /// `Task { }` - which, for a plain (non-actor, non-Sendable) class like this one,
+    /// would otherwise introduce new "sending self risks causing data races" strict-
+    /// concurrency warnings at every new call site (see the identical pattern already
+    /// warned-on in FileOperationsService's `async` forwarding methods).
+    /// - Parameters:
+    ///   - sourceURL: the external file being imported (outside the site, e.g. from Finder)
+    ///   - directory: destination directory; must be inside the site
+    ///   - siteRoot: site root for path traversal validation
+    /// - Returns: the URL the file was copied to (its filename may differ from
+    ///   `sourceURL`'s if a file of the same name already existed at the destination)
+    func importFile(from sourceURL: URL, into directory: URL, siteRoot: URL) throws -> URL {
+        let fileManager = FileManager.default
+
+        // Ensure destination directory exists (e.g. static/ may not exist yet)
+        var isDir: ObjCBool = false
+        if !fileManager.fileExists(atPath: directory.path, isDirectory: &isDir) {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        } else if !isDir.boolValue {
+            throw FileError.fileNotFound
+        }
+
+        let destURL = uniqueImportDestinationURL(for: sourceURL, in: directory)
+        try validatePathWithinSite(destURL, siteRoot: siteRoot)
+
+        let coordinator = NSFileCoordinator()
+        var coordinatorError: NSError?
+        var copyError: Error?
+
+        coordinator.coordinate(
+            readingItemAt: sourceURL, options: [],
+            writingItemAt: destURL, options: .forReplacing,
+            error: &coordinatorError
+        ) { readURL, writeURL in
+            do {
+                try fileManager.copyItem(at: readURL, to: writeURL)
+            } catch {
+                copyError = error
+            }
+        }
+
+        if let error = coordinatorError {
+            throw error
+        }
+        if let error = copyError {
+            throw error
+        }
+
+        return destURL
+    }
+
+    /// Pick a collision-free destination filename for an imported file: keep the
+    /// original name if free, otherwise append " 2", " 3", etc. (Finder's convention
+    /// for copies, distinct from `duplicateFile`'s "copy"/"copy N" suffix since this
+    /// isn't a duplicate of an existing site file - it's a new import that happens to
+    /// share a name).
+    private func uniqueImportDestinationURL(for sourceURL: URL, in directory: URL) -> URL {
+        let fileManager = FileManager.default
+        let originalName = sourceURL.lastPathComponent
+        let baseName = sourceURL.deletingPathExtension().lastPathComponent
+        let ext = sourceURL.pathExtension
+
+        var candidateURL = directory.appendingPathComponent(originalName)
+        var counter = 2
+
+        while fileManager.fileExists(atPath: candidateURL.path) {
+            let candidateName = ext.isEmpty ? "\(baseName) \(counter)" : "\(baseName) \(counter).\(ext)"
+            candidateURL = directory.appendingPathComponent(candidateName)
+            counter += 1
+        }
+
+        return candidateURL
+    }
+
     /// Move a file or folder to the trash
     func moveToTrash(at url: URL) async throws {
         var trashedURL: NSURL?

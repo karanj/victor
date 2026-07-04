@@ -45,7 +45,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 2.4 | NotificationService (@MainActor class, NSObjectProtocol forces non-actor; nonisolated delegate methods); background build-failure notification on error empty→non-empty transition, coalesced per burst; provisional auth on first background failure; notifyOnBuildFailure setting + Preferences row + tests (16/16). Deep-link to Build Issues popover deliberately skipped (would need new cross-view plumbing; idea documented in service doc comment) | victor-ntf | **done** | this commit |
 
-**Next up:** WP2.3 (drag & drop, in flight) → orchestrator adds File-menu ShareLink → 2.R review → Phase 2 gate (incl. SC6 baseline re-verification + manual: real Dock-drop, Open With, confirm-dialog flow, notification flow steps in WP2.4 report).
+| 2.3 | Two-way DnD: sidebar folder drops (node insert, no reload) + editor image drops (ImageDropPathResolver: page bundle vs static/, UTF-16-safe insertion) + asset drag-out (real file provider). importFile via the one FileCoordinator copy path, sync by design (avoids new sending-self warnings). 9 new tests, 142/142 targeted | victor-dnd | **done** | this commit |
+
+**Next up:** orchestrator: File-menu ShareLink → SC6 baseline re-verify (count instances, not unique texts) ∥ 2.R Opus review of 5adb7eb..HEAD → fixes → Phase 2 gate: full suite, ticket flips (doc/qlk/dnd/ntf), push, consolidated USER manual checklist.
 
 **USER manual smoke for Phase 1** (agents can't do these headlessly):
 1. Proxy icon: select a file → titlebar "file.md — Site"; Cmd-click title → path menu; drag proxy icon to Finder.

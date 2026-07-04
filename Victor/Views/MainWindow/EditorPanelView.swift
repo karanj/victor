@@ -71,7 +71,12 @@ struct EditorPanelView: View {
                 },
                 onShowShortcodePicker: {
                     showShortcodePicker = true
-                }
+                },
+                // W3.3 (victor-dnd): lets EditorTextView's drag handler resolve where a
+                // dropped image should be copied (page bundle vs static/) - see
+                // ImageDropPathResolver. Only new arguments added to this existing call.
+                fileNode: fileNode,
+                siteViewModel: siteViewModel
             )
             .opacity(contentOpacity)
 

@@ -16,6 +16,13 @@ final class HighlightingTextView: NSTextView {
     /// Callback to show the shortcode picker (called from context menu)
     var onShowShortcodePicker: (() -> Void)?
 
+    /// The file currently being edited and the site it belongs to - used only to
+    /// decide where a dropped image should be copied (page bundle folder if this
+    /// file lives in one, otherwise static/) and to validate the destination stays
+    /// within the site. Nil in previews/tests where no site context exists.
+    var fileNode: FileNode?
+    var siteViewModel: SiteViewModel?
+
     /// Track if a redraw is already pending to avoid excessive needsDisplay calls
     private var redrawPending = false
 
@@ -81,6 +88,53 @@ final class HighlightingTextView: NSTextView {
                 let newPosition = insertRange.location + droppedString.count
                 setSelectedRange(NSRange(location: newPosition, length: 0))
                 return true
+            }
+        }
+
+        // Try a dropped file (Finder, sidebar, or an asset dragged out then back in).
+        // Images are copied into the site and turned into a markdown reference; every
+        // other file type falls through to the default NSTextView behavior below
+        // (inserts the raw file path), unchanged from before.
+        if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+           let droppedURL = fileURLs.first,
+           FileType(url: droppedURL) == .image,
+           let fileNode, let siteViewModel, let siteRoot = siteViewModel.site?.rootURL,
+           let layoutManager = layoutManager, let textContainer = textContainer {
+
+            let dropPoint = convert(sender.draggingLocation, from: nil)
+            let glyphIndex = layoutManager.glyphIndex(for: dropPoint, in: textContainer)
+            let charIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
+
+            let destination = ImageDropPathResolver.destination(
+                currentFileParentURL: fileNode.parent?.url,
+                parentIsPageBundle: fileNode.parent?.isPageBundle ?? false,
+                siteRoot: siteRoot
+            )
+
+            do {
+                let destURL = try FileSystemService.shared.importFile(
+                    from: droppedURL, into: destination.directory, siteRoot: siteRoot
+                )
+                let markdown = ImageDropPathResolver.markdownImageReference(for: destURL, style: destination.style)
+
+                // NSString length (UTF-16), not Swift's grapheme-cluster `.count` -
+                // `charIndex` above is already a UTF-16 offset from the layout manager,
+                // and mixing it with `.count` would misplace the cursor on any text
+                // containing multi-scalar graphemes (victor-u16 is about not
+                // introducing exactly this mismatch in new code).
+                let nsLength = (string as NSString).length
+                let insertRange = NSRange(location: min(charIndex, nsLength), length: 0)
+
+                if shouldChangeText(in: insertRange, replacementString: markdown) {
+                    textStorage?.replaceCharacters(in: insertRange, with: markdown)
+                    didChangeText()
+                    let newPosition = insertRange.location + (markdown as NSString).length
+                    setSelectedRange(NSRange(location: newPosition, length: 0))
+                }
+                return true
+            } catch {
+                Logger.shared.error("Failed to import dropped image", error: error)
+                return false
             }
         }
 
@@ -312,6 +366,10 @@ struct EditorTextView: NSViewRepresentable {
     var onCoordinatorReady: ((Coordinator) -> Void)?
     var onCursorPositionChange: ((CursorPosition) -> Void)?
     var onShowShortcodePicker: (() -> Void)?
+    /// File/site context for resolving where a dropped image should be copied.
+    /// See `HighlightingTextView.fileNode`/`.siteViewModel`.
+    var fileNode: FileNode?
+    var siteViewModel: SiteViewModel?
 
     init(
         text: Binding<String>,
@@ -320,7 +378,9 @@ struct EditorTextView: NSViewRepresentable {
         fontName: String = "SF Mono",
         onCoordinatorReady: ((Coordinator) -> Void)? = nil,
         onCursorPositionChange: ((CursorPosition) -> Void)? = nil,
-        onShowShortcodePicker: (() -> Void)? = nil
+        onShowShortcodePicker: (() -> Void)? = nil,
+        fileNode: FileNode? = nil,
+        siteViewModel: SiteViewModel? = nil
     ) {
         self._text = text
         self.highlightCurrentLine = highlightCurrentLine
@@ -329,6 +389,8 @@ struct EditorTextView: NSViewRepresentable {
         self.onCoordinatorReady = onCoordinatorReady
         self.onCursorPositionChange = onCursorPositionChange
         self.onShowShortcodePicker = onShowShortcodePicker
+        self.fileNode = fileNode
+        self.siteViewModel = siteViewModel
     }
 
     /// Get the appropriate NSFont based on font name
@@ -355,6 +417,8 @@ struct EditorTextView: NSViewRepresentable {
         let textView = HighlightingTextView(frame: scrollView.bounds)
         textView.highlightCurrentLine = highlightCurrentLine
         textView.onShowShortcodePicker = onShowShortcodePicker
+        textView.fileNode = fileNode
+        textView.siteViewModel = siteViewModel
 
         // Store reference in coordinator
         context.coordinator.textView = textView
@@ -436,6 +500,11 @@ struct EditorTextView: NSViewRepresentable {
         if textView.highlightCurrentLine != highlightCurrentLine {
             textView.highlightCurrentLine = highlightCurrentLine
         }
+
+        // Keep file/site context current (e.g. after switching files, EditorPanelView
+        // re-creates this view with a new fileNode/siteViewModel pair)
+        textView.fileNode = fileNode
+        textView.siteViewModel = siteViewModel
 
         // Update font if size or family changed
         let expectedFont = getFont(size: fontSize)
