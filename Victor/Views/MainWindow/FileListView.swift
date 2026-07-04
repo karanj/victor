@@ -166,11 +166,28 @@ struct FileRowViewModel: Equatable {
 // MARK: - File Row
 
 struct FileRowView: View, Equatable {
-    let viewModel: FileRowViewModel
-    /// The node is passed separately to observe contentStatus changes (loaded async)
-    let node: FileNode
+    // `View` conformance infers @MainActor isolation onto the whole type including
+    // plain stored properties, which then blocks reading them from the
+    // `nonisolated static func ==` below (needed for the `Equatable` conformance
+    // itself, whose requirement is nonisolated by contract).
+    // `FileRowViewModel` is a plain `Sendable`-eligible struct (UUID/String/Color/
+    // Bool/etc.), so plain `nonisolated` suffices for it.
+    nonisolated let viewModel: FileRowViewModel
+    /// The node is passed separately to observe contentStatus changes (loaded async).
+    /// `nonisolated(unsafe)`, not plain `nonisolated`, because `FileNode` isn't
+    /// `Sendable` (weak parent + recursive children, CLAUDE.md: must stay a class).
+    /// `(unsafe)` is safe in practice because `FileRowView` (a SwiftUI view) is only
+    /// ever constructed/compared on the main actor to begin with - the type system
+    /// just can't prove that through the `Equatable` conformance boundary (WP3.5
+    /// Cluster 7).
+    nonisolated(unsafe) let node: FileNode
 
-    static func == (lhs: FileRowView, rhs: FileRowView) -> Bool {
+    // `nonisolated`: `View`'s `body` carries an implicit `@MainActor`, but
+    // `Equatable`'s requirement is nonisolated by contract - that mismatch is
+    // exactly what the warning names. `node.contentStatuses` isn't itself
+    // actor-isolated (`FileNode` is a plain class), so there's nothing to
+    // snapshot here; the fix is annotation-only (WP3.5 Cluster 7).
+    nonisolated static func == (lhs: FileRowView, rhs: FileRowView) -> Bool {
         lhs.viewModel == rhs.viewModel &&
         lhs.node.contentStatuses == rhs.node.contentStatuses
     }

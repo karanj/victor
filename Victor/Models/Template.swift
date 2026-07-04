@@ -189,8 +189,11 @@ struct TemplateMetadata {
 // MARK: - Template Model
 
 /// Represents a Hugo template file with parsed metadata
+/// `@MainActor`: only ever constructed/mutated from `@MainActor` call sites
+/// (form-bound editing via `@Bindable` in the Template editor) — see WP3.5 Cluster 13.
 @Observable
-class Template: EditableFile {
+@MainActor
+class Template: @MainActor EditableFile {
     let id: UUID
     let url: URL
     var content: String
@@ -353,33 +356,41 @@ class Template: EditableFile {
 
 // MARK: - Template Collection Helpers
 
+/// `@MainActor`: these all read `@MainActor`-isolated `Template` properties
+/// synchronously (WP3.5 Cluster 13).
 extension Array where Element == Template {
     /// Group templates by type
+    @MainActor
     var groupedByType: [TemplateType: [Template]] {
         Dictionary(grouping: self) { $0.templateType }
     }
 
     /// Group templates by directory
+    @MainActor
     var groupedByDirectory: [String: [Template]] {
         Dictionary(grouping: self) { $0.directoryPath }
     }
 
     /// Filter to only partials
+    @MainActor
     var partials: [Template] {
         filter { $0.templateType == .partial }
     }
 
     /// Filter to only shortcodes
+    @MainActor
     var shortcodes: [Template] {
         filter { $0.templateType == .shortcode }
     }
 
     /// Filter to only theme templates
+    @MainActor
     var themeTemplates: [Template] {
         filter { $0.isThemeTemplate }
     }
 
     /// Filter to only site templates (non-theme)
+    @MainActor
     var siteTemplates: [Template] {
         filter { !$0.isThemeTemplate }
     }

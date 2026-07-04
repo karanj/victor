@@ -74,6 +74,7 @@ struct SyntaxHighlightedTextView: NSViewRepresentable {
         Coordinator(self, language: language)
     }
 
+    @MainActor
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: SyntaxHighlightedTextView
         var language: String
@@ -92,7 +93,12 @@ struct SyntaxHighlightedTextView: NSViewRepresentable {
             // Debounce syntax highlighting
             highlightingTimer?.invalidate()
             highlightingTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { [weak self] _ in
-                self?.applySyntaxHighlighting(to: textView)
+                // Timer's closure type isn't statically MainActor-isolated even
+                // though this Coordinator is - wrap the MainActor call explicitly
+                // (WP3.5 Cluster 11).
+                Task { @MainActor in
+                    self?.applySyntaxHighlighting(to: textView)
+                }
             }
         }
 

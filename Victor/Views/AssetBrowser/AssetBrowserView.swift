@@ -216,10 +216,9 @@ struct AssetBrowserView: View {
                             assetDragItemProvider(for: asset)
                         }
                         .task {
-                            // Load metadata lazily
-                            if !asset.isMetadataLoaded {
-                                await AssetService.shared.loadAssetMetadata(asset)
-                            }
+                            // Load metadata lazily; de-dup guard lives inside
+                            // loadMetadataIfNeeded (WP3.5 Cluster 5).
+                            await loadMetadataIfNeeded(for: asset)
                         }
                 }
             }
@@ -234,9 +233,7 @@ struct AssetBrowserView: View {
                     assetDragItemProvider(for: asset)
                 }
                 .task {
-                    if !asset.isMetadataLoaded {
-                        await AssetService.shared.loadAssetMetadata(asset)
-                    }
+                    await loadMetadataIfNeeded(for: asset)
                 }
         }
     }
@@ -248,17 +245,94 @@ struct AssetBrowserView: View {
         defer { isLoading = false }
 
         do {
-            // Scan only the specific folder that was selected
-            assets = try await AssetService.shared.scanAssets(in: folderURL, isAssetsDir: isAssetsDir)
+            // Scan only the specific folder that was selected. The actor returns
+            // Sendable descriptors, not Asset instances - Asset is constructed here
+            // on the main actor (WP3.5 Cluster 5).
+            let descriptors = try await AssetService.shared.scanAssets(in: folderURL, isAssetsDir: isAssetsDir)
+            assets = descriptors.map {
+                Asset(url: $0.url, relativePath: $0.relativePath, isInAssetsDir: $0.isInAssetsDir)
+            }
 
             // Start loading metadata for visible assets
             // The rest will be loaded lazily as they scroll into view
             let initialBatch = Array(assets.prefix(20))
-            await AssetService.shared.loadMetadataForAssets(initialBatch)
+            await loadMetadata(for: initialBatch)
         } catch {
             print("Failed to load assets: \(error)")
             assets = []
         }
+    }
+
+    /// Load metadata for a batch of assets and apply it back to each `Asset`
+    /// instance. The `!asset.isMetadataLoaded` de-dup guard lives here now
+    /// (moved from inside the actor - WP3.5 Cluster 5), evaluated per-asset
+    /// before that asset's URL is even included in the actor call.
+    private func loadMetadata(for assetsToLoad: [Asset]) async {
+        let pending = assetsToLoad.filter { !$0.isMetadataLoaded }
+        guard !pending.isEmpty else { return }
+
+        let urls = pending.map(\.url)
+        let snapshots = await AssetService.shared.metadataSnapshots(for: urls)
+
+        for asset in pending {
+            applyMetadata(snapshots[asset.url], to: asset)
+        }
+    }
+
+    /// Load metadata for a single asset (used by the lazy per-cell `.task {}` below).
+    private func loadMetadataIfNeeded(for asset: Asset) async {
+        guard !asset.isMetadataLoaded else { return }
+        let snapshot = await AssetService.shared.metadataSnapshot(for: asset.url)
+        applyMetadata(snapshot, to: asset)
+    }
+
+    /// Apply a metadata snapshot to an `Asset` and, for images, generate its
+    /// thumbnail on the main actor (`NSImage` drawing never crosses into the actor -
+    /// WP3.5 Cluster 5).
+    private func applyMetadata(_ snapshot: AssetMetadataSnapshot?, to asset: Asset) {
+        if let snapshot {
+            asset.fileSize = snapshot.fileSize
+            asset.modificationDate = snapshot.modificationDate
+            asset.dimensions = snapshot.dimensions
+        }
+
+        if asset.fileType == .image, let image = NSImage(contentsOf: asset.url) {
+            asset.thumbnail = Self.generateThumbnail(for: image)
+        }
+
+        asset.isMetadataLoaded = true
+    }
+
+    /// Generate a thumbnail for an image. Runs on the main actor - `NSImage`
+    /// isn't `Sendable`, so this stays entirely off the `AssetService` actor
+    /// (WP3.5 Cluster 5).
+    private static func generateThumbnail(for image: NSImage) -> NSImage {
+        let thumbnailSize = CGSize(width: 120, height: 120)
+        let aspectRatio = image.size.width / image.size.height
+        var thumbSize = thumbnailSize
+
+        if aspectRatio > 1 {
+            thumbSize.height = thumbSize.width / aspectRatio
+        } else {
+            thumbSize.width = thumbSize.height * aspectRatio
+        }
+
+        // Ensure minimum size
+        thumbSize.width = max(thumbSize.width, 1)
+        thumbSize.height = max(thumbSize.height, 1)
+
+        let thumbnail = NSImage(size: thumbSize)
+        thumbnail.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(
+            in: NSRect(origin: .zero, size: thumbSize),
+            from: NSRect(origin: .zero, size: image.size),
+            operation: .copy,
+            fraction: 1.0
+        )
+        thumbnail.unlockFocus()
+
+        return thumbnail
     }
 
     // MARK: - Drag Out

@@ -25,35 +25,36 @@ class HugoSite: Identifiable {
         self.configFile = configFile
     }
 
-    /// Create a HugoSite asynchronously, performing file I/O on a background thread
+    /// Create a HugoSite asynchronously.
+    /// Note: no `Task.detached` here — `HugoSite` is a plain (non-actor-isolated)
+    /// class and this does a handful of trivial `FileManager.fileExists` checks,
+    /// so there's no actor to hop off of; detaching only manufactured a
+    /// `Sendable` requirement on the return value for no real benefit (WP3.5
+    /// Cluster 4).
     static func create(rootURL: URL) async -> HugoSite {
-        await Task.detached {
-            // Try to find Hugo config file
-            let possibleConfigs = [
-                "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
-                "config.toml", "config.yaml", "config.yml", "config.json"
-            ]
+        // Try to find Hugo config file
+        let possibleConfigs = [
+            "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
+            "config.toml", "config.yaml", "config.yml", "config.json"
+        ]
 
-            var foundConfig: URL?
-            for configName in possibleConfigs {
-                let configURL = rootURL.appendingPathComponent(configName)
-                if FileManager.default.fileExists(atPath: configURL.path) {
-                    foundConfig = configURL
-                    break
-                }
+        var foundConfig: URL?
+        for configName in possibleConfigs {
+            let configURL = rootURL.appendingPathComponent(configName)
+            if FileManager.default.fileExists(atPath: configURL.path) {
+                foundConfig = configURL
+                break
             }
+        }
 
-            return HugoSite(rootURL: rootURL, configFile: foundConfig)
-        }.value
+        return HugoSite(rootURL: rootURL, configFile: foundConfig)
     }
 
     /// Check if this appears to be a valid Hugo site (async version)
-    /// Performs file existence check on a background thread
+    /// Note: no `Task.detached` — see `create(rootURL:)` above for why.
     func validateAsync() async -> Bool {
-        await Task.detached {
-            // A valid Hugo site should have a content directory or a config file
-            FileManager.default.fileExists(atPath: self.contentDirectory.path) || self.configFile != nil
-        }.value
+        // A valid Hugo site should have a content directory or a config file
+        FileManager.default.fileExists(atPath: self.contentDirectory.path) || self.configFile != nil
     }
 
     /// Check if this appears to be a valid Hugo site (sync version)

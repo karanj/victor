@@ -3,8 +3,11 @@ import Foundation
 /// Represents a Hugo archetype (content template)
 /// Archetypes are stored in the archetypes/ directory and define templates
 /// for new content files with frontmatter and body placeholders.
+/// `@MainActor`: only ever constructed/mutated from `@MainActor` call sites
+/// (form-bound editing via `@Bindable` in the Archetype editor) — see WP3.5 Cluster 13.
 @Observable
-class Archetype: EditableFile {
+@MainActor
+class Archetype: @MainActor EditableFile {
     let id: UUID
     let url: URL
 

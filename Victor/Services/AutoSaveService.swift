@@ -26,13 +26,19 @@ actor AutoSaveService {
     ///   - onConflict: Callback when a conflict is detected
     ///   - onSuccess: Callback when save succeeds
     ///   - onError: Callback when save fails
+    ///
+    /// Callback parameters are `@Sendable @MainActor` (WP3.5 Cluster 8): `@MainActor`
+    /// alone says where the closure runs, but doesn't make the closure *value* legal
+    /// to store in this actor's isolated state - that's what `@Sendable` is for. No
+    /// call-site changes needed: callers' closures already only capture `weak self`
+    /// plus Sendable primitives (`UUID`/`URL`), which already satisfies `@Sendable`.
     func scheduleAutoSave(
         fileURL: URL,
         content: String,
         lastModified: Date,
-        onConflict: @escaping @MainActor () -> ConflictResolution,
-        onSuccess: @escaping @MainActor (Date) -> Void,
-        onError: @escaping @MainActor (Error) -> Void
+        onConflict: @escaping @Sendable @MainActor () -> ConflictResolution,
+        onSuccess: @escaping @Sendable @MainActor (Date) -> Void,
+        onError: @escaping @Sendable @MainActor (Error) -> Void
     ) {
         // Cancel any pending save for this file only
         saveTasks[fileURL]?.cancel()
@@ -100,7 +106,7 @@ actor AutoSaveService {
         fileURL: URL,
         content: String,
         lastModified: Date,
-        onConflict: @escaping @MainActor () -> ConflictResolution
+        onConflict: @escaping @Sendable @MainActor () -> ConflictResolution
     ) async throws -> Date {
         // Check for conflicts (file modified externally)
         let currentModificationDate = try await getFileModificationDate(url: fileURL)

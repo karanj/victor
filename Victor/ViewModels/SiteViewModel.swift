@@ -929,7 +929,16 @@ class SiteViewModel {
                     if let editedContent = fileCacheManager.getContent(for: nodeID) {
                         contentFile.markdownContent = editedContent
                     }
-                    try await fileSystemService.saveContentFile(contentFile)
+                    // Extract the Sendable url/content pair AFTER the sync above and
+                    // BEFORE the await - this ordering is safety-critical (WP3.5 Cluster 1,
+                    // Risk Notes §5): saveContentFile no longer takes the ContentFile object
+                    // itself, so the extraction point is now an explicit line of code rather
+                    // than an implicit read inside the callee. Reading fullContent before the
+                    // sync above would silently drop the just-synced edit and reintroduce the
+                    // stale-content-on-Save-and-Quit bug this comment chain already fixed once.
+                    let url = contentFile.url
+                    let content = contentFile.fullContent
+                    try await fileSystemService.saveContentFile(url: url, content: content)
                     clearFileModified(nodeID)
                     Logger.shared.info("Saved: \(node.name)")
                 } catch {
@@ -1011,8 +1020,12 @@ class SiteViewModel {
     /// Load content for a text file node (non-markdown)
     private func loadTextFileContent(for node: FileNode) async {
         do {
+            // Extract the Sendable URL before crossing into Task.detached - the
+            // closure must not capture `node` itself (a non-Sendable FileNode class),
+            // same boundary-snapshot fix as Cluster 1's ContentFile handling.
+            let url = node.url
             let content = try await Task.detached {
-                try String(contentsOf: node.url, encoding: .utf8)
+                try String(contentsOf: url, encoding: .utf8)
             }.value
 
             let attributes = try FileManager.default.attributesOfItem(atPath: node.url.path)

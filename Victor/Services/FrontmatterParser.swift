@@ -29,8 +29,11 @@ enum FrontmatterError: LocalizedError {
 }
 
 /// Service for parsing and serializing Hugo frontmatter
-/// Note: No @MainActor - parsing is CPU-intensive but doesn't require main thread
-class FrontmatterParser {
+/// Note: No @MainActor - parsing is CPU-intensive but doesn't require main thread.
+/// Stateless aside from `private init()` — safe to hand across actor boundaries.
+/// Must stay callable off the main actor: called from inside
+/// `FileSystemService.readContentFile`'s background block.
+final class FrontmatterParser: @unchecked Sendable {
     static let shared = FrontmatterParser()
 
     /// Cached date formatter for Hugo dates (avoids creating new formatter on each call)

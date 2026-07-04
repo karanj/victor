@@ -59,16 +59,24 @@ struct PreviewWebView: NSViewRepresentable {
 
     // MARK: - Coordinator
 
+    // `@MainActor`: `WKNavigationDelegate.webView(_:decidePolicyFor:decisionHandler:)`
+    // is itself declared `@MainActor` in the SDK (WP3.5 Cluster 10) - matching
+    // that exactly is what the signature-drift warning below needs.
+    @MainActor
     class Coordinator: NSObject, WKNavigationDelegate {
         var currentHTML: String = ""
         weak var webView: WKWebView?
 
-        deinit {
-            webView?.navigationDelegate = nil
-        }
+        // No deinit nil-out needed: `WKWebView.navigationDelegate` is `weak`
+        // in WebKit, so it already clears itself automatically when this
+        // Coordinator deallocates. A synchronous `deinit` can't touch
+        // `@MainActor` state anyway (WP3.5 Cluster 11, applied here per its
+        // own prose note even though this file isn't in Cluster 11's file
+        // list - the same pattern, an apparent gap in the memo's file
+        // enumeration).
 
         // Handle navigation
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             // Allow initial load
             if navigationAction.navigationType == .other {
                 decisionHandler(.allow)

@@ -312,9 +312,16 @@ struct GlobalSearchView: View {
             scope: scope
         )
 
+        // Walk the live FileNode tree and extract plain URLs on @MainActor,
+        // before crossing into the actor - FileNode can't be Sendable (weak
+        // parent + recursive children) and fileNodes is a long-lived
+        // SiteViewModel property still read elsewhere after this call returns
+        // (WP3.5 Cluster 6).
+        let fileURLs = SearchService.searchableFileURLs(from: siteViewModel.fileNodes, options: options)
+
         let fileResults = await SearchService.shared.search(
             options: options,
-            in: siteViewModel.fileNodes,
+            in: fileURLs,
             siteRootURL: siteRootURL
         )
 

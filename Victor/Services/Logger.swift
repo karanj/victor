@@ -14,13 +14,16 @@ enum LogLevel: Int, Comparable {
 }
 
 /// Centralized logging service for consistent error reporting and debugging
-final class Logger {
+/// `minLevel` is assigned once via `#if DEBUG` and never reassigned elsewhere,
+/// so it's a `let` — combined with `OSLog` itself being `Sendable`, that makes
+/// this whole type safe to hand across actor boundaries without `@unchecked`.
+final class Logger: Sendable {
     static let shared = Logger()
 
     #if DEBUG
-    var minLevel: LogLevel = .debug
+    let minLevel: LogLevel = .debug
     #else
-    var minLevel: LogLevel = .warning
+    let minLevel: LogLevel = .warning
     #endif
 
     private let osLog = OSLog(subsystem: "com.victor.app", category: "general")

@@ -5,6 +5,8 @@ import TOMLKit
 
 /// Tests for archetype template generation to ensure generated templates are valid
 /// and parseable by YAML/TOML/JSON parsers
+/// `@MainActor`: constructs `Archetype`, which is `@MainActor`-isolated (WP3.5 Cluster 13).
+@MainActor
 final class ArchetypeTemplateGenerationTests: XCTestCase {
 
     // MARK: - YAML Template Generation Tests

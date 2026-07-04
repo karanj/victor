@@ -208,6 +208,40 @@ final class FileOperationsServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - saveContentFile / readContentFile (WP3.5 Cluster 1 signature change)
+
+    /// `saveContentFile` changed from taking a `ContentFile` object to taking an
+    /// extracted `url`/`content` pair (so the non-Sendable `ContentFile` class never
+    /// has to cross the actor boundary). This confirms the new signature still writes
+    /// exactly the given bytes to disk - not just that it compiles.
+    func testSaveContentFileWritesExactBytesForGivenURLAndContent() async throws {
+        let fileURL = tempDirectory.appendingPathComponent("saved.md")
+        try "stale on-disk content".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let fsService = FileSystemService.shared
+        try await fsService.saveContentFile(url: fileURL, content: "---\ntitle: Hi\n---\nbody text")
+
+        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertEqual(onDisk, "---\ntitle: Hi\n---\nbody text")
+    }
+
+    /// `readContentFile` now crosses its `Task.detached` boundary as a private
+    /// Sendable (String, Date) snapshot and constructs the `ContentFile` class only
+    /// after returning - confirms the round trip still produces correct frontmatter
+    /// + markdown separation end to end, not just that the boundary type-checks.
+    func testReadContentFileRoundTripsFrontmatterAndMarkdown() async throws {
+        let fileURL = tempDirectory.appendingPathComponent("read.md")
+        let raw = "---\ntitle: Round Trip\n---\nHello body"
+        try raw.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let fsService = FileSystemService.shared
+        let contentFile = try await fsService.readContentFile(at: fileURL)
+
+        XCTAssertEqual(contentFile.frontmatter?.title, "Round Trip")
+        XCTAssertEqual(contentFile.markdownContent, "Hello body")
+        XCTAssertEqual(contentFile.url, fileURL)
+    }
+
     // MARK: - Copy Path Tests
 
     func testCopyPathSetsClipboard() {

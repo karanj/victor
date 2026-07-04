@@ -3,7 +3,8 @@ import Yams
 import TOMLKit
 
 /// Service for parsing and serializing Hugo data files (YAML/JSON/TOML)
-class DataFileParser {
+/// Stateless aside from `private init()` — safe to hand across actor boundaries.
+final class DataFileParser: @unchecked Sendable {
     static let shared = DataFileParser()
 
     private init() {}
@@ -13,6 +14,9 @@ class DataFileParser {
     /// Parse a data file from disk
     /// - Parameter url: The file URL
     /// - Returns: A DataFile instance
+    /// `@MainActor`: constructs a `DataFile`, which is itself `@MainActor`-isolated
+    /// (WP3.5 Cluster 13) — this method already only ever runs from `@MainActor` callers.
+    @MainActor
     func parseDataFile(at url: URL) async throws -> DataFile {
         let content = try await Task.detached {
             try String(contentsOf: url, encoding: .utf8)
@@ -75,6 +79,8 @@ class DataFileParser {
     // MARK: - Serialization
 
     /// Serialize a DataFile back to string
+    /// `@MainActor`: reads the `@MainActor`-isolated `DataFile.data` (WP3.5 Cluster 13).
+    @MainActor
     func serialize(_ dataFile: DataFile) throws -> String {
         let normalized = SerializationHelper.normalizeForSerialization(dataFile.data)
         return try serialize(data: normalized, format: dataFile.format)
@@ -117,10 +123,15 @@ class DataFileParser {
     // MARK: - File Operations
 
     /// Save a DataFile to disk
+    /// `@MainActor`: touches the `@MainActor`-isolated `DataFile` (WP3.5 Cluster 13).
+    @MainActor
     func save(_ dataFile: DataFile) async throws {
         let content = try serialize(dataFile)
+        // Capture only the Sendable url primitive - never `dataFile` itself -
+        // before entering Task.detached (WP3.5 Cluster 13 line-level fix).
+        let url = dataFile.url
         try await Task.detached {
-            try content.write(to: dataFile.url, atomically: true, encoding: .utf8)
+            try content.write(to: url, atomically: true, encoding: .utf8)
         }.value
         dataFile.updateRawContent(content)
         dataFile.markAsSaved()

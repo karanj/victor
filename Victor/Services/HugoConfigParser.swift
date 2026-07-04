@@ -3,7 +3,8 @@ import Yams
 import TOMLKit
 
 /// Service for parsing and serializing Hugo configuration files
-class HugoConfigParser {
+/// Stateless aside from `private init()` — safe to hand across actor boundaries.
+final class HugoConfigParser: @unchecked Sendable {
     static let shared = HugoConfigParser()
 
     private init() {}

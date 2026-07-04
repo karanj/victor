@@ -1,7 +1,8 @@
 import Foundation
 
 /// Service for managing Hugo archetypes (content templates)
-class ArchetypeManager {
+/// Stateless aside from `private init()` — safe to hand across actor boundaries.
+final class ArchetypeManager: @unchecked Sendable {
     static let shared = ArchetypeManager()
 
     private init() {}
@@ -11,6 +12,9 @@ class ArchetypeManager {
     /// Load all archetypes from a Hugo site's archetypes directory
     /// - Parameter siteURL: The root URL of the Hugo site
     /// - Returns: Array of Archetype objects
+    /// `@MainActor`: reads `@MainActor`-isolated `Archetype` properties
+    /// (`isDefault`, `name`) synchronously while sorting (WP3.5 Cluster 13).
+    @MainActor
     func loadArchetypes(from siteURL: URL) async throws -> [Archetype] {
         let archetypesURL = siteURL.appendingPathComponent("archetypes")
 
@@ -58,6 +62,9 @@ class ArchetypeManager {
     /// Parse a single archetype file
     /// - Parameter url: The archetype file URL
     /// - Returns: An Archetype instance
+    /// `@MainActor`: constructs an `Archetype`, which is itself `@MainActor`-isolated
+    /// (WP3.5 Cluster 13) — this method already only ever runs from `@MainActor` callers.
+    @MainActor
     func parseArchetype(at url: URL) async throws -> Archetype {
         let content = try await Task.detached {
             try String(contentsOf: url, encoding: .utf8)
@@ -182,6 +189,9 @@ class ArchetypeManager {
     ///   - targetDirectory: The directory to create the file in
     ///   - filename: Optional custom filename (defaults to slugified title)
     /// - Returns: URL of the created file
+    /// `@MainActor`: calls `archetype.processTemplate(title:)`, an instance
+    /// method on the `@MainActor`-isolated `Archetype` (WP3.5 Cluster 13).
+    @MainActor
     func createContent(
         from archetype: Archetype,
         title: String,

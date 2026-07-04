@@ -2,6 +2,8 @@ import XCTest
 @testable import Victor
 
 /// Tests for DataFileParser parsing and serialization
+/// `@MainActor`: constructs `DataFile`, which is `@MainActor`-isolated (WP3.5 Cluster 13).
+@MainActor
 final class DataFileParserTests: XCTestCase {
 
     private let parser = DataFileParser.shared

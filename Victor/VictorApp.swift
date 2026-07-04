@@ -4,6 +4,8 @@ import AppKit
 // MARK: - Find Panel Helper
 
 /// Helper to trigger NSTextView's native find panel from SwiftUI menu commands
+/// `@MainActor`: both static funcs call `NSApp.sendAction` (WP3.5 Cluster 11).
+@MainActor
 enum FindPanelHelper {
     /// Extended actions from NSTextFinder.Action (not all in NSFindPanelAction)
     static let showReplaceInterface = 12  // NSTextFinder.Action.showReplaceInterface

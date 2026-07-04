@@ -2,6 +2,8 @@ import XCTest
 @testable import Victor
 
 /// Tests for ArchetypeManager and Archetype model
+/// `@MainActor`: constructs `Archetype`, which is `@MainActor`-isolated (WP3.5 Cluster 13).
+@MainActor
 final class ArchetypeManagerTests: XCTestCase {
 
     private let manager = ArchetypeManager.shared

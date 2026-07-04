@@ -4,6 +4,9 @@ import AppKit
 // MARK: - Custom Text View with Line Highlighting
 
 /// Custom NSTextView subclass that highlights the current line and provides custom context menu
+/// `@MainActor`: NSTextView overrides here (`awakeFromNib`, drag-and-drop, etc.) call
+/// MainActor-isolated AppKit accessors — see WP3.5 Cluster 11.
+@MainActor
 final class HighlightingTextView: NSTextView {
 
     /// Whether to show current line highlighting
@@ -42,7 +45,15 @@ final class HighlightingTextView: NSTextView {
 
     override func awakeFromNib() {
         super.awakeFromNib()
-        registerForDraggedTypes([.string, .fileURL])
+        // NSObject.awakeFromNib is `nonisolated` in the AppKit overlay (it can
+        // fire during nib decoding before actor isolation is established), so
+        // this override stays nonisolated to match even though the class
+        // itself is @MainActor - wrap the MainActor call explicitly rather
+        // than calling it synchronously from this nonisolated context
+        // (WP3.5 Cluster 11).
+        Task { @MainActor in
+            self.registerForDraggedTypes([.string, .fileURL])
+        }
     }
 
     /// Register for drag types when becoming first responder
@@ -486,7 +497,9 @@ struct EditorTextView: NSViewRepresentable {
 
         // Force initial layout after the view is set up
         // This ensures text is visible immediately without needing to click
-        DispatchQueue.main.async {
+        // Task { @MainActor in } instead of DispatchQueue.main.async - provably
+        // MainActor-isolated rather than merely scheduled-and-hoped-for (WP3.5 Cluster 11).
+        Task { @MainActor in
             if let layoutManager = textView.layoutManager,
                let textContainer = textView.textContainer {
                 layoutManager.ensureLayout(for: textContainer)
@@ -495,8 +508,9 @@ struct EditorTextView: NSViewRepresentable {
         }
 
         // Notify coordinator is ready and request focus after view is in hierarchy
-        // Use RunLoop to ensure we're outside any layout pass
-        RunLoop.main.perform {
+        // Deferred to the next MainActor turn so we're outside any layout pass.
+        // Task { @MainActor in } instead of RunLoop.main.perform (WP3.5 Cluster 11).
+        Task { @MainActor in
             onCoordinatorReady?(context.coordinator)
             // Request focus so user can start typing immediately
             textView.window?.makeFirstResponder(textView)
@@ -553,6 +567,7 @@ struct EditorTextView: NSViewRepresentable {
 
     // MARK: - Coordinator
 
+    @MainActor
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: EditorTextView
         weak var textView: HighlightingTextView?
@@ -561,9 +576,10 @@ struct EditorTextView: NSViewRepresentable {
             self.parent = parent
         }
 
-        deinit {
-            textView?.delegate = nil
-        }
+        // No deinit nil-out needed: `NSTextView.delegate` is `weak` in AppKit,
+        // so it already clears itself automatically when this Coordinator
+        // deallocates. A synchronous `deinit` can't touch `@MainActor` state
+        // anyway now that this class is `@MainActor` (WP3.5 Cluster 11).
 
         // Called whenever text changes
         func textDidChange(_ notification: Notification) {

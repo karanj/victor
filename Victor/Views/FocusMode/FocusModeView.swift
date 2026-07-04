@@ -60,7 +60,9 @@ struct FocusModeView: View {
 // MARK: - Scroll Offset Preference Key
 
 struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    // `let` not `var`: never mutates, and `PreferenceKey`'s `{ get }` requirement
+    // is satisfiable by a `static let` (WP3.5 Cluster 12).
+    static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
@@ -203,9 +205,10 @@ struct FocusModeEditor: NSViewRepresentable {
         // Store reference in coordinator
         context.coordinator.textView = textView
 
-        // Focus the text view after it's in the hierarchy
-        // Use RunLoop to ensure we're outside any layout pass
-        RunLoop.main.perform {
+        // Focus the text view after it's in the hierarchy, deferred to the next
+        // MainActor turn so we're outside any layout pass.
+        // Task { @MainActor in } instead of RunLoop.main.perform (WP3.5 Cluster 11).
+        Task { @MainActor in
             textView.window?.makeFirstResponder(textView)
         }
 
@@ -228,6 +231,7 @@ struct FocusModeEditor: NSViewRepresentable {
         Coordinator(self)
     }
 
+    @MainActor
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: FocusModeEditor
         weak var textView: NSTextView?
@@ -236,9 +240,10 @@ struct FocusModeEditor: NSViewRepresentable {
             self.parent = parent
         }
 
-        deinit {
-            textView?.delegate = nil
-        }
+        // No deinit nil-out needed: `NSTextView.delegate` is `weak` in AppKit,
+        // so it already clears itself automatically when this Coordinator
+        // deallocates. A synchronous `deinit` can't touch `@MainActor` state
+        // anyway now that this class is `@MainActor` (WP3.5 Cluster 11).
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }

@@ -60,7 +60,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 3.4 | Opus burn-down memo (Docs/SC6-BURNDOWN-MEMO.md): 13 clusters covering all 102 real warnings, 3 justified departures from strategy priority + a 4th tool (nonisolated ==), per-consumer AsyncStream design w/ replay-on-subscribe, 11-step order w/ checkpoint counts 103→0, hands-off list, risk notes (AsyncStream conversion, AssetService dedup relocation, ContentFile save-boundary ordering) | victor-sc6/str | **done** | this commit |
 
-**Next up:** WP3.5 (Sonnet executes memo: burn-down + AsyncStream, steps 1-10; Swift 6 flip step 11 = WP3.7, orchestrator-gated) → WP3.6 (Task.detached + M4) → 3.R → Phase 3 gate.
+| 3.5a | Burn-down memo steps 1-8 executed: 103 → 14 warnings, every step build-checkpointed (trail in agent checkpoint file, divergences ≤3 and explained). Undocumented warning classes found+fixed: isolated conformances (@MainActor EditableFile), Timer closure isolation, navigationDelegate deinit. NOTE FOR 3.R REVIEW: FileRowView.node got nonisolated(unsafe) — scrutinize. Agent killed by session limit before step 9; state banked green (full suite passes) | victor-sc6 | **done** | this commit |
+
+**Next up:** WP3.5b (resume agent: step 9 = Cluster 9 + M2 AsyncStream rewrite — the highest-risk step; step 10 = verification sweep) → WP3.7 (orchestrator gates Swift 6 flip) → WP3.6 (Task.detached + M4) → 3.R → Phase 3 gate.
 
 **USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
 7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.

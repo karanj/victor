@@ -1,7 +1,8 @@
 import Foundation
 
 /// Service for parsing Hugo template files and extracting metadata
-class TemplateParser {
+/// Stateless aside from `private init()` — safe to hand across actor boundaries.
+final class TemplateParser: @unchecked Sendable {
     static let shared = TemplateParser()
 
     private init() {}
@@ -9,12 +10,16 @@ class TemplateParser {
     // MARK: - Public Methods
 
     /// Parse a template file and return a Template object with metadata
+    /// `@MainActor`: constructs a `Template`, which is itself `@MainActor`-isolated
+    /// (WP3.5 Cluster 13) — this method already only ever runs from `@MainActor` callers.
+    @MainActor
     func parseTemplate(at url: URL) async throws -> Template {
         let content = try String(contentsOf: url, encoding: .utf8)
         return parseTemplate(content: content, url: url)
     }
 
     /// Parse template content and extract metadata
+    @MainActor
     func parseTemplate(content: String, url: URL) -> Template {
         let metadata = extractMetadata(from: content)
         let templateType = Template.detectType(from: url)
@@ -55,11 +60,19 @@ class TemplateParser {
     }
 
     /// Save a template to disk
+    /// `@MainActor`: touches the `@MainActor`-isolated `Template` (WP3.5 Cluster 13).
+    /// The `MainActor.run` hop this used to need is gone now that `Template` is
+    /// itself `@MainActor` — `markAsSaved()` is just a direct call.
+    @MainActor
     func save(_ template: Template) async throws {
-        try template.content.write(to: template.url, atomically: true, encoding: .utf8)
-        await MainActor.run {
-            template.markAsSaved()
-        }
+        // Capture only the Sendable primitives the write needs - never the
+        // model object itself - before crossing into Task.detached.
+        let url = template.url
+        let content = template.content
+        try await Task.detached {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        }.value
+        template.markAsSaved()
     }
 
     // MARK: - Private Extraction Methods
@@ -234,6 +247,9 @@ class TemplateParser {
 extension TemplateParser {
 
     /// Discover all templates in a Hugo site
+    /// `@MainActor`: assembles/mutates `@MainActor`-isolated `Template` instances
+    /// via `scanDirectory` (WP3.5 Cluster 13).
+    @MainActor
     func discoverTemplates(in siteURL: URL) async throws -> [Template] {
         var templates: [Template] = []
 
@@ -275,6 +291,9 @@ extension TemplateParser {
     }
 
     /// Scan a directory for template files
+    /// `@MainActor`: mutates `@MainActor`-isolated `Template` properties directly
+    /// (`isThemeTemplate`, `themeName`) (WP3.5 Cluster 13).
+    @MainActor
     private func scanDirectory(_ url: URL, isTheme: Bool, themeName: String?) async throws -> [Template] {
         var templates: [Template] = []
 
@@ -307,6 +326,8 @@ extension TemplateParser {
 extension TemplateParser {
 
     /// Analyze template dependencies (which templates use which partials)
+    /// `@MainActor`: reads `@MainActor`-isolated `Template` properties (WP3.5 Cluster 13).
+    @MainActor
     func analyzeDependencies(templates: [Template]) -> [UUID: Set<String>] {
         var dependencies: [UUID: Set<String>] = [:]
 
@@ -321,16 +342,19 @@ extension TemplateParser {
     }
 
     /// Find templates that extend a base template (use blocks)
+    @MainActor
     func findExtendingTemplates(templates: [Template]) -> [Template] {
         templates.filter { $0.metadata.hasBaseTemplate }
     }
 
     /// Find base templates (define blocks)
+    @MainActor
     func findBaseTemplates(templates: [Template]) -> [Template] {
         templates.filter { $0.templateType == .base || $0.metadata.definesBlocks }
     }
 
     /// Get all unique partials referenced across templates
+    @MainActor
     func getAllPartialReferences(templates: [Template]) -> [String: Int] {
         var partialCounts: [String: Int] = [:]
 

@@ -2,7 +2,8 @@ import Foundation
 import AppKit
 
 /// Service for file system operations and folder management
-class FileSystemService {
+/// Stateless aside from `private init()` — safe to hand across actor boundaries.
+final class FileSystemService: @unchecked Sendable {
     static let shared = FileSystemService()
 
     private init() {}
@@ -309,28 +310,42 @@ class FileSystemService {
 
     // MARK: - File I/O
 
+    /// Sendable wire format for `readContentFile(at:)`'s background read: only
+    /// `String` + `Date` cross the `Task.detached` boundary. The non-Sendable
+    /// `ContentFile` class (shared with `FileNode.contentFile`) is constructed
+    /// afterward, back in the caller's isolation domain (WP3.5 Cluster 1).
+    private struct ContentFileReadResult: Sendable {
+        let content: String
+        let modificationDate: Date
+    }
+
     /// Read content file from disk
-    /// File I/O is performed on a background thread to avoid blocking the main thread
+    /// File I/O is performed on a background thread to avoid blocking the main thread.
+    /// `Task.detached` is kept deliberately: `String(contentsOf:)` and the
+    /// `FileManager` attribute read below are synchronous/blocking, and this
+    /// function has no actor isolation of its own, so without detaching, the
+    /// blocking read would run inline on whatever thread the caller is on
+    /// (typically the main actor) rather than actually moving to a background
+    /// thread.
     func readContentFile(at url: URL) async throws -> ContentFile {
         // Perform file I/O on background thread
-        try await Task.detached {
+        let result: ContentFileReadResult = try await Task.detached {
             let content = try String(contentsOf: url, encoding: .utf8)
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             let modificationDate = attributes[.modificationDate] as? Date ?? Date()
-
-            // Parse frontmatter and markdown
-            let parser = FrontmatterParser.shared
-            let (frontmatter, markdown) = parser.parseContent(content)
-
-            let file = ContentFile(
-                url: url,
-                frontmatter: frontmatter,
-                markdownContent: markdown,
-                lastModified: modificationDate
-            )
-
-            return file
+            return ContentFileReadResult(content: content, modificationDate: modificationDate)
         }.value
+
+        // Parse frontmatter and construct the ContentFile after crossing back
+        let parser = FrontmatterParser.shared
+        let (frontmatter, markdown) = parser.parseContent(result.content)
+
+        return ContentFile(
+            url: url,
+            frontmatter: frontmatter,
+            markdownContent: markdown,
+            lastModified: result.modificationDate
+        )
     }
 
     /// Write content to file at URL
@@ -364,9 +379,14 @@ class FileSystemService {
         }.value
     }
 
-    /// Write content file to disk
-    func saveContentFile(_ file: ContentFile) async throws {
-        try await writeFile(to: file.url, content: file.fullContent)
+    /// Write content file to disk.
+    /// Takes `url`/`content` rather than a `ContentFile` so the non-Sendable
+    /// model class never has to cross the `await` boundary into this call
+    /// (WP3.5 Cluster 1) — the caller extracts these two Sendable primitives
+    /// from the `ContentFile` immediately before calling, after syncing any
+    /// pending edited content into it.
+    func saveContentFile(url: URL, content: String) async throws {
+        try await writeFile(to: url, content: content)
     }
 
     /// Create a new markdown file inside the given folder URL

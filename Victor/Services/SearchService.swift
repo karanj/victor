@@ -11,22 +11,22 @@ actor SearchService {
     /// Search for matches across multiple files
     /// - Parameters:
     ///   - options: Search configuration including query, regex, case sensitivity
-    ///   - nodes: File nodes to search in
+    ///   - fileURLs: Pre-filtered file URLs to search in (see `searchableFileURLs(from:options:)`
+    ///     below, called by the caller on `@MainActor` before crossing into this actor -
+    ///     `FileNode` has a `weak var parent` and recursive children, so it can never be
+    ///     Sendable and must never cross this boundary as a live tree; WP3.5 Cluster 6)
     ///   - siteRootURL: Root URL of the Hugo site (for relative paths)
     /// - Returns: Array of file results with matches
     func search(
         options: SearchOptions,
-        in nodes: [FileNode],
+        in fileURLs: [URL],
         siteRootURL: URL
     ) async -> [FileSearchResult] {
         guard !options.query.isEmpty else { return [] }
 
-        // Collect all searchable files
-        let filesToSearch = collectSearchableFiles(from: nodes, options: options)
-
         // Search files in parallel
         return await withTaskGroup(of: FileSearchResult?.self) { group in
-            for fileURL in filesToSearch {
+            for fileURL in fileURLs {
                 group.addTask {
                     await self.searchFile(at: fileURL, options: options, siteRootURL: siteRootURL)
                 }
@@ -214,8 +214,15 @@ actor SearchService {
 
     // MARK: - File Collection
 
-    /// Recursively collect all searchable file URLs from nodes
-    private func collectSearchableFiles(from nodes: [FileNode], options: SearchOptions) -> [URL] {
+    /// Recursively collect all searchable file URLs from nodes.
+    ///
+    /// `nonisolated static`, not an actor-isolated instance method: `FileNode` has a
+    /// `weak var parent` and recursive children (CLAUDE.md: must stay a class, can't be
+    /// Sendable), so this walk has to happen entirely on the caller's side (`@MainActor`,
+    /// since `SiteViewModel.fileNodes` is only safe to read there) - the actor itself
+    /// never touches a `FileNode` reference (WP3.5 Cluster 6). Call this before
+    /// `search(options:in:siteRootURL:)`, passing its result as `fileURLs`.
+    nonisolated static func searchableFileURLs(from nodes: [FileNode], options: SearchOptions) -> [URL] {
         var files: [URL] = []
 
         for node in nodes {
@@ -225,7 +232,7 @@ actor SearchService {
         return files
     }
 
-    private func collectFiles(from node: FileNode, into files: inout [URL], options: SearchOptions) {
+    private nonisolated static func collectFiles(from node: FileNode, into files: inout [URL], options: SearchOptions) {
         if node.isDirectory {
             // Check scope filtering
             if let roles = options.scope.hugoRoles {
@@ -262,7 +269,7 @@ actor SearchService {
     }
 
     /// Check if a file node is within a directory matching the given roles
-    private func isNodeInScope(_ node: FileNode, roles: Set<HugoRole>) -> Bool {
+    private nonisolated static func isNodeInScope(_ node: FileNode, roles: Set<HugoRole>) -> Bool {
         var current: FileNode? = node.parent
         while let parent = current {
             if let role = parent.hugoRole, roles.contains(role) {

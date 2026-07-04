@@ -44,8 +44,11 @@ struct DataItem: Identifiable {
 }
 
 /// Represents a data file (YAML/JSON/TOML) in Hugo's data/ directory
+/// `@MainActor`: only ever constructed/mutated from `@MainActor` call sites
+/// (form-bound editing via `@Bindable` in the Data editor) — see WP3.5 Cluster 13.
 @Observable
-class DataFile: EditableFile {
+@MainActor
+class DataFile: @MainActor EditableFile {
     let id: UUID
     let url: URL
     let format: DataFormat
