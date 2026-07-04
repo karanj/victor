@@ -58,7 +58,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 3.2 | W4 audit fixes, 31 files: semantic colors per orchestrator judgment calls, animation tokens + reduce-motion gates (6 structs gained the env var), 2 timers → cancellable Task.sleep, inspector → ultraThinMaterial. Zero new warnings (forced-recompile verification). Agent survived session-limit kill (resumed, verified, reported) | victor-vis | **done** | this commit |
 
-**Next up:** WP3.4 (Opus Sendable memo → Docs/SC6-BURNDOWN-MEMO.md) → WP3.5 (sc6 burn-down + AsyncStream per memo) → WP3.6 (Task.detached + M4) → WP3.7 (Swift 6 flip) → 3.R → Phase 3 gate (full suite incl. visual checklist items from WP3.2/3.3 reports on the USER manual list).
+| 3.4 | Opus burn-down memo (Docs/SC6-BURNDOWN-MEMO.md): 13 clusters covering all 102 real warnings, 3 justified departures from strategy priority + a 4th tool (nonisolated ==), per-consumer AsyncStream design w/ replay-on-subscribe, 11-step order w/ checkpoint counts 103→0, hands-off list, risk notes (AsyncStream conversion, AssetService dedup relocation, ContentFile save-boundary ordering) | victor-sc6/str | **done** | this commit |
+
+**Next up:** WP3.5 (Sonnet executes memo: burn-down + AsyncStream, steps 1-10; Swift 6 flip step 11 = WP3.7, orchestrator-gated) → WP3.6 (Task.detached + M4) → 3.R → Phase 3 gate.
 
 **USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
 7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.
