@@ -231,6 +231,7 @@
 		80C218E9EF99008C56DDA666 /* BuildIssuesPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildIssuesPopover.swift; sourceTree = "<group>"; };
 		815EA918C4B3B850A863AC39 /* FileViewerRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileViewerRouter.swift; sourceTree = "<group>"; };
 		827E1E006B609681AC20B551 /* FileStatusMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStatusMetadataTests.swift; sourceTree = "<group>"; };
+		836EBA4DD0DB06602DA53CF5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		83C6A730A22D17CDD281C5A4 /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
 		84CD5F2BF61B01D240436E53 /* Symbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Symbols.swift; sourceTree = "<group>"; };
 		84D0FD1175E8EB9D0D6867A9 /* ArchetypeTemplateGenerationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchetypeTemplateGenerationTests.swift; sourceTree = "<group>"; };
@@ -423,6 +424,7 @@
 				E4C5BE3806D3162ED1598BC7 /* Views */,
 				83C6A730A22D17CDD281C5A4 /* AppConstants.swift */,
 				2E394C27DB0DEEF088DDEC4C /* Assets.xcassets */,
+				836EBA4DD0DB06602DA53CF5 /* Info.plist */,
 				60652C9B093349D58726B929 /* Victor.entitlements */,
 				F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */,
 			);
@@ -1050,6 +1052,7 @@
 				DEVELOPMENT_TEAM = 55V96YBUQ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Victor/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Victor;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -1153,6 +1156,7 @@
 				DEVELOPMENT_TEAM = 55V96YBUQ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Victor/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Victor;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

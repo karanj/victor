@@ -283,10 +283,22 @@ class SiteViewModel {
     /// Filtered file nodes based on search (recursively searches tree)
     /// Results are cached to avoid recomputation on every SwiftUI render cycle
     var filteredNodes: [FileNode] {
-        // Empty search - return fileNodes directly (no caching needed)
+        // Empty search - return fileNodes directly (no caching needed).
+        // Guard the resets so this computed property (read directly from
+        // FileListView's body) doesn't unconditionally re-mutate @Observable
+        // state on every access - W3.1 (victor-doc) surfaced that an
+        // unconditional mutation here, when the mutated state's own view is
+        // already live and observing, can retrigger a re-render indefinitely
+        // (a busy loop) once a site is loaded after the window has already
+        // appeared, e.g. via a Dock-dropped folder. Skipping the write when
+        // there's nothing to clear keeps this a true no-op on repeat access.
         guard !searchQuery.isEmpty else {
-            autoExpandedNodeIDs.removeAll()
-            _cachedFilteredNodes = nil
+            if !autoExpandedNodeIDs.isEmpty {
+                autoExpandedNodeIDs.removeAll()
+            }
+            if _cachedFilteredNodes != nil {
+                _cachedFilteredNodes = nil
+            }
             return fileNodes
         }
 
@@ -413,9 +425,19 @@ class SiteViewModel {
         return filtered
     }
 
+    /// Tracks the cold-launch auto-restore of the last saved site kicked off
+    /// by `init()` below. W3.1 (victor-doc) awaits this before handling an
+    /// incoming Dock-drop / Open With / `open -a` request, so that request
+    /// doesn't race the auto-restore and call `loadSite` concurrently for a
+    /// second, potentially different URL - two overlapping `loadSite` calls
+    /// both reassign `fileNodes` and bump `_fileNodesVersion`, which can
+    /// leave `filteredNodes`' cache thrashing between versions and drive a
+    /// busy SwiftUI re-render loop.
+    private(set) var initialSiteRestoreTask: Task<Void, Never>?
+
     init() {
         // Try to load previously opened site
-        Task { [weak self] in
+        initialSiteRestoreTask = Task { [weak self] in
             await self?.loadSavedSite()
         }
     }

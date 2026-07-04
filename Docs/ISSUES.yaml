@@ -825,6 +825,24 @@ issues:
       and the server silently drifts to port+1. Set SO_REUSEADDR on the probe
       socket before bind.
 
+  - id: victor-sbx
+    title: "App Sandbox is not actually enabled (empty entitlements)"
+    status: open
+    priority: P3
+    type: bug
+    files: [Victor/Victor.entitlements, project.yml]
+    estimate: 0.5-1d
+    detail: >
+      Found during WP2.1 (2026-07-04): Victor.entitlements is an empty
+      dict, so App Sandbox is off despite the codebase being written for it
+      (security-scoped bookmarks, CLAUDE.md assumptions). Enable
+      com.apple.security.app-sandbox + user-selected.read-write, then
+      re-verify on a clean install: bookmark minting/resolution, Dock-drop
+      URL grants (victor-doc's deferred check), Hugo server subprocess
+      launch (may need entitlement exceptions or an unsandboxed helper -
+      investigate; hugo spawning is the likely blocker and the reason this
+      needs its own spike rather than just flipping the key).
+
   - id: victor-lsi
     title: "SiteViewModel.init side effect: unconditional loadSavedSite Task"
     status: open

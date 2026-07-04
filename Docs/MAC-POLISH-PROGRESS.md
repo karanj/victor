@@ -41,7 +41,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 2.2 | Real Quick Look (.quickLookPreview) in asset panel/grid/list + sidebar file list (Space, non-editable files only, .ignored fall-through for editable); ShareLink in asset panel. NSWorkspace.open fake deleted | victor-qlk | **done** | this commit |
 
-**Next up:** WP2.1 (folder document type, in flight) → WP2.4 (notifications; waits on 2.1 for xcodegen serialization) → WP2.3 (drag & drop) → orchestrator adds File-menu ShareLink (snippet in WP2.2 report; VictorApp owned by 2.1 right now) → 2.R review → Phase 2 gate.
+| 2.1 | Folder document type (info: plist merge w/ INFOPLIST_KEY_*, versions pinned to build settings, LSHandlerRank Alternate); onOpenURL + application(_:open:) routing to single window; restore-race fix (initialSiteRestoreTask) + filteredNodes render-loop fix (pre-existing, exposed). Discoveries: entitlements empty → sandbox OFF (victor-sbx filed); agent claims SC6 baseline may undercount (~24) — RE-VERIFY AT GATE (conflicts with orchestrator's clean-build 103=103 measurement) | victor-doc | **done** | this commit |
+
+**Next up:** WP2.3 (drag & drop) ∥ WP2.4 (notifications) — disjoint files, only 2.4 runs xcodegen → orchestrator adds File-menu ShareLink → 2.R review → Phase 2 gate (incl. SC6 baseline re-verification + manual: real Dock-drop, Open With, confirm-dialog flow).
 
 **USER manual smoke for Phase 1** (agents can't do these headlessly):
 1. Proxy icon: select a file → titlebar "file.md — Site"; Cmd-click title → path menu; drag proxy icon to Finder.

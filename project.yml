@@ -40,6 +40,23 @@ targets:
       - package: Yams
       - package: TOMLKit
       - package: Highlightr
+    # W3.1 (victor-doc): CFBundleDocumentTypes can't be expressed via
+    # INFOPLIST_KEY_* build settings, so we hand xcodegen a literal Info.plist
+    # via `info:`. This sets INFOPLIST_FILE for every config; combined with
+    # GENERATE_INFOPLIST_FILE: YES below, Xcode's modern build system merges
+    # this file's keys with the INFOPLIST_KEY_* synthesized ones (verified in
+    # the built product's Info.plist - see report).
+    info:
+      path: Victor/Info.plist
+      properties:
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: "Hugo Site"
+            CFBundleTypeRole: Editor
+            LSItemContentTypes:
+              - public.folder
+            LSHandlerRank: Alternate
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.victor.Victor

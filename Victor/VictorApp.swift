@@ -30,10 +30,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Reference to check for unsaved changes
     weak var siteViewModel: SiteViewModel?
 
+    /// W3.1 (victor-doc): set by `VictorApp.onAppear` so folders dropped on
+    /// the Dock icon, opened via Finder "Open With", or passed to
+    /// `open -a Victor <folder>` route through the single existing window
+    /// instead of AppKit's default document-window handling. This is the
+    /// path that actually fires for Dock-icon drops (confirmed empirically -
+    /// see victor-doc report); `onOpenURL` on the WindowGroup is kept as a
+    /// defensive second path but is not reached once this delegate method is
+    /// implemented, since AppKit only calls one open-URL handler per launch.
+    var onOpenSiteFolders: (([URL]) -> Void)?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Disable native window tabbing - app architecture is single-window
         // Enabling tabs causes freeze due to shared SiteViewModel state conflicts
         NSWindow.allowsAutomaticWindowTabbing = false
+    }
+
+    /// Dock-icon folder drop, Finder "Open With ▸ Victor", and
+    /// `open -a Victor <folder>` all deliver here as the 'odoc' Apple Event.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        Logger.shared.info("application(_:open:) received \(urls.count) URL(s): \(urls.map(\.path))")
+        onOpenSiteFolders?(urls)
     }
 
     // MARK: - Dock Menu (W2.4)
@@ -178,6 +195,23 @@ struct VictorApp: App {
     @State private var isCloseSiteConfirmationPresented = false
     @State private var isRevertConfirmationPresented = false
 
+    // W3.1 (victor-doc): folder awaiting load once the Close Site
+    // confirmation above resolves. Set only when an incoming open request
+    // (Dock drop / Open With / `open -a`) arrives while a site with unsaved
+    // changes is already open.
+    @State private var pendingOpenSiteURL: URL?
+
+    // W3.1 (victor-doc): de-dupes duplicate delivery of the same open-folder
+    // event. Empirically, `open -a Victor <folder>` can deliver through
+    // *both* `onOpenURL` and the AppDelegate path, and `onOpenURL` alone has
+    // been observed firing twice for a single invocation. Loading the same
+    // site twice concurrently corrupts SiteViewModel's filteredNodes cache
+    // (two racing `loadSite` calls thrash `_fileNodesVersion`) into a busy
+    // re-render loop, so track the in-flight URL and ignore repeats. Set
+    // synchronously (no `await` in between) so two back-to-back deliveries
+    // in the same run-loop turn can't both pass the guard.
+    @State private var siteURLLoadInFlight: URL?
+
     var body: some Scene {
         WindowGroup {
             ContentView(siteViewModel: siteViewModel)
@@ -185,6 +219,19 @@ struct VictorApp: App {
                 .onAppear {
                     // Wire up app delegate to view model for quit confirmation
                     appDelegate.siteViewModel = siteViewModel
+                    // W3.1 (victor-doc): Dock drop / Open With route through
+                    // the delegate (see AppDelegate.application(_:open:)).
+                    appDelegate.onOpenSiteFolders = { urls in
+                        for url in urls {
+                            handleOpenSiteFolder(url)
+                        }
+                    }
+                }
+                // W3.1 (victor-doc): `open -a Victor ~/blog` and some Finder
+                // open paths deliver here instead of the delegate. Both
+                // paths funnel into the same single-window handler.
+                .onOpenURL { url in
+                    handleOpenSiteFolder(url)
                 }
                 .sheet(isPresented: $siteViewModel.isNewContentPresented) {
                     if let siteURL = siteViewModel.site?.rootURL,
@@ -212,12 +259,17 @@ struct VictorApp: App {
                         Task {
                             await siteViewModel.saveAllModifiedFiles()
                             siteViewModel.closeSite()
+                            await openPendingSiteIfNeeded()
                         }
                     }
                     Button("Close Without Saving", role: .destructive) {
                         siteViewModel.closeSite()
+                        Task { await openPendingSiteIfNeeded() }
                     }
-                    Button("Cancel", role: .cancel) {}
+                    Button("Cancel", role: .cancel) {
+                        // W3.1: an open request that triggered this dialog is abandoned on Cancel.
+                        pendingOpenSiteURL = nil
+                    }
                 } message: {
                     Text("This site has unsaved changes. Choose whether to save them before closing.")
                 }
@@ -501,6 +553,65 @@ struct VictorApp: App {
         
         Window("Server Logs",id: "server-logs") {
             ServerLogView()
+        }
+    }
+
+    /// W3.1 (victor-doc): route an incoming site-folder URL (Dock drop,
+    /// Finder "Open With", or `open -a Victor <folder>`) through the same
+    /// single-window load path as File > Open Hugo Site, reusing the Close
+    /// Site confirmation when another site is open with unsaved changes.
+    /// Never opens a second window - the confirmation dialogs above are
+    /// App-scoped state shared across the (single) window, per victor-doc's
+    /// P2 note.
+    private func handleOpenSiteFolder(_ url: URL) {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            siteViewModel.errorMessage = "\"\(url.lastPathComponent)\" is not a folder. Choose a Hugo site folder to open it in Victor."
+            return
+        }
+
+        // Duplicate delivery of the same open request (see
+        // `siteURLLoadInFlight` doc comment) - ignore the repeat. Set
+        // synchronously (no `await` before this point) so two back-to-back
+        // deliveries in the same run-loop turn can't both pass the guard.
+        guard siteURLLoadInFlight != url else { return }
+        siteURLLoadInFlight = url
+
+        Task {
+            // Cold launch kicks off an auto-restore of the last saved site
+            // (SiteViewModel.init -> loadSavedSite). Wait for that to settle
+            // first so it can't race this request's `loadSite` call - see
+            // `initialSiteRestoreTask`'s doc comment for why that matters.
+            await siteViewModel.initialSiteRestoreTask?.value
+
+            guard !siteViewModel.hasUnsavedChanges else {
+                pendingOpenSiteURL = url
+                isCloseSiteConfirmationPresented = true
+                siteURLLoadInFlight = nil
+                return
+            }
+
+            await siteViewModel.loadSite(from: url)
+            if siteURLLoadInFlight == url {
+                siteURLLoadInFlight = nil
+            }
+        }
+    }
+
+    /// Loads `pendingOpenSiteURL` (set by `handleOpenSiteFolder` when the
+    /// Close Site confirmation had to run first) once the previous site has
+    /// been closed. `loadSite` performs the Hugo-site validation itself and
+    /// sets `errorMessage` if `url` isn't one.
+    private func openPendingSiteIfNeeded() async {
+        guard let url = pendingOpenSiteURL else { return }
+        pendingOpenSiteURL = nil
+
+        guard siteURLLoadInFlight != url else { return }
+        siteURLLoadInFlight = url
+        await siteViewModel.loadSite(from: url)
+        if siteURLLoadInFlight == url {
+            siteURLLoadInFlight = nil
         }
     }
 
