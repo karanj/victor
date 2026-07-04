@@ -1,5 +1,14 @@
 import Foundation
 
+// MARK: - LiveReload Event
+
+/// A LiveReload event, delivered through `LiveReloadClient.events()`
+/// (WP3.5 Cluster 9 / M2 - replaces the `onNavigate`/`onReload` callback pair).
+enum LiveReloadEvent: Sendable {
+    case navigate(String)
+    case reload
+}
+
 // MARK: - URLSession Delegate for Certificate Validation
 
 /// Delegate for handling WebSocket connection authentication challenges.
@@ -101,27 +110,36 @@ actor LiveReloadClient {
     private var isConnected = false
     private var reconnectTask: Task<Void, Never>?
 
-    /// Callback for navigation events
-    private var onNavigate: (@MainActor (String) -> Void)?
-
-    /// Callback for reload events (no navigation, just refresh)
-    private var onReload: (@MainActor () -> Void)?
+    /// Independent event streams (WP3.5 Cluster 9 / M2) - replaces the stored
+    /// `onNavigate`/`onReload` `@MainActor` callbacks. `events()` is called by
+    /// `ServerControlView`'s two call sites that used to call
+    /// `connect(to:onNavigate:onReload:)`; the continuations are actor-level
+    /// state decoupled from the WebSocket session lifecycle, so a reconnect
+    /// (see `establishConnection()`) doesn't drop or duplicate a consumer's
+    /// registration.
+    private var eventContinuations: [UUID: AsyncStream<LiveReloadEvent>.Continuation] = [:]
 
     // MARK: - Public API
 
+    /// New independent stream of LiveReload events (navigate/reload).
+    func events() -> AsyncStream<LiveReloadEvent> {
+        let (stream, continuation) = AsyncStream.makeStream(of: LiveReloadEvent.self)
+        let id = UUID()
+        eventContinuations[id] = continuation
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeEventContinuation(id) }
+        }
+        return stream
+    }
+
+    private func removeEventContinuation(_ id: UUID) {
+        eventContinuations.removeValue(forKey: id)
+    }
+
     /// Connect to Hugo's LiveReload WebSocket
-    /// - Parameters:
-    ///   - serverURL: The Hugo server base URL (e.g., http://localhost:1313)
-    ///   - onNavigate: Callback when Hugo sends a navigate command with the path to navigate to
-    ///   - onReload: Callback when Hugo sends a reload command (refresh current page)
-    func connect(
-        to serverURL: URL,
-        onNavigate: @escaping @MainActor (String) -> Void,
-        onReload: @escaping @MainActor () -> Void
-    ) {
+    /// - Parameter serverURL: The Hugo server base URL (e.g., http://localhost:1313)
+    func connect(to serverURL: URL) {
         self.serverURL = serverURL
-        self.onNavigate = onNavigate
-        self.onReload = onReload
 
         establishConnection()
     }
@@ -271,14 +289,18 @@ actor LiveReloadClient {
         }
     }
 
+    /// Plain actor-local iteration - no `@MainActor` closures stored or passed
+    /// anywhere (WP3.5 Cluster 9 / M2).
+    private func broadcast(_ event: LiveReloadEvent) {
+        for continuation in eventContinuations.values {
+            continuation.yield(event)
+        }
+    }
+
     private func handleReload(_ message: LiveReloadMessage) {
         guard let path = message.path else {
             Logger.shared.debug("[LiveReload] Reload message without path, refreshing")
-            if let callback = onReload {
-                Task { @MainActor in
-                    callback()
-                }
-            }
+            broadcast(.reload)
             return
         }
 
@@ -288,20 +310,12 @@ actor LiveReloadClient {
             let navigatePath = String(path.dropFirst(Self.navigatePrefix.count))
             Logger.shared.info("[LiveReload] Navigate to: \(navigatePath)")
 
-            if let callback = onNavigate {
-                Task { @MainActor in
-                    callback(navigatePath)
-                }
-            }
+            broadcast(.navigate(navigatePath))
         } else {
             // Regular reload
             Logger.shared.debug("[LiveReload] Reload requested for path: \(path)")
 
-            if let callback = onReload {
-                Task { @MainActor in
-                    callback()
-                }
-            }
+            broadcast(.reload)
         }
     }
 

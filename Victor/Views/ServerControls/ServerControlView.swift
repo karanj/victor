@@ -48,8 +48,13 @@ struct ServerControlView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .onAppear {
-            setupServerCallbacks()
             checkHugoInstallation()
+        }
+        .task {
+            await observeServerStatus()
+        }
+        .task {
+            await observeBuildErrors()
         }
         .alert(errorTitle, isPresented: $showingError) {
             Button("OK", role: .cancel) { }
@@ -229,27 +234,26 @@ struct ServerControlView: View {
         openWindow(id: "server-logs")
     }
 
-    private func setupServerCallbacks() {
-        // Set up callbacks to update UI when server state changes
-        Task {
-            await HugoServerService.shared.setOnStatusChange { @MainActor newStatus in
-                withAnimation(reduceMotion ? nil : .default) {
-                    serverStatus = newStatus
-                }
+    /// Independent stream consumer (WP3.5 Cluster 9 / M2) - same shape as
+    /// `SiteViewModel`'s observers, just not routed through it (`ServerControlView`
+    /// is its own `@MainActor` consumer). Using SwiftUI's `.task {}` instead of a
+    /// bare `Task {}` inside `.onAppear`-style setup means the observation task
+    /// is automatically cancelled when the view disappears - a strict
+    /// improvement over the old callback registration, which never
+    /// deregistered and leaked for the toolbar's lifetime.
+    private func observeServerStatus() async {
+        for await newStatus in await HugoServerService.shared.statusUpdates() {
+            withAnimation(reduceMotion ? nil : .default) {
+                serverStatus = newStatus
             }
+        }
+    }
 
-            await HugoServerService.shared.setOnBuildErrorsChange { @MainActor errors in
-                withAnimation(reduceMotion ? nil : .default) {
-                    buildErrors = errors
-                }
+    private func observeBuildErrors() async {
+        for await errors in await HugoServerService.shared.buildErrorUpdates() {
+            withAnimation(reduceMotion ? nil : .default) {
+                buildErrors = errors
             }
-
-            // Get initial status
-            let initialStatus = await HugoServerService.shared.status
-            serverStatus = initialStatus
-
-            let initialErrors = await HugoServerService.shared.buildErrors
-            buildErrors = initialErrors
         }
     }
 

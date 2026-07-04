@@ -21,8 +21,8 @@ struct ServerLogView: View {
             logContent
         }
         .frame(minWidth: 400, minHeight: 300)
-        .onAppear {
-            setupLogCallback()
+        .task {
+            await observeServerOutput()
         }
     }
 
@@ -168,15 +168,16 @@ struct ServerLogView: View {
 
     // MARK: - Actions
 
-    private func setupLogCallback() {
-        Task {
-            await HugoServerService.shared.setOnOutputChange { @MainActor newOutput in
-                logLines = newOutput
-            }
-
-            // Get initial output
-            let initialOutput = await HugoServerService.shared.serverOutput
-            logLines = initialOutput
+    /// Independent stream consumer (WP3.5 Cluster 9 / M2). `ServerLogView` opens
+    /// in its own `Window` scene with no `SiteViewModel` in its environment
+    /// (`VictorApp.swift`), so it observes `HugoServerService` directly rather
+    /// than through `SiteViewModel` - same shape as the other three consumers,
+    /// just not routed through it. Replay-on-subscribe means a freshly-opened
+    /// Server Logs window (opened after the server already started) still
+    /// shows the current output, without a separate initial-fetch.
+    private func observeServerOutput() async {
+        for await newOutput in await HugoServerService.shared.outputUpdates() {
+            logLines = newOutput
         }
     }
 
@@ -231,7 +232,7 @@ struct ServerLogView: View {
             ServerLogView()
                 .onAppear {
                     Task {
-                        await HugoServerService.shared.setOnOutputChange { @MainActor newOutput in
+                        for await _ in await HugoServerService.shared.outputUpdates() {
                             // Preview version
                         }
                     }

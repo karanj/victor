@@ -113,8 +113,14 @@ class TextEditorViewModel {
         guard let file = textFile else { return }
 
         do {
+            // Extract the Sendable URL before crossing into Task.detached - the
+            // closure must not capture `file` itself (a non-Sendable TextFile
+            // class), same boundary-snapshot fix as WP3.5 Cluster 1's
+            // ContentFile handling (this file wasn't in Cluster 1's audited
+            // list, but has the identical pattern).
+            let url = file.url
             let content = try await Task.detached {
-                try String(contentsOf: file.url, encoding: .utf8)
+                try String(contentsOf: url, encoding: .utf8)
             }.value
 
             file.content = content

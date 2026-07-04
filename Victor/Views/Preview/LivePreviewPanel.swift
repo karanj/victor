@@ -57,11 +57,11 @@ struct LivePreviewPanel: View {
                 serverNotRunningPlaceholder
             }
         }
-        .onAppear {
-            setupServerStateObservers()
-            Task {
-                await refreshServerState()
-            }
+        .task {
+            await observeServerStatus()
+        }
+        .task(id: serverURL) {
+            await observeLiveReloadEvents()
         }
     }
 
@@ -185,55 +185,51 @@ struct LivePreviewPanel: View {
 
     // MARK: - Server State Management
 
-    private func setupServerStateObservers() {
-        Task {
-            await HugoServerService.shared.setOnStatusChange { @MainActor newStatus in
-                let previousStatus = status
-                status = newStatus
-
-                // Connect/disconnect LiveReload based on server status
-                if newStatus.isRunning, let url = serverURL {
-                    Task {
-                        await LiveReloadClient.shared.connect(
-                            to: url,
-                            onNavigate: { path in
-                                liveReloadNavigatePath = path
-                            },
-                            onReload: {
-                                reloadTrigger += 1
-                            }
-                        )
-                    }
-                } else if previousStatus.isRunning && !newStatus.isRunning {
-                    Task {
-                        await LiveReloadClient.shared.disconnect()
-                    }
-                }
+    /// Independent stream consumer (WP3.5 Cluster 9 / M2) - same shape as
+    /// `SiteViewModel`'s status observer, just not routed through it (this
+    /// view isn't `SiteViewModel`-owned). Replay-on-subscribe means this
+    /// picks up the current status immediately on first appearance, replacing
+    /// the old separate `refreshServerState()` initial-fetch.
+    ///
+    /// Also keeps `serverURL` in sync with `status`: the old callback-based
+    /// version only ever set `serverURL` once, from `refreshServerState()`'s
+    /// one-time snapshot at `.onAppear` - if the server was still stopped at
+    /// that point and only started later, `serverURL` stayed `nil` forever
+    /// even after the status callback reported `.running`, silently stuck on
+    /// the "Hugo Server Not Running" placeholder. Fetching `serverURL`
+    /// whenever status changes (and driving the LiveReload `.task(id:)` below
+    /// off of it) fixes that as a direct consequence of wiring the new
+    /// per-status-change source of truth correctly, not a separate change.
+    private func observeServerStatus() async {
+        for await newStatus in await HugoServerService.shared.statusUpdates() {
+            status = newStatus
+            if newStatus.isRunning {
+                serverURL = await HugoServerService.shared.serverURL
+            } else {
+                serverURL = nil
             }
         }
     }
 
-    private func refreshServerState() async {
-        let currentStatus = await HugoServerService.shared.status
-        let currentServerURL = await HugoServerService.shared.serverURL
+    /// Connect/reconnect LiveReload whenever `serverURL` changes (nil when the
+    /// server isn't running, a URL once it is) and observe its event stream.
+    /// SwiftUI cancels the previous instance of this task and starts a fresh
+    /// one whenever `serverURL` changes, which is what drives
+    /// connect/disconnect here - no manual "previous status was running"
+    /// bookkeeping needed (WP3.5 Cluster 9 / M2).
+    private func observeLiveReloadEvents() async {
+        guard let url = serverURL else {
+            await LiveReloadClient.shared.disconnect()
+            return
+        }
 
-        await MainActor.run {
-            status = currentStatus
-            serverURL = currentServerURL
-
-            // Connect LiveReload if server is already running
-            if currentStatus.isRunning, let url = currentServerURL {
-                Task {
-                    await LiveReloadClient.shared.connect(
-                        to: url,
-                        onNavigate: { path in
-                            liveReloadNavigatePath = path
-                        },
-                        onReload: {
-                            reloadTrigger += 1
-                        }
-                    )
-                }
+        await LiveReloadClient.shared.connect(to: url)
+        for await event in await LiveReloadClient.shared.events() {
+            switch event {
+            case .navigate(let path):
+                liveReloadNavigatePath = path
+            case .reload:
+                reloadTrigger += 1
             }
         }
     }

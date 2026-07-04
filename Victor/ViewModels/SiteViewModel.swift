@@ -279,6 +279,9 @@ class SiteViewModel {
     /// File operations service (for create, rename, duplicate, trash)
     private let fileOperationsService = FileOperationsService.shared
 
+    /// Hugo server service (for start/stop/status streams - WP3.5 Cluster 9)
+    private let hugoServerService = HugoServerService.shared
+
     /// Specialized file manager (for Hugo config, data files, templates, archetypes)
     let specializedFileManager = SpecializedFileManager()
 
@@ -1582,32 +1585,44 @@ class SiteViewModel {
 
     // MARK: - Hugo Server Control
 
+    /// Owned observation tasks for the two `HugoServerService` streams this
+    /// view model consumes (WP3.5 Cluster 9 / M2). `SiteViewModel` lives for
+    /// the app's lifetime (owned by `VictorApp`'s `@State`), so these tasks run
+    /// until app termination; no explicit teardown call is required, but the
+    /// handles are stored anyway (testability, and in case a future "close
+    /// site without quitting" path wants to cancel them).
+    private var statusObservationTask: Task<Void, Never>?
+    private var buildErrorsObservationTask: Task<Void, Never>?
+
     /// Set up observers for Hugo server state changes
     func setupHugoServerObservers() {
-        Task {
-            await HugoServerService.shared.setOnStatusChange { @MainActor [weak self] newStatus in
-                self?.hugoServerStatus = newStatus
+        statusObservationTask = Task { [weak self] in
+            guard let stream = await self?.hugoServerService.statusUpdates() else { return }
+            for await status in stream {
+                guard let self else { return }
+                self.hugoServerStatus = status
                 // Auto-enable live preview when server starts running
-                if newStatus.isRunning {
-                    self?.useLivePreview = true
+                if status.isRunning {
+                    self.useLivePreview = true
                 }
             }
-
-            await HugoServerService.shared.setOnBuildErrorsChange { @MainActor [weak self] errors in
+        }
+        buildErrorsObservationTask = Task { [weak self] in
+            guard let stream = await self?.hugoServerService.buildErrorUpdates() else { return }
+            for await errors in stream {
                 self?.hugoBuildErrors = errors
             }
+        }
 
-            // Get initial state
-            let initialStatus = await HugoServerService.shared.status
-            let initialErrors = await HugoServerService.shared.buildErrors
-            let initialURL = await HugoServerService.shared.serverURL
-
-            hugoServerStatus = initialStatus
-            hugoBuildErrors = initialErrors
-            hugoServerURL = initialURL
-            if initialStatus.isRunning {
-                useLivePreview = true
-            }
+        // `hugoServerURL` isn't part of either stream above (it's a plain
+        // actor-isolated var, not one of Cluster 9's three notify signals) -
+        // fetch it once here so re-entering this screen while the server is
+        // already running (e.g. the main window re-appearing) still picks up
+        // the current URL, matching the old callback-based setup's behavior.
+        Task { [weak self] in
+            guard let self else { return }
+            let initialURL = await self.hugoServerService.serverURL
+            self.hugoServerURL = initialURL
         }
     }
 

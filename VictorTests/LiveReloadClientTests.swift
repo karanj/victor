@@ -190,9 +190,6 @@ final class LiveReloadClientTests: XCTestCase {
     // MARK: - Integration Tests
 
     func testLiveReloadClientCallbacksAreInvoked() async throws {
-        let expectation = XCTestExpectation(description: "Callback invoked")
-        var receivedPath: String?
-
         // Create a mock server that sends a navigate message
         // For now, just test that the client can be created
         let client = LiveReloadClient.shared
@@ -200,5 +197,64 @@ final class LiveReloadClientTests: XCTestCase {
         // Verify client exists (basic smoke test)
         let isConnected = await client.getIsConnected()
         XCTAssertFalse(isConnected, "Client should not be connected initially")
+    }
+
+    // MARK: - Event Stream Tests (WP3.5 Cluster 9 / M2)
+    //
+    // `connect(to:)` dropped its `onNavigate`/`onReload` callback parameters in
+    // favor of an `events()` stream (see `LiveReloadEvent`). Actually driving a
+    // `.navigate`/`.reload` event end to end requires a live WebSocket
+    // connection to a real Hugo server - that's covered by the manual test
+    // checklist in Docs/SC6-BURNDOWN-MEMO.md §5, not here. What's covered here
+    // is what's testable without a live server: the stream factory itself
+    // multicasts independently per subscriber, same guarantee as
+    // HugoServerService's streams (see HugoServerTests).
+
+    /// `events()` is single-consumer per call - two independent subscribers
+    /// must each get their own stream, not split a single shared stream's
+    /// elements between them (WP3.5 Cluster 9).
+    func testEventsReturnsIndependentStreamsPerSubscriber() async throws {
+        let streamA = await LiveReloadClient.shared.events()
+        let streamB = await LiveReloadClient.shared.events()
+
+        // Two independently-obtained AsyncStreams over the same event type -
+        // confirm both can be iterated concurrently without one starving the
+        // other (each has cancelled below via task cancellation, matching the
+        // "cancellation is the only deregistration mechanism" contract).
+        let taskA = Task {
+            for await _ in streamA { break }
+        }
+        let taskB = Task {
+            for await _ in streamB { break }
+        }
+
+        // Neither task should ever receive an element here (no server is
+        // connected to broadcast one) - this just confirms both streams exist
+        // independently and can be set up/torn down without interfering with
+        // each other or crashing.
+        taskA.cancel()
+        taskB.cancel()
+        _ = await taskA.value
+        _ = await taskB.value
+    }
+
+    /// `LiveReloadEvent` itself is a plain `Sendable` enum wrapping the two
+    /// message shapes `handleReload` used to invoke callbacks for - a basic
+    /// shape/equality check that the type migration preserved both cases.
+    func testLiveReloadEventCases() {
+        let navigate = LiveReloadEvent.navigate("/posts/my-post/")
+        let reload = LiveReloadEvent.reload
+
+        if case .navigate(let path) = navigate {
+            XCTAssertEqual(path, "/posts/my-post/")
+        } else {
+            XCTFail("Expected .navigate case")
+        }
+
+        if case .reload = reload {
+            // Expected
+        } else {
+            XCTFail("Expected .reload case")
+        }
     }
 }

@@ -120,6 +120,12 @@ actor HugoServerService {
     private var errorPipe: Pipe?
     private var siteRootURL: URL?
 
+    /// Line-pumping tasks reading `outputPipe`/`errorPipe` via
+    /// `fileHandleForReading.bytes.lines` (WP3.5 Cluster 9 / M2 - replaces
+    /// `Pipe.readabilityHandler`).
+    private var stdoutTask: Task<Void, Never>?
+    private var stderrTask: Task<Void, Never>?
+
     /// Maximum lines of output to keep in memory
     private let maxOutputLines = 500
 
@@ -127,10 +133,25 @@ actor HugoServerService {
     private var crashRecoveryAttempts = 0
     private let maxCrashRecoveryAttempts = 3
 
-    /// Callbacks for state changes (main actor) - supports multiple observers
-    private var statusChangeCallbacks: [UUID: @MainActor (HugoServerStatus) -> Void] = [:]
-    private var buildErrorsChangeCallbacks: [UUID: @MainActor ([HugoBuildError]) -> Void] = [:]
-    private var outputChangeCallbacks: [UUID: @MainActor ([String]) -> Void] = [:]
+    // MARK: - Observation (AsyncStream, WP3.5 Cluster 9 / M2)
+    //
+    // `AsyncStream` is single-consumer: if two `for await` loops iterate the same
+    // stream, elements are split between them, not broadcast to both. Four
+    // independent places observe this service (SiteViewModel, LivePreviewPanel,
+    // ServerControlView, ServerLogView), and ServerLogView lives in a separate
+    // `Window` scene with no `SiteViewModel` in its environment
+    // (`VictorApp.swift`), so consolidating to one consumer that republishes
+    // isn't available. Each call to `statusUpdates()`/`buildErrorUpdates()`/
+    // `outputUpdates()` creates an independent stream+continuation pair,
+    // preserving the previous multicast-callback-registry behavior. The
+    // consuming `Task`'s cancellation is the only deregistration mechanism now:
+    // there is no `removeOnXChange(id:)`-shaped method anymore - letting the
+    // `for await` loop's task end (e.g. a SwiftUI `.task {}` tearing down when
+    // its view disappears) triggers `AsyncStream`'s `onTermination`, which
+    // removes that continuation here.
+    private var statusContinuations: [UUID: AsyncStream<HugoServerStatus>.Continuation] = [:]
+    private var buildErrorContinuations: [UUID: AsyncStream<[HugoBuildError]>.Continuation] = [:]
+    private var outputContinuations: [UUID: AsyncStream<[String]>.Continuation] = [:]
 
     private init() {}
 
@@ -141,56 +162,56 @@ actor HugoServerService {
         config = newConfig
     }
 
-    /// Add callback for status changes, returns ID to remove later
-    @discardableResult
-    func addOnStatusChange(_ callback: @escaping @MainActor (HugoServerStatus) -> Void) -> UUID {
+    /// New independent stream of status changes. Replays the current value
+    /// immediately so a late subscriber (e.g. Server Logs window opened after
+    /// the server already started) doesn't have to separately fetch `status`
+    /// first - this replay-on-subscribe behavior is new, not a port of
+    /// something that existed before.
+    func statusUpdates() -> AsyncStream<HugoServerStatus> {
+        let (stream, continuation) = AsyncStream.makeStream(of: HugoServerStatus.self)
         let id = UUID()
-        statusChangeCallbacks[id] = callback
-        return id
+        statusContinuations[id] = continuation
+        continuation.yield(status)
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeStatusContinuation(id) }
+        }
+        return stream
     }
 
-    /// Remove a status change callback
-    func removeOnStatusChange(_ id: UUID) {
-        statusChangeCallbacks.removeValue(forKey: id)
-    }
-
-    /// Add callback for build errors changes, returns ID to remove later
-    @discardableResult
-    func addOnBuildErrorsChange(_ callback: @escaping @MainActor ([HugoBuildError]) -> Void) -> UUID {
+    /// New independent stream of build-error changes. Replays the current value.
+    func buildErrorUpdates() -> AsyncStream<[HugoBuildError]> {
+        let (stream, continuation) = AsyncStream.makeStream(of: [HugoBuildError].self)
         let id = UUID()
-        buildErrorsChangeCallbacks[id] = callback
-        return id
+        buildErrorContinuations[id] = continuation
+        continuation.yield(buildErrors)
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeBuildErrorContinuation(id) }
+        }
+        return stream
     }
 
-    /// Remove a build errors change callback
-    func removeOnBuildErrorsChange(_ id: UUID) {
-        buildErrorsChangeCallbacks.removeValue(forKey: id)
-    }
-
-    /// Add callback for output changes, returns ID to remove later
-    @discardableResult
-    func addOnOutputChange(_ callback: @escaping @MainActor ([String]) -> Void) -> UUID {
+    /// New independent stream of server output changes. Replays the current value.
+    func outputUpdates() -> AsyncStream<[String]> {
+        let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
         let id = UUID()
-        outputChangeCallbacks[id] = callback
-        return id
+        outputContinuations[id] = continuation
+        continuation.yield(serverOutput)
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeOutputContinuation(id) }
+        }
+        return stream
     }
 
-    /// Remove an output change callback
-    func removeOnOutputChange(_ id: UUID) {
-        outputChangeCallbacks.removeValue(forKey: id)
+    private func removeStatusContinuation(_ id: UUID) {
+        statusContinuations.removeValue(forKey: id)
     }
 
-    // Legacy single-callback methods for backwards compatibility
-    func setOnStatusChange(_ callback: @escaping @MainActor (HugoServerStatus) -> Void) {
-        addOnStatusChange(callback)
+    private func removeBuildErrorContinuation(_ id: UUID) {
+        buildErrorContinuations.removeValue(forKey: id)
     }
 
-    func setOnBuildErrorsChange(_ callback: @escaping @MainActor ([HugoBuildError]) -> Void) {
-        addOnBuildErrorsChange(callback)
-    }
-
-    func setOnOutputChange(_ callback: @escaping @MainActor ([String]) -> Void) {
-        addOnOutputChange(callback)
+    private func removeOutputContinuation(_ id: UUID) {
+        outputContinuations.removeValue(forKey: id)
     }
 
     // MARK: - Hugo Binary Detection
@@ -336,8 +357,8 @@ actor HugoServerService {
         // Clear previous output and errors
         serverOutput = []
         buildErrors = []
-        await notifyOutputChange()
-        await notifyBuildErrorsChange()
+        notifyOutputChange()
+        notifyBuildErrorsChange()
 
         // Build command arguments
         var args = ["server"]
@@ -411,10 +432,14 @@ actor HugoServerService {
 
         Logger.shared.info("[HugoServer] Stopping server...")
 
-        // Stop pumping output before tearing down, so the pipes' file handles
-        // are released and no stray reads fire after stop
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        // Stop pumping output before tearing down, so no stray reads fire
+        // after the intentional stop (same ordering as the old
+        // `readabilityHandler = nil` pair - WP3.5 Cluster 9 / M2).
+        // `AsyncLineSequence` checks cancellation cooperatively between lines.
+        stdoutTask?.cancel()
+        stderrTask?.cancel()
+        stdoutTask = nil
+        stderrTask = nil
 
         // Send SIGTERM for graceful shutdown
         process.terminate()
@@ -445,47 +470,56 @@ actor HugoServerService {
 
     // MARK: - Output Handling
 
+    /// Pump stdout/stderr line-by-line via `AsyncLineSequence` instead of
+    /// `Pipe.readabilityHandler` (WP3.5 Cluster 9 / M2). EOF (the process's pipe
+    /// write end closing) simply finishes the sequence - the `for try await`
+    /// loop exits normally, no error, no special-casing needed. A genuine read
+    /// error (rare - bad descriptor) throws out of the loop and is logged via
+    /// `logPumpFailure`, matching the file's existing silent
+    /// swallow-and-continue behavior for parse errors elsewhere.
     private func setupOutputHandlers(outputPipe: Pipe, errorPipe: Pipe) {
-        // Handle stdout
-        outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-
-            if let output = String(data: data, encoding: .utf8) {
-                Task { [weak self] in
-                    await self?.processOutput(output, isError: false)
+        stdoutTask = Task { [weak self] in
+            do {
+                for try await line in outputPipe.fileHandleForReading.bytes.lines {
+                    guard let self else { return }
+                    await self.processLine(line, isError: false)
                 }
+            } catch {
+                await self?.logPumpFailure(error, isError: false)
             }
         }
-
-        // Handle stderr
-        errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-
-            if let output = String(data: data, encoding: .utf8) {
-                Task { [weak self] in
-                    await self?.processOutput(output, isError: true)
+        stderrTask = Task { [weak self] in
+            do {
+                for try await line in errorPipe.fileHandleForReading.bytes.lines {
+                    guard let self else { return }
+                    await self.processLine(line, isError: true)
                 }
+            } catch {
+                await self?.logPumpFailure(error, isError: true)
             }
         }
     }
 
-    private func processOutput(_ output: String, isError: Bool) async {
-        let lines = output.components(separatedBy: .newlines).filter { !$0.isEmpty }
+    /// `.bytes.lines` already yields one line at a time, so unlike the old
+    /// `processOutput(_:isError:)` this needs no manual
+    /// `.components(separatedBy: .newlines)` splitting/filtering.
+    private func processLine(_ line: String, isError: Bool) async {
+        guard !line.isEmpty else { return }
 
-        for line in lines {
-            // Add to output log
-            serverOutput.append(line)
-            if serverOutput.count > maxOutputLines {
-                serverOutput.removeFirst()
-            }
-
-            // Parse the line for status and errors
-            await parseLine(line)
+        serverOutput.append(line)
+        if serverOutput.count > maxOutputLines {
+            serverOutput.removeFirst()
         }
 
-        await notifyOutputChange()
+        // Parse the line for status and errors
+        await parseLine(line)
+
+        notifyOutputChange()
+    }
+
+    private func logPumpFailure(_ error: Error, isError: Bool) {
+        let streamName = isError ? "stderr" : "stdout"
+        Logger.shared.debug("[HugoServer] \(streamName) pump ended with error: \(error.localizedDescription)")
     }
 
     private func parseLine(_ line: String) async {
@@ -498,7 +532,7 @@ actor HugoServerService {
         // Check for rebuild notification - clear errors
         if BuildErrorParser.isRebuildingLine(line) {
             buildErrors = []
-            await notifyBuildErrorsChange()
+            notifyBuildErrorsChange()
             return
         }
 
@@ -512,7 +546,7 @@ actor HugoServerService {
         if let error = BuildErrorParser.parseLine(line) {
             let hadFailureBefore = buildErrors.contains { $0.level == .error }
             buildErrors.append(error)
-            await notifyBuildErrorsChange()
+            notifyBuildErrorsChange()
 
             // New failing build: the first `.error`-level line since the
             // last rebuild cleared `buildErrors` (see isRebuildingLine
@@ -550,8 +584,12 @@ actor HugoServerService {
         let wasRunning = status.isRunning
         let previousSiteURL = siteRootURL
 
-        outputPipe?.fileHandleForReading.readabilityHandler = nil
-        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        // Crash path (process died without stop() being called) - same
+        // cancel pair as stop() (WP3.5 Cluster 9 / M2).
+        stdoutTask?.cancel()
+        stderrTask?.cancel()
+        stdoutTask = nil
+        stderrTask = nil
         process = nil
         outputPipe = nil
         errorPipe = nil
@@ -621,27 +659,27 @@ actor HugoServerService {
 
     private func updateStatus(_ newStatus: HugoServerStatus) async {
         status = newStatus
-        await notifyStatusChange()
+        notifyStatusChange()
     }
 
-    private func notifyStatusChange() async {
+    private func notifyStatusChange() {
         let currentStatus = status
-        for callback in statusChangeCallbacks.values {
-            await callback(currentStatus)
+        for continuation in statusContinuations.values {
+            continuation.yield(currentStatus)
         }
     }
 
-    private func notifyBuildErrorsChange() async {
+    private func notifyBuildErrorsChange() {
         let currentErrors = buildErrors
-        for callback in buildErrorsChangeCallbacks.values {
-            await callback(currentErrors)
+        for continuation in buildErrorContinuations.values {
+            continuation.yield(currentErrors)
         }
     }
 
-    private func notifyOutputChange() async {
+    private func notifyOutputChange() {
         let currentOutput = serverOutput
-        for callback in outputChangeCallbacks.values {
-            await callback(currentOutput)
+        for continuation in outputContinuations.values {
+            continuation.yield(currentOutput)
         }
     }
 

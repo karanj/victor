@@ -218,4 +218,86 @@ final class HugoServerTests: XCTestCase {
             "Hugo server is not running"
         )
     }
+
+    // MARK: - AsyncStream Observation Tests (WP3.5 Cluster 9 / M2)
+    //
+    // These exercise `HugoServerService`'s stream factories directly, without
+    // starting a real Hugo subprocess (CI has no guarantee Hugo is installed,
+    // and the manual test checklist in Docs/SC6-BURNDOWN-MEMO.md §5 covers
+    // the full start/stop/crash lifecycle against a live server). What's
+    // covered here is the part that's new behavior and fully unit-testable in
+    // isolation: replay-on-subscribe, and that each subscriber gets an
+    // independent stream rather than splitting elements between consumers.
+
+    /// A freshly-created status stream must immediately replay the current
+    /// status as its first element - a late subscriber (e.g. the Server Logs
+    /// window opened after the server already started) shouldn't have to
+    /// separately fetch `status` first. This is new behavior, not a port of
+    /// something that existed before the AsyncStream conversion.
+    func testStatusUpdatesReplaysCurrentStatusOnSubscribe() async throws {
+        let stream = await HugoServerService.shared.statusUpdates()
+        var iterator = stream.makeAsyncIterator()
+
+        let firstElement = await iterator.next()
+        XCTAssertNotNil(firstElement, "statusUpdates() must yield at least one element (the replayed current status) immediately on subscribe")
+    }
+
+    /// Same replay-on-subscribe guarantee for buildErrorUpdates().
+    func testBuildErrorUpdatesReplaysCurrentErrorsOnSubscribe() async throws {
+        let stream = await HugoServerService.shared.buildErrorUpdates()
+        var iterator = stream.makeAsyncIterator()
+
+        let firstElement = await iterator.next()
+        XCTAssertNotNil(firstElement, "buildErrorUpdates() must yield at least one element (the replayed current errors) immediately on subscribe")
+    }
+
+    /// Same replay-on-subscribe guarantee for outputUpdates().
+    func testOutputUpdatesReplaysCurrentOutputOnSubscribe() async throws {
+        let stream = await HugoServerService.shared.outputUpdates()
+        var iterator = stream.makeAsyncIterator()
+
+        let firstElement = await iterator.next()
+        XCTAssertNotNil(firstElement, "outputUpdates() must yield at least one element (the replayed current output) immediately on subscribe")
+    }
+
+    /// `AsyncStream` is single-consumer: two `for await` loops over the *same*
+    /// stream split elements between them rather than both seeing every
+    /// element. The whole point of the stream-factory design (WP3.5 Cluster 9)
+    /// is that each call to `statusUpdates()` returns an *independent*
+    /// stream+continuation pair, so two independent subscribers (e.g.
+    /// SiteViewModel and ServerControlView, both observing at once) each get
+    /// their own replayed value rather than racing over one shared stream.
+    func testMultipleStatusSubscribersEachReplayIndependently() async throws {
+        let streamA = await HugoServerService.shared.statusUpdates()
+        let streamB = await HugoServerService.shared.statusUpdates()
+
+        var iteratorA = streamA.makeAsyncIterator()
+        var iteratorB = streamB.makeAsyncIterator()
+
+        let firstA = await iteratorA.next()
+        let firstB = await iteratorB.next()
+
+        XCTAssertNotNil(firstA, "First subscriber must receive the replayed current status")
+        XCTAssertNotNil(firstB, "Second, independent subscriber must ALSO receive the replayed current status - not have it consumed by the first subscriber")
+    }
+
+    /// Cancelling the consuming `Task` is the only deregistration mechanism
+    /// now (no more `removeOnXChange(id:)`) - confirm that cancellation
+    /// actually ends the `for await` loop rather than hanging forever.
+    func testStatusUpdatesStreamEndsWhenConsumingTaskIsCancelled() async throws {
+        let receivedFirstElement = XCTestExpectation(description: "received at least one element")
+        let loopEnded = XCTestExpectation(description: "for-await loop ended after cancellation")
+
+        let task = Task {
+            let stream = await HugoServerService.shared.statusUpdates()
+            for await _ in stream {
+                receivedFirstElement.fulfill()
+            }
+            loopEnded.fulfill()
+        }
+
+        await fulfillment(of: [receivedFirstElement], timeout: 2.0)
+        task.cancel()
+        await fulfillment(of: [loopEnded], timeout: 2.0)
+    }
 }

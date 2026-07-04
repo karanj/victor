@@ -62,7 +62,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 3.5a | Burn-down memo steps 1-8 executed: 103 → 14 warnings, every step build-checkpointed (trail in agent checkpoint file, divergences ≤3 and explained). Undocumented warning classes found+fixed: isolated conformances (@MainActor EditableFile), Timer closure isolation, navigationDelegate deinit. NOTE FOR 3.R REVIEW: FileRowView.node got nonisolated(unsafe) — scrutinize. Agent killed by session limit before step 9; state banked green (full suite passes) | victor-sc6 | **done** | this commit |
 
-**Next up:** WP3.5b (resume agent: step 9 = Cluster 9 + M2 AsyncStream rewrite — the highest-risk step; step 10 = verification sweep) → WP3.7 (orchestrator gates Swift 6 flip) → WP3.6 (Task.detached + M4) → 3.R → Phase 3 gate.
+| 3.5b | Steps 9-10: AsyncStream conversion (per-consumer factories w/ replay-on-subscribe, 5 new stream tests; LiveReloadEvent stream; bytes.lines pipes) + verification sweep. **0 warnings, 2 consecutive clean builds, 476/476 full suite.** 6 undocumented gaps fixed w/ reasoning; latent bug fixed (LivePreviewPanel serverURL stuck nil after late server start); Cluster 1 ordering verified 2 ways; readContentFile keeps Task.detached (recorded decision: blocking I/O off-main). Closes victor-str. Manual checklist items added to USER list | victor-sc6/str | **done** | this commit |
+
+**Next up:** WP3.7 (orchestrator: Swift 6 flip — verify 0-warning clean build, SWIFT_VERSION 6.0, xcodegen, clean build 0 errors, full suite) → WP3.6 (Task.detached audit + M4 grab-bag, Sonnet) → 3.R (Opus; scrutinize FileRowView nonisolated(unsafe) + AsyncStream behavior) → Phase 3 gate.
 
 **USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
 7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.
