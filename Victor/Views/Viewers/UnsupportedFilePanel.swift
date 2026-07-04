@@ -80,10 +80,7 @@ struct UnsupportedFilePanel: View {
 
             // Modification date
             if let date = attributes[.modificationDate] as? Date {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .medium
-                formatter.timeStyle = .short
-                modificationDate = formatter.string(from: date)
+                modificationDate = date.formatted(date: .abbreviated, time: .shortened)
             }
         } catch {
             // Keep defaults

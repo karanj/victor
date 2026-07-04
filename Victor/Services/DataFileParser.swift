@@ -18,9 +18,11 @@ final class DataFileParser: @unchecked Sendable {
     /// (WP3.5 Cluster 13) — this method already only ever runs from `@MainActor` callers.
     @MainActor
     func parseDataFile(at url: URL) async throws -> DataFile {
-        let content = try await Task.detached {
-            try String(contentsOf: url, encoding: .utf8)
-        }.value
+        // `parseDataFile` is `@MainActor`, so this read needs to genuinely leave that
+        // actor - `readFileContentsOffActor` (shared `nonisolated` helper) replaces
+        // `Task.detached` here (victor-tdt audit): same "off the actor" effect, but
+        // stays inside the caller's structured task.
+        let content = try await readFileContentsOffActor(at: url)
 
         guard let format = DataFormat.from(url: url) else {
             throw DataFileError.unsupportedFormat

@@ -187,15 +187,11 @@ struct EditorActions {
     var hasUnsavedChanges: () -> Bool
 }
 
-struct EditorActionsKey: FocusedValueKey {
-    typealias Value = EditorActions
-}
-
 extension FocusedValues {
-    var editorActions: EditorActionsKey.Value? {
-        get { self[EditorActionsKey.self] }
-        set { self[EditorActionsKey.self] = newValue }
-    }
+    /// `@Entry` (victor-mod grab-bag item 4) generates the `FocusedValueKey` type and
+    /// getter/setter boilerplate the manual pattern above used to need - available on
+    /// this project's toolchain (Xcode 26.3 / Swift 6.2), so this isn't gated.
+    @Entry var editorActions: EditorActions?
 }
 
 @main

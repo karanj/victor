@@ -36,15 +36,6 @@ enum FrontmatterError: LocalizedError {
 final class FrontmatterParser: @unchecked Sendable {
     static let shared = FrontmatterParser()
 
-    /// Cached date formatter for Hugo dates (avoids creating new formatter on each call)
-    private static let hugoDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
-        return formatter
-    }()
-
     /// Known fields that are handled explicitly (not stored in customFields)
     private static let knownFields: Set<String> = [
         // Essential
@@ -616,6 +607,13 @@ final class FrontmatterParser: @unchecked Sendable {
     }
 
     /// Parse date string (supports multiple Hugo date formats)
+    /// Deliberately still `DateFormatter`, not `Date.ParseStrategy` (victor-mod item 2
+    /// exception): this is a lenient fallback *parse* cascade over untrusted, hand-edited
+    /// frontmatter content, not a fixed-format *format* call - `Date.ParseStrategy`
+    /// doesn't have a graceful "try, return nil on mismatch" API surface as clean as
+    /// `DateFormatter.date(from:)`, and re-deriving four format/locale/timezone
+    /// combinations' exact leniency (optional offsets, optional seconds) against real
+    /// Hugo content risked behavior changes for a P4 grab-bag item. Left as-is.
     private func parseDate(_ dateString: String) -> Date? {
         let formatters = [
             "yyyy-MM-dd'T'HH:mm:ssZ",      // ISO 8601 with timezone
@@ -1061,7 +1059,9 @@ final class FrontmatterParser: @unchecked Sendable {
     }
 
     /// Format date for Hugo (uses simple date format: yyyy-MM-dd)
+    /// `Date.VerbatimFormatStyle` values are cheap, immutable value types - no caching
+    /// needed the way the old per-class `DateFormatter` instance was (victor-mod item 2).
     private func formatDate(_ date: Date) -> String {
-        return Self.hugoDateFormatter.string(from: date)
+        date.formatted(Date.VerbatimFormatStyle.hugoDateOnly(timeZone: .current))
     }
 }

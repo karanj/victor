@@ -66,7 +66,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 3.7 | **SWIFT_VERSION = 6.0.** Orchestrator-gated: independent 0-warning clean-build verification, flip, clean build 0 errors, full suite green. Data-race safety is now a compile error. victor-sc6 + victor-str closed (29 open) | victor-sc6 | **done** | this commit |
 
-**Next up:** WP3.6 (Task.detached audit + M4 grab-bag, Sonnet — now under Swift 6 errors) → 3.R (Opus; scrutinize FileRowView nonisolated(unsafe) + AsyncStream behavior + WP3.5's undocumented-gap fixes) → Phase 3 gate (full suite + USER manual: server-lifecycle stream checks, asset-grid scroll, visual light/dark/reduce-motion passes).
+| 3.6 | Task.detached audit: 14 converted to nonisolated async (semantics verified empirically w/ pthread probe), 1 kept+justified (readContentFile); OffActorFileIO helper dedupes 6 read sites. M4: os.Logger engine (categories+privacy), Date.FormatStyle in 7 files (parseDate cascade kept on DateFormatter, documented), FileCoordinationHelper w/ OSAllocatedUnfairLock (Swift 6 rejected the naive guard — flip already paying off) + 4 tests, @Entry macro for FocusedValues. 480/480, zero warnings | victor-tdt/mod | **done** | this commit |
+
+**Next up:** 3.R (Opus review of d2d8832..HEAD; scrutiny list: FileRowView nonisolated(unsafe), AsyncStream behavior surface, WP3.5 undocumented-gap fixes, WP3.6 nonisolated conversions, FileCoordinationHelper lock design) → Phase 3 gate: full suite, push, USER manual checklist.
 
 **USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
 7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.

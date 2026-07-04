@@ -109,9 +109,10 @@ struct TextViewerPanel: View {
         errorMessage = nil
 
         do {
-            let loadedContent = try await Task.detached {
-                try String(contentsOf: url, encoding: .utf8)
-            }.value
+            // `readFileContentsOffActor` (shared `nonisolated` helper) replaces
+            // `Task.detached` here (victor-tdt audit) - gets the blocking read off
+            // whatever actor this SwiftUI `View`'s method runs on.
+            let loadedContent = try await readFileContentsOffActor(at: url)
 
             await MainActor.run {
                 self.content = loadedContent

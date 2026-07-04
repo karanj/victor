@@ -1023,13 +1023,16 @@ class SiteViewModel {
     /// Load content for a text file node (non-markdown)
     private func loadTextFileContent(for node: FileNode) async {
         do {
-            // Extract the Sendable URL before crossing into Task.detached - the
-            // closure must not capture `node` itself (a non-Sendable FileNode class),
+            // Extract the Sendable URL before crossing the actor boundary - the
+            // read must not capture `node` itself (a non-Sendable FileNode class),
             // same boundary-snapshot fix as Cluster 1's ContentFile handling.
+            // `readFileContentsOffActor` (shared `nonisolated` helper) replaces
+            // `Task.detached` here (victor-tdt audit): `SiteViewModel` is `@MainActor`,
+            // so this still needs to leave the actor for the blocking read, but a plain
+            // `nonisolated async` call does that while staying in the caller's
+            // structured task.
             let url = node.url
-            let content = try await Task.detached {
-                try String(contentsOf: url, encoding: .utf8)
-            }.value
+            let content = try await readFileContentsOffActor(at: url)
 
             let attributes = try FileManager.default.attributesOfItem(atPath: node.url.path)
             let modificationDate = attributes[.modificationDate] as? Date ?? Date()

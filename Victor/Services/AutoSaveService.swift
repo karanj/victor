@@ -135,11 +135,11 @@ actor AutoSaveService {
             // If content is the same, no conflict - just proceed with save
         }
 
-        // Perform the save with NSFileCoordinator
-        return try await withCheckedThrowingContinuation { continuation in
+        // Perform the save with NSFileCoordinator (victor-mod: shared `withFileCoordination`
+        // helper replaces the hand-rolled continuation + didResume dance)
+        return try await withFileCoordination { resume in
             let coordinator = NSFileCoordinator()
             var coordinatorError: NSError?
-            var didResume = false
 
             coordinator.coordinate(writingItemAt: fileURL, options: .forReplacing, error: &coordinatorError) { url in
                 do {
@@ -153,35 +153,30 @@ actor AutoSaveService {
                     let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
                     let newModificationDate = attributes[.modificationDate] as? Date ?? Date()
 
-                    continuation.resume(returning: newModificationDate)
-                    didResume = true
+                    resume(.success(newModificationDate))
                 } catch {
-                    continuation.resume(throwing: error)
-                    didResume = true
+                    resume(.failure(error))
                 }
             }
 
-            // Only resume here if the coordination block was never executed
-            // (coordinatorError is set when coordination fails before the block runs)
-            if !didResume, let error = coordinatorError {
-                continuation.resume(throwing: error)
-            }
+            return coordinatorError
         }
     }
 
-    /// Get the modification date of a file (runs on background thread)
-    private func getFileModificationDate(url: URL) async throws -> Date {
-        try await Task.detached {
-            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-            return attributes[.modificationDate] as? Date ?? Date()
-        }.value
+    /// Get the modification date of a file, off the actor.
+    /// `nonisolated` replaces `Task.detached` here (victor-tdt audit): this private
+    /// method was actor-isolated purely by inheriting `AutoSaveService`'s isolation, not
+    /// because it touches any actor state - `nonisolated` already gets the blocking
+    /// `FileManager` call off the actor's executor under this project's current
+    /// `NonisolatedNonsendingByDefault = false` default, without spawning a detached task.
+    private nonisolated func getFileModificationDate(url: URL) async throws -> Date {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return attributes[.modificationDate] as? Date ?? Date()
     }
 
-    /// Get the current content of a file (runs on background thread)
-    private func getFileContent(url: URL) async throws -> String {
-        try await Task.detached {
-            try String(contentsOf: url, encoding: .utf8)
-        }.value
+    /// Get the current content of a file, off the actor (see `getFileModificationDate` above).
+    private nonisolated func getFileContent(url: URL) async throws -> String {
+        try await readFileContentsOffActor(at: url)
     }
 }
 

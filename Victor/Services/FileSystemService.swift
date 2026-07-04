@@ -348,35 +348,36 @@ final class FileSystemService: @unchecked Sendable {
         )
     }
 
-    /// Write content to file at URL
-    /// File I/O is performed on a background thread to avoid blocking the main thread
+    /// Write content to file at URL, off the caller's actor.
+    /// `writeFile` itself carries no actor annotation (`FileSystemService` is a plain
+    /// `@unchecked Sendable` class, not `@MainActor`), so being `nonisolated async` is
+    /// already enough to leave the caller's actor (verified for the victor-tdt audit) -
+    /// `Task.detached` here was doing a job the function signature already did, so it's
+    /// removed rather than converted to a helper.
     func writeFile(to url: URL, content: String) async throws {
-        // Perform file I/O on background thread
-        try await Task.detached {
-            let coordinator = NSFileCoordinator()
-            var coordinatorError: NSError?
-            var writeError: Error?
+        let coordinator = NSFileCoordinator()
+        var coordinatorError: NSError?
+        var writeError: Error?
 
-            coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
-                do {
-                    // Write directly (not atomically) so Hugo's file watcher can detect
-                    // which file changed for --navigateToChanged. Atomic writes use rename
-                    // which Hugo can't associate with the content file path.
-                    // Risk is minimal since Hugo content is typically git-tracked.
-                    try content.write(to: coordinatedURL, atomically: false, encoding: .utf8)
-                } catch {
-                    writeError = error
-                }
+        coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
+            do {
+                // Write directly (not atomically) so Hugo's file watcher can detect
+                // which file changed for --navigateToChanged. Atomic writes use rename
+                // which Hugo can't associate with the content file path.
+                // Risk is minimal since Hugo content is typically git-tracked.
+                try content.write(to: coordinatedURL, atomically: false, encoding: .utf8)
+            } catch {
+                writeError = error
             }
+        }
 
-            // Check for errors
-            if let error = coordinatorError {
-                throw error
-            }
-            if let error = writeError {
-                throw error
-            }
-        }.value
+        // Check for errors
+        if let error = coordinatorError {
+            throw error
+        }
+        if let error = writeError {
+            throw error
+        }
     }
 
     /// Write content file to disk.
@@ -403,9 +404,7 @@ final class FileSystemService: @unchecked Sendable {
         }
 
         // Generate a base name from the current date: YYYY-MM-DD
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let dateString = formatter.string(from: Date())
+        let dateString = Date().formatted(Date.VerbatimFormatStyle.hugoDateOnly())
         let baseName = dateString
         var candidateName = "\(baseName).md"
         var index = 1
@@ -470,26 +469,23 @@ final class FileSystemService: @unchecked Sendable {
             throw FileError.fileAlreadyExists
         }
 
-        let coordinator = NSFileCoordinator()
-        var coordinatorError: NSError?
-
-        return try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
+        // victor-mod: shared `withFileCoordination` helper replaces the hand-rolled
+        // continuation + didResume dance (also used by AutoSaveService.performSave and
+        // duplicateFile below).
+        return try await withFileCoordination { resume in
+            let coordinator = NSFileCoordinator()
+            var coordinatorError: NSError?
 
             coordinator.coordinate(writingItemAt: url, options: .forMoving, writingItemAt: newURL, options: .forReplacing, error: &coordinatorError) { oldURL, targetURL in
                 do {
                     try FileManager.default.moveItem(at: oldURL, to: targetURL)
-                    continuation.resume(returning: targetURL)
-                    didResume = true
+                    resume(.success(targetURL))
                 } catch {
-                    continuation.resume(throwing: error)
-                    didResume = true
+                    resume(.failure(error))
                 }
             }
 
-            if !didResume, let error = coordinatorError {
-                continuation.resume(throwing: error)
-            }
+            return coordinatorError
         }
     }
 
@@ -511,26 +507,21 @@ final class FileSystemService: @unchecked Sendable {
             newURL = directory.appendingPathComponent(newName)
         }
 
-        let coordinator = NSFileCoordinator()
-        var coordinatorError: NSError?
-
-        return try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
+        // victor-mod: shared `withFileCoordination` helper (see renameFile above).
+        return try await withFileCoordination { resume in
+            let coordinator = NSFileCoordinator()
+            var coordinatorError: NSError?
 
             coordinator.coordinate(readingItemAt: url, options: [], writingItemAt: newURL, options: .forReplacing, error: &coordinatorError) { sourceURL, destURL in
                 do {
                     try fileManager.copyItem(at: sourceURL, to: destURL)
-                    continuation.resume(returning: destURL)
-                    didResume = true
+                    resume(.success(destURL))
                 } catch {
-                    continuation.resume(throwing: error)
-                    didResume = true
+                    resume(.failure(error))
                 }
             }
 
-            if !didResume, let error = coordinatorError {
-                continuation.resume(throwing: error)
-            }
+            return coordinatorError
         }
     }
 
@@ -666,24 +657,25 @@ final class FileSystemService: @unchecked Sendable {
 
     /// Read only the frontmatter portion of a markdown file (first ~4KB)
     /// This is much faster than reading the entire file for large content
+    /// Off the caller's actor: `readFrontmatterOnly` is `nonisolated async` on a plain
+    /// (non-`@MainActor`) class, which already leaves the caller's actor for its whole
+    /// body - `Task.detached` was redundant here (victor-tdt audit), so it's removed.
     func readFrontmatterOnly(at url: URL) async -> FileStatusMetadata? {
-        await Task.detached {
-            do {
-                // Read first 4KB - more than enough for any reasonable frontmatter
-                let handle = try FileHandle(forReadingFrom: url)
-                defer { try? handle.close() }
+        do {
+            // Read first 4KB - more than enough for any reasonable frontmatter
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
 
-                let data = handle.readData(ofLength: 4096)
-                guard let content = String(data: data, encoding: .utf8) else {
-                    return nil
-                }
-
-                return FrontmatterParser.shared.parseStatusMetadata(from: content)
-            } catch {
-                Logger.shared.debug("Failed to read frontmatter from \(url.lastPathComponent): \(error.localizedDescription)")
+            let data = handle.readData(ofLength: 4096)
+            guard let content = String(data: data, encoding: .utf8) else {
                 return nil
             }
-        }.value
+
+            return FrontmatterParser.shared.parseStatusMetadata(from: content)
+        } catch {
+            Logger.shared.debug("Failed to read frontmatter from \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
     }
 
     /// Batch load status metadata for multiple files

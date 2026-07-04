@@ -13,10 +13,18 @@ enum LogLevel: Int, Comparable {
     }
 }
 
-/// Centralized logging service for consistent error reporting and debugging
+/// Centralized logging service for consistent error reporting and debugging.
 /// `minLevel` is assigned once via `#if DEBUG` and never reassigned elsewhere,
-/// so it's a `let` — combined with `OSLog` itself being `Sendable`, that makes
+/// so it's a `let` — combined with `os.Logger` itself being `Sendable`, that makes
 /// this whole type safe to hand across actor boundaries without `@unchecked`.
+///
+/// Engine: `os.Logger` (structured logging), not the raw `os_log`/`OSLog` API. Every
+/// call site keeps calling `Logger.shared.debug(...)`/`info`/`warning`/`error` exactly
+/// as before - this is a swap of what runs underneath the facade, not a call-site
+/// migration. `category` is new (defaults to `"general"`, the only category this app
+/// used previously) - passing one buckets a call under its own `os.Logger` subsystem
+/// category without touching the ~109 existing call sites, which all keep using the
+/// default.
 final class Logger: Sendable {
     static let shared = Logger()
 
@@ -26,28 +34,32 @@ final class Logger: Sendable {
     let minLevel: LogLevel = .warning
     #endif
 
-    private let osLog = OSLog(subsystem: "com.victor.app", category: "general")
+    private static let subsystem = "com.victor.app"
+
+    /// Default category for call sites that don't specify one - matches the single
+    /// `"general"` category the old `OSLog` engine always used.
+    static let defaultCategory = "general"
 
     private init() {}
 
-    func debug(_ message: String, file: String = #file, line: Int = #line) {
-        log(level: .debug, message: message, file: file, line: line)
+    func debug(_ message: String, category: String = Logger.defaultCategory, file: String = #file, line: Int = #line) {
+        log(level: .debug, message: message, category: category, file: file, line: line)
     }
 
-    func info(_ message: String, file: String = #file, line: Int = #line) {
-        log(level: .info, message: message, file: file, line: line)
+    func info(_ message: String, category: String = Logger.defaultCategory, file: String = #file, line: Int = #line) {
+        log(level: .info, message: message, category: category, file: file, line: line)
     }
 
-    func warning(_ message: String, file: String = #file, line: Int = #line) {
-        log(level: .warning, message: message, file: file, line: line)
+    func warning(_ message: String, category: String = Logger.defaultCategory, file: String = #file, line: Int = #line) {
+        log(level: .warning, message: message, category: category, file: file, line: line)
     }
 
-    func error(_ message: String, error: Error? = nil, file: String = #file, line: Int = #line) {
+    func error(_ message: String, error: Error? = nil, category: String = Logger.defaultCategory, file: String = #file, line: Int = #line) {
         let fullMessage = error != nil ? "\(message): \(error!.localizedDescription)" : message
-        log(level: .error, message: fullMessage, file: file, line: line)
+        log(level: .error, message: fullMessage, category: category, file: file, line: line)
     }
 
-    private func log(level: LogLevel, message: String, file: String, line: Int) {
+    private func log(level: LogLevel, message: String, category: String, file: String, line: Int) {
         guard level >= minLevel else { return }
 
         let fileName = (file as NSString).lastPathComponent
@@ -57,17 +69,24 @@ final class Logger: Sendable {
         print("\(prefix) - \(message)")
         #endif
 
-        os_log("%{public}@ - %{public}@", log: osLog, type: level.osLogType, prefix, message)
-    }
-}
+        // `os.Logger` values are cheap, immutable, plain-data wrappers around the
+        // subsystem/category pair - no caching needed, unlike the old class-based `OSLog`.
+        let osLogger = os.Logger(subsystem: Self.subsystem, category: category)
 
-private extension LogLevel {
-    var osLogType: OSLogType {
-        switch self {
-        case .debug: return .debug
-        case .info: return .info
-        case .warning: return .default
-        case .error: return .error
+        // Explicit `privacy: .public` per interpolated value - the direct replacement
+        // for the old `os_log("%{public}@ - %{public}@", ...)` format string. Both
+        // `prefix` (source location) and `message` are internal diagnostic strings with
+        // no user content, so `.public` (unredacted in Console.app) is correct here,
+        // same as before.
+        switch level {
+        case .debug:
+            osLogger.debug("\(prefix, privacy: .public) - \(message, privacy: .public)")
+        case .info:
+            osLogger.info("\(prefix, privacy: .public) - \(message, privacy: .public)")
+        case .warning:
+            osLogger.warning("\(prefix, privacy: .public) - \(message, privacy: .public)")
+        case .error:
+            osLogger.error("\(prefix, privacy: .public) - \(message, privacy: .public)")
         }
     }
 }

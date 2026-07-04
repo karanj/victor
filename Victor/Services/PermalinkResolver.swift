@@ -104,18 +104,12 @@ struct PermalinkResolver {
         result = result.replacingOccurrences(of: ":yearday", with: String(format: "%03d", dayOfYear))
 
         // Month name (use POSIX locale for consistency with Hugo)
-        let monthFormatter = DateFormatter()
-        monthFormatter.timeZone = utc
-        monthFormatter.locale = Locale(identifier: "en_US_POSIX")
-        monthFormatter.dateFormat = "MMMM"
-        result = result.replacingOccurrences(of: ":monthname", with: monthFormatter.string(from: date).lowercased())
+        let monthName = date.formatted(Date.VerbatimFormatStyle.hugoMonthName(timeZone: utc))
+        result = result.replacingOccurrences(of: ":monthname", with: monthName.lowercased())
 
         // Weekday
-        let weekdayFormatter = DateFormatter()
-        weekdayFormatter.timeZone = utc
-        weekdayFormatter.locale = Locale(identifier: "en_US_POSIX")
-        weekdayFormatter.dateFormat = "EEEE"
-        result = result.replacingOccurrences(of: ":weekdayname", with: weekdayFormatter.string(from: date).lowercased())
+        let weekdayName = date.formatted(Date.VerbatimFormatStyle.hugoWeekdayName(timeZone: utc))
+        result = result.replacingOccurrences(of: ":weekdayname", with: weekdayName.lowercased())
         result = result.replacingOccurrences(of: ":weekday", with: String(comps.weekday ?? 0))
 
         // Content tokens

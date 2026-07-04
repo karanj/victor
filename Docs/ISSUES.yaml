@@ -727,7 +727,7 @@ issues:
 
   - id: victor-tdt
     title: "Task.detached audit: default to nonisolated async functions"
-    status: open
+    status: done
     priority: P3
     type: task
     files: [19 uses across 12 files - see grep Task.detached]
@@ -740,7 +740,7 @@ issues:
 
   - id: victor-mod
     title: "Small modernisation wins (grab-bag, individually droppable)"
-    status: open
+    status: done
     priority: P4
     type: task
     files:

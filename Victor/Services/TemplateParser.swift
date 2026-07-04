@@ -66,13 +66,21 @@ final class TemplateParser: @unchecked Sendable {
     @MainActor
     func save(_ template: Template) async throws {
         // Capture only the Sendable primitives the write needs - never the
-        // model object itself - before crossing into Task.detached.
+        // model object itself - before crossing the actor boundary.
         let url = template.url
         let content = template.content
-        try await Task.detached {
-            try content.write(to: url, atomically: true, encoding: .utf8)
-        }.value
+        try await writeTemplateContent(content, to: url)
         template.markAsSaved()
+    }
+
+    /// Off-actor write for `save(_:)` above. `nonisolated` replaces `Task.detached`
+    /// (victor-tdt audit): `save` is `@MainActor`, so this private helper needs to
+    /// actually leave that actor for the blocking write - `nonisolated async` does
+    /// that under this project's current default, while keeping the call inside the
+    /// caller's structured task (priority/cancellation/task-locals still propagate,
+    /// unlike a genuinely detached task).
+    private nonisolated func writeTemplateContent(_ content: String, to url: URL) async throws {
+        try content.write(to: url, atomically: true, encoding: .utf8)
     }
 
     // MARK: - Private Extraction Methods

@@ -34,10 +34,13 @@ final class HugoConfigParser: @unchecked Sendable {
     // MARK: - Parsing
 
     /// Parse a Hugo config file from disk
+    /// `parseConfig` carries no actor annotation (`HugoConfigParser` is a plain
+    /// `@unchecked Sendable` class), so being `nonisolated async` is already enough to
+    /// leave the caller's actor for this whole function body (verified for the
+    /// victor-tdt audit) - `Task.detached` here was redundant, so it's removed rather
+    /// than converted to a helper.
     func parseConfig(at url: URL) async throws -> HugoConfig {
-        let content = try await Task.detached {
-            try String(contentsOf: url, encoding: .utf8)
-        }.value
+        let content = try String(contentsOf: url, encoding: .utf8)
 
         let format = ConfigFormat(filename: url.lastPathComponent) ?? .toml
         let dictionary = try parse(content: content, format: format)
@@ -204,10 +207,10 @@ final class HugoConfigParser: @unchecked Sendable {
     // MARK: - Raw Content
 
     /// Read raw file content from disk
+    /// Same reasoning as `parseConfig` above: already `nonisolated async` on a
+    /// non-`@MainActor` class, so `Task.detached` was redundant here.
     func readRawContent(from url: URL) async throws -> String {
-        try await Task.detached {
-            try String(contentsOf: url, encoding: .utf8)
-        }.value
+        try String(contentsOf: url, encoding: .utf8)
     }
 }
 

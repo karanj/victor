@@ -181,9 +181,7 @@ class Archetype: @MainActor EditableFile {
     ///   - additionalParams: Additional template parameters
     /// - Returns: The processed content string
     func processTemplate(title: String, date: Date = Date(), additionalParams: [String: String] = [:]) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate, .withTime, .withDashSeparatorInDate, .withColonSeparatorInTime]
-        let dateString = dateFormatter.string(from: date)
+        let dateString = date.formatted(Date.ISO8601FormatStyle.hugoArchetypeTimestamp)
 
         // Process frontmatter
         var processedFrontmatter = frontmatterContent

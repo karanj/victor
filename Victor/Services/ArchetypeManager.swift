@@ -66,9 +66,9 @@ final class ArchetypeManager: @unchecked Sendable {
     /// (WP3.5 Cluster 13) — this method already only ever runs from `@MainActor` callers.
     @MainActor
     func parseArchetype(at url: URL) async throws -> Archetype {
-        let content = try await Task.detached {
-            try String(contentsOf: url, encoding: .utf8)
-        }.value
+        // Off-actor read (victor-tdt audit): see `DataFileParser.parseDataFile`'s
+        // identical comment for why `readFileContentsOffActor` replaces `Task.detached`.
+        let content = try await readFileContentsOffActor(at: url)
 
         let (frontmatter, body, format) = parseFrontmatterAndBody(content)
 
@@ -222,9 +222,7 @@ final class ArchetypeManager: @unchecked Sendable {
 
     /// Generate the default archetype content (used when no archetypes exist)
     func defaultArchetypeContent(title: String, date: Date = Date()) -> String {
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate, .withTime, .withDashSeparatorInDate, .withColonSeparatorInTime]
-        let dateString = dateFormatter.string(from: date)
+        let dateString = date.formatted(Date.ISO8601FormatStyle.hugoArchetypeTimestamp)
 
         return """
         ---

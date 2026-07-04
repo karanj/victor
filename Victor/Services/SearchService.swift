@@ -188,28 +188,31 @@ actor SearchService {
         return matchCount
     }
 
-    /// Write content to file with coordination
-    private func writeFile(to url: URL, content: String) async throws {
-        try await Task.detached {
-            let coordinator = NSFileCoordinator()
-            var coordinatorError: NSError?
-            var writeError: Error?
+    /// Write content to file with coordination.
+    /// `nonisolated` replaces `Task.detached` here (victor-tdt audit): `SearchService`
+    /// is an `actor`, so this private method was actor-isolated purely by inheriting
+    /// that isolation, not because it touches actor state - `nonisolated` already gets
+    /// the blocking coordinated write off the actor's executor under this project's
+    /// current default, without spawning a detached task.
+    private nonisolated func writeFile(to url: URL, content: String) async throws {
+        let coordinator = NSFileCoordinator()
+        var coordinatorError: NSError?
+        var writeError: Error?
 
-            coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
-                do {
-                    try content.write(to: coordinatedURL, atomically: true, encoding: .utf8)
-                } catch {
-                    writeError = error
-                }
+        coordinator.coordinate(writingItemAt: url, options: [], error: &coordinatorError) { coordinatedURL in
+            do {
+                try content.write(to: coordinatedURL, atomically: true, encoding: .utf8)
+            } catch {
+                writeError = error
             }
+        }
 
-            if let error = coordinatorError {
-                throw error
-            }
-            if let error = writeError {
-                throw error
-            }
-        }.value
+        if let error = coordinatorError {
+            throw error
+        }
+        if let error = writeError {
+            throw error
+        }
     }
 
     // MARK: - File Collection

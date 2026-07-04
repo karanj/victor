@@ -121,13 +121,10 @@ struct ImageViewerPanel: View {
         errorMessage = nil
 
         do {
-            // Load image on background thread
-            let loadedImage = try await Task.detached {
-                guard let image = NSImage(contentsOf: url) else {
-                    throw ImageError.failedToLoad
-                }
-                return image
-            }.value
+            // Off the actor for the blocking `NSImage(contentsOf:)` load. `nonisolated`
+            // replaces `Task.detached` here (victor-tdt audit) - same effect, but stays
+            // inside this view's structured task.
+            let loadedImage = try await Self.loadImage(at: url)
 
             await MainActor.run {
                 self.image = loadedImage
@@ -139,6 +136,13 @@ struct ImageViewerPanel: View {
                 self.isLoading = false
             }
         }
+    }
+
+    private nonisolated static func loadImage(at url: URL) async throws -> NSImage {
+        guard let image = NSImage(contentsOf: url) else {
+            throw ImageError.failedToLoad
+        }
+        return image
     }
 }
 
