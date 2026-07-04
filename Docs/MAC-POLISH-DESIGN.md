@@ -219,10 +219,12 @@ sidebar → editor → inspector. `focusSection()` on the three panes;
 Cmd+Option+← /→ to move focus between panes (Xcode convention).
 
 **W5.2 Shortcut coherence pass.** One table of all shortcuts (doc appendix +
-Help menu item "Keyboard Shortcuts"). **Decided 2026-07-04:** Cmd+P goes to
-Quick Open (editor convention) when victor-qop ships; until then it keeps
-focusing sidebar search. Sidebar filter focus moves to Cmd+Option+F (Xcode's
-filter-in-navigator idiom). Cmd+Shift+F stays Find in Files.
+Help menu item "Keyboard Shortcuts"). **Decided 2026-07-04, corrected same
+day:** Cmd+P goes to Quick Open (editor convention) when victor-qop ships;
+until then it is unbound. Sidebar filter focus moves to **Cmd+Option+J** —
+the original decision said Cmd+Option+F "per Xcode's filter idiom", but
+Xcode's navigator filter is actually ⌥⌘J; ⌥⌘F is the platform-standard Find
+and Replace chord and stays there. Cmd+Shift+F stays Find in Files.
 
 **W5.3 VoiceOver.** Execute victor-3l6 (already ticketed, P4) as part of this
 phase rather than "later" — polish that ignores VoiceOver isn't polish.
@@ -375,3 +377,139 @@ revisions. Execution sequencing lives in
 3. **Toolbar customization** (`toolbar(id:)`) historically had SwiftUI quirks with conditional items (items that appear only when a site is open). Prototype with the server controls first; if placement persistence misbehaves, fall back to a static toolbar and drop W1.3 rather than fighting it.
 4. **Notification permission prompts** annoy users if mistimed — request only on first *background* build failure, not at launch.
 5. **Sandbox + dropped folders:** verify security-scoped bookmark minting works for Dock-dropped URLs on a clean install (no prior grant).
+
+## Appendix: Keyboard shortcuts
+
+Full inventory as of victor-kbd (W5.1–W5.2), 2026-07-04. Grep source:
+`grep -rn "keyboardShortcut" Victor`. A live copy of the table below (minus
+the "Where defined" column) ships in the app itself via Help > Keyboard
+Shortcuts (`Victor/Views/Shared/KeyboardShortcutsView.swift`); keep both in
+sync when a shortcut changes.
+
+### Edit menu — Find
+
+| Shortcut | Action | Where defined |
+|----------|--------|----------------|
+| ⌘F | Find… | `VictorApp.swift` |
+| ⌘G | Find Next | `VictorApp.swift` |
+| ⇧⌘G | Find Previous | `VictorApp.swift` |
+| ⌘E | Use Selection for Find | `VictorApp.swift` |
+| ⌥⌘F | Find and Replace… | `VictorApp.swift` — platform-standard chord, kept (see Collisions below) |
+| ⇧⌘F | Find in Files… | `VictorApp.swift` |
+
+### File menu
+
+| Shortcut | Action | Where defined |
+|----------|--------|----------------|
+| ⌘N | New Post… | `VictorApp.swift` |
+| ⇧⌘N | New Folder | `VictorApp.swift` |
+| ⌘O | Open Hugo Site… | `VictorApp.swift` |
+| ⇧⌘W | Close Site | `VictorApp.swift` |
+| ⌘S | Save | `VictorApp.swift` (menu, routed through `editorActions.save`); also owned locally by `EditorToolbarButtons.swift`'s `EditorSaveButton` for the Config/Data/Translation/Template/Archetype editors, which don't publish `editorActions` — see Collisions below for why this isn't a runtime clash |
+| ⌥⌘S | Save All | `VictorApp.swift` |
+| ⌥⌘R | Reveal in Finder | `VictorApp.swift` |
+
+### Format menu
+
+| Shortcut | Action | Where defined |
+|----------|--------|----------------|
+| ⌘B | Bold | `VictorApp.swift` |
+| ⌘I | Italic | `VictorApp.swift` |
+| ⌘K | Insert Link | `VictorApp.swift` |
+| ⇧⌘I | Insert Image | `VictorApp.swift` |
+| ⇧⌘K | Insert Shortcode… | `VictorApp.swift` |
+| ⌘' | Block Quote | `VictorApp.swift` |
+
+### View menu
+
+| Shortcut | Action | Where defined |
+|----------|--------|----------------|
+| ⌃⌘S | Toggle Sidebar | `VictorApp.swift` |
+| ⌥⌘J | Search Files (sidebar filter) | `VictorApp.swift` — **moved from ⌘P 2026-07-04** (W5.2 decision, corrected: ⌥⌘J is Xcode's real navigator-filter chord); ⌘P is reserved for Quick Open (victor-qop) and is currently unbound to anything |
+| ⌘1 | Editor Only | `VictorApp.swift` |
+| ⌘2 | Preview Only | `VictorApp.swift` |
+| ⌘3 | Split View | `VictorApp.swift` |
+| ⌥⌘← | Focus Previous Pane | `VictorApp.swift` (new, W5.1) |
+| ⌥⌘→ | Focus Next Pane | `VictorApp.swift` (new, W5.1) |
+| ⌥⌘I | Show/Hide Inspector | `VictorApp.swift` |
+| ⌃⌘F | Enter/Exit Focus Mode | `VictorApp.swift` |
+
+### Go menu (W2.2)
+
+| Shortcut | Action | Where defined |
+|----------|--------|----------------|
+| ⌃⌘← | Back | `VictorApp.swift` |
+| ⌃⌘→ | Forward | `VictorApp.swift` |
+
+### Dialogs, popovers, and panels (not menu-bar items)
+
+| Shortcut | Action | Where defined |
+|----------|--------|----------------|
+| Esc (`.cancelAction`) | Cancel/dismiss the presented dialog | `NewArchetypeView.swift`, `NewDataFileView.swift`, `GlobalSearchView.swift`, `NewContentView.swift`, `ServerConfigPopover.swift`, `NewTranslationFileView.swift` |
+| Esc (explicit `.escape`) | Cancel the shortcode form | `ShortcodeFormView.swift` |
+| ⏎ (`.defaultAction`) | Confirm the presented dialog's primary button | `NewArchetypeView.swift`, `NewDataFileView.swift`, `NewContentView.swift`, `ServerConfigPopover.swift`, `NewTranslationFileView.swift` |
+| ⏎ (explicit `.return`) | Insert the shortcode | `ShortcodeFormView.swift` |
+| Space | Toggle Quick Look preview | `AssetDetailPanel.swift` |
+
+Each of these is scoped to its own sheet/popover (only one is on screen at a
+time), so despite several files reusing Esc/⏎, there's no menu-bar-level
+collision — the responder chain routes the key to whichever
+sheet/popover is actually presented.
+
+### Collisions found and resolved
+
+Auditing every `.keyboardShortcut` call for this ticket surfaced one real
+collision and one pattern worth documenting so it isn't mistaken for a bug
+later:
+
+1. **⌥⌘F: sidebar filter vs. Find and Replace… (real collision, resolved —
+   resolution corrected 2026-07-04).** The original W5.2 decision locked ⌥⌘F
+   for the sidebar filter "per Xcode's filter idiom", but that premise was
+   wrong: Xcode's navigator filter is **⌥⌘J**; ⌥⌘F is the platform-standard
+   Find-and-Replace chord (Xcode, TextEdit), which Victor's Find menu already
+   used correctly. First-pass resolution displaced Find and Replace to a
+   nonstandard ⇧⌘R; the corrected resolution restores **⌥⌘F = Find and
+   Replace…** (platform standard, no muscle-memory break) and gives the
+   sidebar filter **⌥⌘J** (the actual Xcode idiom the decision intended).
+   No chord is double-bound.
+2. **⌘S: File > Save vs. `EditorSaveButton`'s local ⌘S (apparent collision,
+   not a real one).** `EditorToolbarButtons.swift`'s `EditorSaveButton` keeps
+   its own `.keyboardShortcut("s", modifiers: .command)`, and is used by the
+   Config/Data/Translation/Template/Archetype editors. Those editors don't
+   publish `editorActions` via `FocusedValue`, so the File > Save menu item
+   is `.disabled` whenever one of them is showing (`editorActions == nil`) —
+   the two ⌘S owners are mutually exclusive by construction, never both
+   enabled at once. Markdown/text editors do the opposite: they publish
+   `editorActions` and deliberately omit their own `.keyboardShortcut` on the
+   toolbar Save button (see the "No .keyboardShortcut here" comments in
+   `TextEditorPanel.swift` and `EditorPanelView.swift`), leaving the File
+   menu as sole owner. Documented here since grep alone makes this look like
+   a duplicate binding.
+3. **⌃⌘←/→ (Go Back/Forward) vs. ⌥⌘←/→ (new pane traversal) — verified
+   distinct.** Control vs. Option keeps these from colliding; both are live
+   in the View/Go menus simultaneously with no ambiguity.
+4. **Checked against common system shortcuts** (⌘Q, ⌘W, ⌘,, ⌘Z/⇧⌘Z, ⌘A/C/V/X,
+   ⌘H, ⌘M, ⌘`) — none of the app's custom bindings collide; these are all
+   left to their default system/AppKit behavior and aren't re-bound anywhere
+   in the app.
+
+### W5.1 pane-focus traversal — implementation note
+
+`.focusSection()` has no direct "move focus to the next section"
+API in SwiftUI, so Cmd+Option+Left/Right (`VictorApp.swift`, View menu) don't
+call a focus API themselves. Instead: `ContentView` declares a private
+`AppPane` enum (`.sidebar`, `.editor`, `.inspector`) and a
+`@FocusState<AppPane?>`, with `.focusable()` + `.focusSection()` +
+`.focused($focusedPane, equals:)` applied to each of the three panes. The
+menu commands can't reach that `@FocusState` directly (it lives in a
+different view than the scene-level `.commands` closure), so they set
+`SiteViewModel.paneFocusDirection` (a `PaneFocusDirection?` trigger),
+which `ContentView` observes via `.onChange` and resets to `nil` once
+consumed — the same observable-trigger shape `shouldFocusSearch` already
+used for the sidebar search field. NSWindow-level `firstResponder` juggling
+through the existing `WindowAccessor` bridge was considered and rejected:
+there's no single stable NSView to target for the "editor" pane (its content
+varies by file type — markdown editor, image viewer, config form, etc.), so
+there'd be nothing reliable to hand `makeFirstResponder`. Traversal order is
+sidebar → editor → inspector (wrapping), with inspector dropped from the
+cycle when hidden.

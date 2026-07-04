@@ -1,11 +1,34 @@
 import SwiftUI
 import AppKit
 
+/// W5.1 (victor-kbd): the three top-level panes keyboard focus can land on,
+/// left-to-right on screen. This order is what Cmd+Option+Right traverses
+/// forward through (Cmd+Option+Left reverses it) - see `ContentView.focusedPane`.
+private enum AppPane: Hashable {
+    case sidebar
+    case editor
+    case inspector
+}
+
 struct ContentView: View {
     @Bindable var siteViewModel: SiteViewModel
     @Bindable private var settings = AppSettings.shared
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var window: NSWindow?
+
+    // W5.1 (victor-kbd): which of the three panes currently holds keyboard
+    // focus. Moved by Tab/arrow-key traversal (via `.focusSection()`/
+    // `.focusable()` below) and programmatically by the View menu's
+    // Cmd+Option+Left/Right commands, relayed through
+    // `siteViewModel.paneFocusDirection` since those commands live in
+    // `VictorApp`'s scene-level `.commands`, which can't reach a
+    // `@FocusState` declared here directly. This is the same
+    // observable-trigger pattern `shouldFocusSearch` already uses for
+    // Cmd+P/Cmd+Option+F - preferred over juggling `NSWindow.firstResponder`
+    // through `WindowAccessor` because there's no single stable NSView per
+    // pane to target (the editor pane's content varies by file type), while
+    // every pane already gets a real SwiftUI focus identity for free here.
+    @FocusState private var focusedPane: AppPane?
 
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -64,6 +87,44 @@ struct ContentView: View {
         .onChange(of: siteViewModel.hasUnsavedChanges) { _, newValue in
             window?.isDocumentEdited = newValue
         }
+        .onChange(of: siteViewModel.paneFocusDirection) { _, newDirection in
+            guard let newDirection else { return }
+            movePaneFocus(newDirection)
+            siteViewModel.paneFocusDirection = nil
+        }
+    }
+
+    // MARK: - Pane Focus Traversal (W5.1)
+
+    /// Panes currently eligible for focus, left-to-right on screen. Inspector
+    /// drops out when hidden so Cmd+Option+Right/Left never "focuses" a pane
+    /// that isn't there.
+    private var availablePanes: [AppPane] {
+        var panes: [AppPane] = [.sidebar, .editor]
+        if settings.isInspectorVisible {
+            panes.append(.inspector)
+        }
+        return panes
+    }
+
+    /// Moves `focusedPane` to the next/previous pane in `availablePanes`,
+    /// wrapping around at either end. Called both by the Cmd+Option+Left/Right
+    /// menu commands (via the `paneFocusDirection` trigger above) and could be
+    /// invoked directly in tests.
+    private func movePaneFocus(_ direction: PaneFocusDirection) {
+        let panes = availablePanes
+        guard !panes.isEmpty else { return }
+        guard let current = focusedPane, let currentIndex = panes.firstIndex(of: current) else {
+            focusedPane = direction == .next ? panes.first : panes.last
+            return
+        }
+        let count = panes.count
+        switch direction {
+        case .next:
+            focusedPane = panes[(currentIndex + 1) % count]
+        case .previous:
+            focusedPane = panes[(currentIndex - 1 + count) % count]
+        }
     }
 
     // MARK: - Main Content
@@ -89,6 +150,10 @@ struct ContentView: View {
                     ideal: AppConstants.Sidebar.idealWidth,
                     max: AppConstants.Sidebar.maxWidth
                 )
+                // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
+                .focusable()
+                .focusSection()
+                .focused($focusedPane, equals: .sidebar)
         } detail: {
             // Main content area with optional inspector
             HSplitView {
@@ -111,6 +176,10 @@ struct ContentView: View {
                     }
                 }
                 .frame(minWidth: AppConstants.Content.minWidth)
+                // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
+                .focusable()
+                .focusSection()
+                .focused($focusedPane, equals: .editor)
 
                 // Inspector panel (right side)
                 if settings.isInspectorVisible {
@@ -120,6 +189,9 @@ struct ContentView: View {
                         siteViewModel: siteViewModel
                     )
                     .transition(.move(edge: .trailing))
+                    .focusable()
+                    .focusSection()
+                    .focused($focusedPane, equals: .inspector)
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.isInspectorVisible)
@@ -301,7 +373,7 @@ struct ContentView: View {
 
             // Helpful hints
             VStack(alignment: .leading, spacing: 12) {
-                KeyboardHintRow(keys: "⌘F", description: "Search files")
+                KeyboardHintRow(keys: "⌥⌘F", description: "Search files")
                 KeyboardHintRow(keys: "⌘1", description: "Editor only")
                 KeyboardHintRow(keys: "⌘2", description: "Preview only")
                 KeyboardHintRow(keys: "⌘3", description: "Split view")

@@ -32,6 +32,17 @@ enum EditorLayoutMode: String, CaseIterable {
     }
 }
 
+// MARK: - Pane Focus Direction
+
+/// W5.1 (victor-kbd): direction of pane-focus traversal requested from the
+/// View menu (Cmd+Option+Left/Right), consumed by `ContentView`'s
+/// `@FocusState<AppPane?>`. Mirrors the app's Xcode-style navigator/editor/
+/// inspector traversal convention.
+enum PaneFocusDirection {
+    case previous
+    case next
+}
+
 /// Main view model managing the Hugo site state
 @MainActor
 @Observable
@@ -129,6 +140,14 @@ class SiteViewModel {
 
     /// Trigger to focus search field
     var shouldFocusSearch = false
+
+    /// W5.1 (victor-kbd): direction requested by the View menu's
+    /// Cmd+Option+Left/Right pane-traversal commands. `ContentView` observes
+    /// this (same observable-trigger pattern as `shouldFocusSearch` above,
+    /// since the commands live in `VictorApp`'s scene-level menu and
+    /// `ContentView`'s `@FocusState` isn't reachable from there) and resets
+    /// it to `nil` once consumed.
+    var paneFocusDirection: PaneFocusDirection?
 
     /// Whether global search panel is presented
     var isGlobalSearchPresented = false

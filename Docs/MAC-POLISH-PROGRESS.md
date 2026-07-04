@@ -53,7 +53,10 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 **Phase 2 COMPLETE** (pending user manual smoke). Tickets closed: victor-doc, victor-qlk, victor-dnd, victor-ntf (30 open).
 
-**Next up:** Phase 3 — WP3.1 (Haiku audit inventories) ∥ WP3.3 (keyboard traversal + shortcut table, victor-kbd) → WP3.2 (audit fixes) → WP3.4 (Opus Sendable memo) → WP3.5 (sc6 burn-down + AsyncStream) → WP3.6 (Task.detached + M4) → WP3.7 (Swift 6 flip) → 3.R.
+| 3.1 | Haiku inventories: ~60 color sites (judgment calls made by orchestrator), 7 files missing reduce-motion, 2 uncancellable timers, 1 vibrancy offender (InspectorPanel) | victor-vis | **done** | tables in WP3.2 work order |
+| 3.3 | Pane traversal (@FocusState AppPane + observable trigger, ⌥⌘←/→), sidebar filter → ⌥⌘J, Help > Keyboard Shortcuts window + design-doc appendix. Agent survived session-limit kill mid-work (resumed, finished). ORCHESTRATOR CORRECTION: original W5.2 decision misattributed ⌥⌘F as Xcode's filter chord; agent's first resolution displaced Find-and-Replace to ⇧⌘R; corrected to filter=⌥⌘J, Find-and-Replace stays ⌥⌘F (platform standard). Known tradeoff: focusable() adds one Tab stop per pane | victor-kbd | **done** | this commit |
+
+**Next up:** WP3.2 report (audit-fix agent to resume for verify+report; its edits are in-tree) → commit 3.2 → WP3.4 (Opus Sendable memo) → WP3.5 (sc6 burn-down + AsyncStream) → WP3.6 (Task.detached + M4) → WP3.7 (Swift 6 flip) → 3.R.
 
 **USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
 7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.

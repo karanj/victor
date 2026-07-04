@@ -201,6 +201,7 @@ struct VictorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var siteViewModel = SiteViewModel()
     @FocusedValue(\.editorActions) private var editorActions
+    @Environment(\.openWindow) private var openWindow
 
     // Editor preferences (shared with Preferences window via AppSettings)
     @Bindable private var settings = AppSettings.shared
@@ -323,6 +324,11 @@ struct VictorApp: App {
                     // Use NSTextFinder.Action.showReplaceInterface (value 12)
                     FindPanelHelper.performActionWithTag(FindPanelHelper.showReplaceInterface)
                 }
+                // W5.2 (victor-kbd): Cmd+Option+F stays here - it's the
+                // platform-standard Find and Replace chord (Xcode, TextEdit).
+                // The original W5.2 decision misattributed it to Xcode's
+                // navigator filter (which is actually Cmd+Option+J, now used
+                // by Search Files below) - corrected 2026-07-04.
                 .keyboardShortcut("f", modifiers: [.command, .option])
 
                 Button("Find Next") {
@@ -512,7 +518,16 @@ struct VictorApp: App {
                 Button("Search Files") {
                     siteViewModel.shouldFocusSearch = true
                 }
-                .keyboardShortcut("p", modifiers: .command)
+                // W5.2 (victor-kbd, corrected 2026-07-04): Cmd+Option+J is
+                // Xcode's actual filter-in-navigator chord - the original
+                // decision said Cmd+Option+F, but that's the platform-standard
+                // Find and Replace binding (kept there). Cmd+P is deliberately
+                // NOT kept as a second binding here - it's reserved for Quick
+                // Open (victor-qop) once that ships. A SwiftUI Button can only
+                // own one `.keyboardShortcut`, so there's a window between
+                // this ticket and victor-qop shipping where Cmd+P does
+                // nothing; that's accepted, not a bug.
+                .keyboardShortcut("j", modifiers: [.command, .option])
                 .disabled(siteViewModel.site == nil)
             }
 
@@ -534,6 +549,25 @@ struct VictorApp: App {
                     settings.layoutMode = .split
                 }
                 .keyboardShortcut("3", modifiers: .command)
+
+                Divider()
+
+                // W5.1 (victor-kbd): Xcode-convention pane traversal (sidebar
+                // <-> editor <-> inspector). Distinct from the Go menu's
+                // Cmd+Control+Left/Right (back/forward navigation history,
+                // below) - Option vs. Control keeps the two from colliding.
+                // `paneFocusDirection` is an observable trigger consumed by
+                // `ContentView`'s `@FocusState`, since that state lives in a
+                // different view than this scene-level menu.
+                Button("Focus Previous Pane") {
+                    siteViewModel.paneFocusDirection = .previous
+                }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+
+                Button("Focus Next Pane") {
+                    siteViewModel.paneFocusDirection = .next
+                }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
 
                 Divider()
 
@@ -588,6 +622,13 @@ struct VictorApp: App {
                 goToFolderButton(title: "Go to layouts/", role: .layouts)
                 goToFolderButton(title: "Go to data/", role: .data)
             }
+
+            // Help menu (W5.2) - keyboard shortcut reference
+            CommandGroup(after: .help) {
+                Button("Keyboard Shortcuts") {
+                    openWindow(id: "shortcuts")
+                }
+            }
         }
 
         // Preferences window (Cmd+,)
@@ -598,6 +639,16 @@ struct VictorApp: App {
         Window("Server Logs",id: "server-logs") {
             ServerLogView()
         }
+
+        // W5.2 (victor-kbd): Help > Keyboard Shortcuts. A doc file is the
+        // wrong UX for end users, so this is a small native window built
+        // from a static table rather than a link out to
+        // Docs/MAC-POLISH-DESIGN.md (which stays the source of truth the
+        // table here is transcribed from).
+        Window("Keyboard Shortcuts", id: "shortcuts") {
+            KeyboardShortcutsView()
+        }
+        .defaultSize(width: 560, height: 620)
     }
 
     /// W3.1 (victor-doc): route an incoming site-folder URL (Dock drop,

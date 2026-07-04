@@ -30,6 +30,7 @@
 		281A23A15B2B0AAC8668F4CC /* MenuEntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B70F82D5687B1A912977787 /* MenuEntryEditor.swift */; };
 		2A7824AEA7B4DD8C29FF143C /* NewArchetypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24D962843741FD00216E0E92 /* NewArchetypeView.swift */; };
 		2C4B6AB6EDC96BA98D826BF1 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E3EACAE0A34F09D3B209D3A /* NotificationService.swift */; };
+		2EADAC748C8F360CF70EE867 /* KeyboardShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B75BD2A23B77CC32816D29 /* KeyboardShortcutsView.swift */; };
 		2FCC48CCD498DB32C3C792AE /* FrontmatterParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */; };
 		300C54B2B9F453BF45D16635 /* EditorViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D5B5E71B8E3101729B548D /* EditorViewModelTests.swift */; };
 		30E860A721BB929412AE5492 /* ConfigTaxonomiesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 223F74E0E401E8F149482D2B /* ConfigTaxonomiesTab.swift */; };
@@ -301,6 +302,7 @@
 		D3B404F98684163BC1F29FB3 /* PreviewWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWebView.swift; sourceTree = "<group>"; };
 		D6ACF3BA6CE007302198EC88 /* NewDataFileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewDataFileView.swift; sourceTree = "<group>"; };
 		DCCA10242E49CB155FE91ABD /* ThemeCSSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeCSSService.swift; sourceTree = "<group>"; };
+		E0B75BD2A23B77CC32816D29 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
 		E26C877E1ACF87322356CA1C /* TextEditorViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditorViewModelTests.swift; sourceTree = "<group>"; };
 		E47231FACC5F28F3FB428392 /* FileSystemService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemService.swift; sourceTree = "<group>"; };
 		E48282E0D260FE4E514D9777 /* DataFileParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFileParser.swift; sourceTree = "<group>"; };
@@ -444,6 +446,7 @@
 			children = (
 				80C218E9EF99008C56DDA666 /* BuildIssuesPopover.swift */,
 				AFAB008C59B9F635B3F2A21F /* EmptyStateView.swift */,
+				E0B75BD2A23B77CC32816D29 /* KeyboardShortcutsView.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -940,6 +943,7 @@
 				8036A8654293E04C2568570A /* ImageDropPathResolver.swift in Sources */,
 				B1D968E0DEDCD821046FAD0B /* ImageViewerPanel.swift in Sources */,
 				DAFAC8E35FDC6F5486D4707F /* InspectorPanel.swift in Sources */,
+				2EADAC748C8F360CF70EE867 /* KeyboardShortcutsView.swift in Sources */,
 				A79E3F427A27EF0AA7353D18 /* LabeledTextField.swift in Sources */,
 				FFA06B7F848E9ED44017C62E /* LivePreviewPanel.swift in Sources */,
 				C95FDEC6AC13A5C542D0F2F4 /* LiveReloadClient.swift in Sources */,
