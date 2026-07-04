@@ -729,6 +729,90 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canNavigateForward, "B should have been pruned, leaving only C ahead of the cursor")
     }
 
+    // MARK: - Sidebar Drop Import Tests (W3.3/victor-dnd, Phase-end review Fix A)
+    // Phase-end review P1: filterNodesRecursively hands FolderRowWithSheets an
+    // ephemeral FileNode COPY (fresh UUID) for folders with a mix of matching and
+    // non-matching children under an active search - attaching an import directly
+    // to that copy would make the file land on disk but vanish from the sidebar on
+    // the next filter recompute. importDroppedFile must resolve the canonical node
+    // by URL before attaching anything.
+
+    func testImportDroppedFileDuringActiveSearchAttachesToCanonicalFolder() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let contentDir = tempDir.appendingPathComponent("content")
+        try FileManager.default.createDirectory(at: contentDir, withIntermediateDirectories: true)
+
+        // A folder with one matching and one non-matching child forces
+        // filterNodesRecursively into the "create a filtered copy" branch instead of
+        // reusing the canonical node (see its doc comment a few hundred lines up).
+        let matchingChild = FileNode(url: contentDir.appendingPathComponent("hello.md"), isDirectory: false)
+        let nonMatchingChild = FileNode(url: contentDir.appendingPathComponent("world.md"), isDirectory: false)
+        let contentFolder = FileNode(url: contentDir, isDirectory: true)
+        contentFolder.addChild(matchingChild)
+        contentFolder.addChild(nonMatchingChild)
+
+        let viewModel = SiteViewModel()
+        viewModel.fileNodes = [contentFolder]
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        viewModel.searchQuery = "hello"
+
+        // Sanity check: confirm the filtered node really is a distinct copy, i.e.
+        // that this test actually exercises the bug scenario rather than the
+        // already-safe "all children match" path.
+        let filteredFolder = try XCTUnwrap(viewModel.filteredNodes.first)
+        XCTAssertNotEqual(
+            filteredFolder.id, contentFolder.id,
+            "Expected filterNodesRecursively to hand out a copy under this search"
+        )
+
+        let sourceURL = tempDir.appendingPathComponent("external.png")
+        try "img-bytes".write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        // Simulates FolderRowWithSheets's dropDestination handler, which only ever
+        // sees whatever filteredNodes produced - i.e. the copy, not contentFolder.
+        await viewModel.importDroppedFile(from: sourceURL, into: filteredFolder)
+
+        XCTAssertEqual(
+            contentFolder.children.count, 3,
+            "Import must attach to the canonical folder's real children, not the discarded filtered copy"
+        )
+        let importedNode = try XCTUnwrap(
+            contentFolder.children.first { $0.name == "external.png" },
+            "Imported node not found under the canonical folder"
+        )
+        XCTAssertEqual(
+            viewModel.findNode(id: importedNode.id)?.id, importedNode.id,
+            "Imported node must be discoverable via findNode(id:) (registerNode must have run)"
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: importedNode.url.path))
+    }
+
+    func testImportDroppedFileSetsErrorMessageOnFailure() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folder = FileNode(url: tempDir.appendingPathComponent("static"), isDirectory: true)
+
+        let viewModel = SiteViewModel()
+        viewModel.fileNodes = [folder]
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+
+        XCTAssertNil(viewModel.errorMessage)
+
+        // Source file doesn't exist on disk, so the copy inside importFile throws
+        let missingSource = tempDir.appendingPathComponent("does-not-exist.png")
+        await viewModel.importDroppedFile(from: missingSource, into: folder)
+
+        XCTAssertNotNil(viewModel.errorMessage, "Failure must surface via errorMessage, matching the editor drop path")
+        XCTAssertTrue(folder.children.isEmpty, "Nothing should have been inserted into the tree on failure")
+    }
+
     // MARK: - Go Menu Top-Level Folder Lookup Tests
 
     func testTopLevelFolderFindsMatchingRole() {

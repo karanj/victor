@@ -140,6 +140,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+// MARK: - Sharing Helper
+
+/// Presents NSSharingServicePicker anchored to the key window.
+/// Exists because ShareLink inside a CommandGroup silently does nothing on
+/// macOS 14 (FB13281955); menu items call this instead.
+@MainActor
+enum SharingHelper {
+    /// The picker must stay alive while its popover is on screen; a fire-and-
+    /// forget local would deallocate before presentation completes.
+    private static var activePicker: NSSharingServicePicker?
+
+    static func share(items: [Any]) {
+        guard let contentView = NSApp.keyWindow?.contentView else { return }
+        let picker = NSSharingServicePicker(items: items)
+        activePicker = picker
+        picker.show(relativeTo: .zero, of: contentView, preferredEdge: .minY)
+    }
+}
+
 // MARK: - Focused Values for Editor Commands
 
 /// Actions the currently focused editor panel exposes to the menu bar.
@@ -222,7 +241,12 @@ struct VictorApp: App {
                     // W3.1 (victor-doc): Dock drop / Open With route through
                     // the delegate (see AppDelegate.application(_:open:)).
                     appDelegate.onOpenSiteFolders = { urls in
-                        for url in urls {
+                        // Single-window app: multi-selecting several folders
+                        // and dropping them together can deliver N URLs in one
+                        // call. Only the first can win; handling the rest
+                        // would race loadSite against itself (see the
+                        // siteURLLoadInFlight comment).
+                        if let url = urls.first {
                             handleOpenSiteFolder(url)
                         }
                     }
@@ -413,6 +437,26 @@ struct VictorApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .option])
                 .disabled(siteViewModel.selectedNode == nil)
+
+                Divider()
+
+                // W3.6: share the selected file; second item exposes the local
+                // preview URL while the Hugo server is running.
+                // Deliberately NOT ShareLink: inside a CommandGroup it renders
+                // but does nothing on macOS 14 (Apple FB13281955), so these go
+                // through NSSharingServicePicker anchored to the key window.
+                Button("Share…") {
+                    if let url = siteViewModel.selectedNode?.url {
+                        SharingHelper.share(items: [url])
+                    }
+                }
+                .disabled(siteViewModel.selectedNode == nil)
+
+                if let serverURL = siteViewModel.hugoServerURL, siteViewModel.isHugoServerRunning {
+                    Button("Share Preview URL") {
+                        SharingHelper.share(items: [serverURL])
+                    }
+                }
             }
 
             // Format menu - Text formatting

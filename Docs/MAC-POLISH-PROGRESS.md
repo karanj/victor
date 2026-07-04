@@ -47,7 +47,21 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 2.3 | Two-way DnD: sidebar folder drops (node insert, no reload) + editor image drops (ImageDropPathResolver: page bundle vs static/, UTF-16-safe insertion) + asset drag-out (real file provider). importFile via the one FileCoordinator copy path, sync by design (avoids new sending-self warnings). 9 new tests, 142/142 targeted | victor-dnd | **done** | this commit |
 
-**Next up:** orchestrator: File-menu ShareLink → SC6 baseline re-verify (count instances, not unique texts) ∥ 2.R Opus review of 5adb7eb..HEAD → fixes → Phase 2 gate: full suite, ticket flips (doc/qlk/dnd/ntf), push, consolidated USER manual checklist.
+| 2.i | Orchestrator integration: File-menu Share…/Share Preview URL (ShareLink; render-check on manual list). SC6 baseline re-verified: 102 unique ≤ 103 baseline, zero new warning files — WP2.1 agent's "~24 extra" was duplicate-instance counting in raw build logs, baseline stands | — | **done** | gate commit |
+
+| 2.R | Opus review: 1 P0 (ShareLink dead in CommandGroup, Apple FB13281955 — orchestrator's own edit; replaced with NSSharingServicePicker helper) + 4 P1s all fixed: multi-URL Dock-drop race (first-URL-only + loadSite serialization guard covering ALL open paths), drop-during-search node orphaning (SiteViewModel.importDroppedFile resolving canonical node by URL + 2 tests), silent editor-drop failures (errorMessage), non-file URLs entering image branch (isFileURL + fileURLsOnly). Flaky test noted: testAutoSaveUsesCorrectContentAfterFileSwitchDuringDebounce failed once in an agent run, passed at gate — watch it | — | **done** | this commit |
+
+**Phase 2 COMPLETE** (pending user manual smoke). Tickets closed: victor-doc, victor-qlk, victor-dnd, victor-ntf (30 open).
+
+**Next up:** Phase 3 — WP3.1 (Haiku audit inventories) ∥ WP3.3 (keyboard traversal + shortcut table, victor-kbd) → WP3.2 (audit fixes) → WP3.4 (Opus Sendable memo) → WP3.5 (sc6 burn-down + AsyncStream) → WP3.6 (Task.detached + M4) → WP3.7 (Swift 6 flip) → 3.R.
+
+**USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
+7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.
+8. Quick Look: Space on an asset (panel, grid, list) and on an image in the sidebar → real QL panel; Space on a markdown file in the sidebar → nothing (typing unaffected).
+9. Asset panel Share button → share sheet; File > Share… on a selected file → share sheet appears (NSSharingServicePicker path — this specifically was the Apple-bug fix); with server running, File > Share Preview URL.
+10. Drag image from Finder → sidebar folder row (accent stroke, file appears, no full reload; try during an active sidebar search — the file must still appear); → editor over a page-bundle file (copies next to index.md, inserts ![](name)); → editor over a non-bundle file (copies to static/, inserts ![](/name)); drag an image from a web page into the editor → URL inserted as text (not a broken import).
+11. Drag an asset out to Finder desktop → real file copy.
+12. Notifications: with Victor in background, break a template save → one notification (provisional, no prompt); click → Victor activates; Preferences > Server toggle off → no notification.
 
 **USER manual smoke for Phase 1** (agents can't do these headlessly):
 1. Proxy icon: select a file → titlebar "file.md — Site"; Cmd-click title → path menu; drag proxy icon to Finder.

@@ -561,7 +561,7 @@ issues:
 
   - id: victor-doc
     title: "W3.1: Open site folders as documents (Dock drop, Open With)"
-    status: open
+    status: done
     priority: P2
     type: feature
     files: [project.yml, Victor/VictorApp.swift]
@@ -578,7 +578,7 @@ issues:
 
   - id: victor-qlk
     title: "W3.2+W3.6: Real Quick Look for assets; ShareLink"
-    status: open
+    status: done
     priority: P2
     type: bug
     files:
@@ -595,7 +595,7 @@ issues:
 
   - id: victor-dnd
     title: "W3.3: Drag & drop both directions (sidebar/editor in, assets out)"
-    status: open
+    status: done
     priority: P3
     type: feature
     files:
@@ -612,7 +612,7 @@ issues:
 
   - id: victor-ntf
     title: "W3.4: Build-failure notifications when app inactive"
-    status: open
+    status: done
     priority: P3
     type: feature
     blocked_by: [victor-stn]

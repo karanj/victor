@@ -95,8 +95,19 @@ final class HighlightingTextView: NSTextView {
         // Images are copied into the site and turned into a markdown reference; every
         // other file type falls through to the default NSTextView behavior below
         // (inserts the raw file path), unchanged from before.
-        if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+        //
+        // `urlReadingFileURLsOnly` plus the explicit `isFileURL` check reject non-file
+        // URLs (e.g. an https://.../photo.jpg dragged from a browser tab): without
+        // both, a remote URL with an image-looking extension would be misread as a
+        // local file and passed to FileSystemService.importFile, which would then
+        // fail trying to copy a URL that isn't on disk. Non-file URLs fall through to
+        // `super.performDragOperation`, matching pre-existing text-insertion behavior.
+        if let fileURLs = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL],
            let droppedURL = fileURLs.first,
+           droppedURL.isFileURL,
            FileType(url: droppedURL) == .image,
            let fileNode, let siteViewModel, let siteRoot = siteViewModel.site?.rootURL,
            let layoutManager = layoutManager, let textContainer = textContainer {
@@ -134,6 +145,7 @@ final class HighlightingTextView: NSTextView {
                 return true
             } catch {
                 Logger.shared.error("Failed to import dropped image", error: error)
+                siteViewModel.errorMessage = "Failed to import \(droppedURL.lastPathComponent): \(error.localizedDescription)"
                 return false
             }
         }

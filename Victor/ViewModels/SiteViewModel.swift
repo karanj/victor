@@ -455,6 +455,15 @@ class SiteViewModel {
 
     /// Load a Hugo site from URL
     func loadSite(from url: URL) async {
+        // Serialize all load paths (Cmd+O, Open Recent, Dock menu, Dock drop,
+        // onOpenURL) at this single choke point: two interleaved loads both
+        // reassign fileNodes and bump _fileNodesVersion, thrashing
+        // filteredNodes' cache into a busy re-render loop. Dropping the late
+        // request is correct for user-initiated opens.
+        guard !isLoading else {
+            Logger.shared.info("Ignoring site open for \(url.lastPathComponent): another site load is in flight")
+            return
+        }
         isLoading = true
         errorMessage = nil
 
@@ -1196,6 +1205,39 @@ class SiteViewModel {
         } catch {
             errorMessage = "Failed to create file: \(error.localizedDescription)"
             Logger.shared.error("Error creating markdown file", error: error)
+        }
+    }
+
+    /// Import a file dropped onto a sidebar folder row (W3.3/victor-dnd), copying it
+    /// via `FileSystemService.importFile` and inserting a node directly - mirrors
+    /// `createMarkdownFile`'s node-insertion approach instead of a full `reloadSite()`.
+    ///
+    /// `folder` may be an ephemeral copy handed out by `filterNodesRecursively` when a
+    /// search is active: that recursive filter builds fresh `FileNode` instances (new
+    /// UUIDs) for the filtered display rather than reusing tree nodes, so `folder`
+    /// itself could be a throwaway that disappears on the next search recompute. This
+    /// resolves the canonical node by URL (stable across recomputes, unlike the copy's
+    /// fresh UUID) before attaching anything, so the import survives the next
+    /// `filteredNodes` access - and reaches `registerNode`/`invalidateFilterCache`
+    /// (both `private`, hence why this lives here rather than in FileListView).
+    func importDroppedFile(from sourceURL: URL, into folder: FileNode) async {
+        guard let siteRoot = site?.rootURL else { return }
+        guard let canonicalFolder = findNode(url: folder.url), canonicalFolder.isDirectory else { return }
+
+        do {
+            let destURL = try FileSystemService.shared.importFile(from: sourceURL, into: canonicalFolder.url, siteRoot: siteRoot)
+
+            let newNode = FileNode(url: destURL, isDirectory: false, isPageBundle: false)
+            canonicalFolder.addChild(newNode)
+            registerNode(newNode)
+
+            // Invalidate filter cache since tree changed
+            invalidateFilterCache()
+
+            selectNode(newNode)
+        } catch {
+            errorMessage = "Failed to import \(sourceURL.lastPathComponent): \(error.localizedDescription)"
+            Logger.shared.error("Error importing dropped file", error: error)
         }
     }
 

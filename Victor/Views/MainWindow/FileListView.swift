@@ -465,13 +465,19 @@ struct FolderRowWithSheets: View {
                         .stroke(Color.accentColor, lineWidth: 2)
                 }
             }
-            // Accept file drops (images and any other file type) onto folder rows:
-            // copy into this folder via FileSystemService.importFile - the same copy
-            // path FileOperationsService/duplicateFile and the editor's image drop use
-            // - then insert a node directly (mirrors createMarkdownFile) instead of a
-            // full reloadSite.
+            // Accept file drops (images and any other file type) onto folder rows.
+            // `node` here can be an ephemeral filtered-search copy (see
+            // SiteViewModel.importDroppedFile's doc comment), so the actual import -
+            // resolving the canonical node, copying, inserting, registering,
+            // invalidating the filter cache - lives there instead of here.
             .dropDestination(for: URL.self) { droppedURLs, _ in
-                importDroppedFiles(droppedURLs)
+                guard node.isDirectory, !droppedURLs.isEmpty else { return false }
+                for sourceURL in droppedURLs {
+                    Task {
+                        await siteViewModel.importDroppedFile(from: sourceURL, into: node)
+                    }
+                }
+                return true
             } isTargeted: { targeted in
                 isDropTargeted = targeted
             }
@@ -540,32 +546,6 @@ struct FolderRowWithSheets: View {
                     }
                 )
             }
-    }
-
-    /// Copy dropped files into this folder and insert a node for each into the tree
-    /// directly, the same way `createMarkdownFile`/`createFolder` do, instead of a
-    /// full `reloadSite()`. Returns whether at least one file was imported (SwiftUI's
-    /// `dropDestination` uses this to decide whether to show the "accepted" animation).
-    private func importDroppedFiles(_ droppedURLs: [URL]) -> Bool {
-        guard node.isDirectory, let siteRoot = siteViewModel.site?.rootURL else { return false }
-
-        var importedNode: FileNode?
-        for sourceURL in droppedURLs {
-            do {
-                let destURL = try FileSystemService.shared.importFile(from: sourceURL, into: node.url, siteRoot: siteRoot)
-                let newNode = FileNode(url: destURL, isDirectory: false, isPageBundle: false)
-                node.addChild(newNode)
-                importedNode = newNode
-            } catch {
-                siteViewModel.errorMessage = "Failed to import \(sourceURL.lastPathComponent): \(error.localizedDescription)"
-                Logger.shared.error("Error importing dropped file", error: error)
-            }
-        }
-
-        if let importedNode {
-            siteViewModel.selectNode(importedNode)
-        }
-        return importedNode != nil
     }
 
     private func findNodeByURL(_ url: URL) -> FileNode? {
