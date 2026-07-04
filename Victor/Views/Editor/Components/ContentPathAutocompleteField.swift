@@ -11,6 +11,7 @@ struct ContentPathAutocompleteField: View {
     @State private var showSuggestions = false
     @State private var selectedIndex = 0
     @State private var currentFilteredSuggestions: [ContentPathSuggestion] = []
+    @State private var hideSuggestionsTask: Task<Void, Never>?
     @FocusState private var isFocused: Bool
 
     // MARK: - Body
@@ -31,11 +32,15 @@ struct ContentPathAutocompleteField: View {
                         // Dispatch async to avoid layout recursion
                         DispatchQueue.main.async {
                             if focused {
+                                hideSuggestionsTask?.cancel()
                                 updateFilteredSuggestions(for: value)
                                 showSuggestions = !currentFilteredSuggestions.isEmpty
                             } else {
                                 // Delay hiding to allow click on suggestion
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                hideSuggestionsTask?.cancel()
+                                hideSuggestionsTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .seconds(0.25))
+                                    guard !Task.isCancelled else { return }
                                     if !isFocused {
                                         showSuggestions = false
                                     }
@@ -111,11 +116,11 @@ struct ContentPathAutocompleteField: View {
             let isValid = suggestions.contains { $0.path == value }
             if isValid {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.Status.saved)
                     .help("Path exists in content/")
             } else {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.Status.warning)
                     .help("Path not found in content/ directory")
             }
         }

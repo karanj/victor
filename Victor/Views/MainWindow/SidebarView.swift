@@ -146,7 +146,7 @@ struct RecentSiteRow: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "folder.fill")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.FileIcon.folder)
                     .frame(width: 16)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -173,7 +173,7 @@ struct RecentSiteRow: View {
             .background(isHovering ? Color(nsColor: .controlBackgroundColor) : Color.clear)
             .cornerRadius(6)
             .contentShape(Rectangle())
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isHovering)
+            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: isHovering)
         }
         .buttonStyle(.plain)
         .onHover { hovering in

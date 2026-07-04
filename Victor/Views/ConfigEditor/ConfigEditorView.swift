@@ -79,7 +79,7 @@ struct ConfigEditorView: View {
         HStack {
             // Config file icon
             Image(systemName: "gearshape.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.FileIcon.config)
 
             // File name
             if let url = config.sourceURL {
@@ -181,7 +181,7 @@ struct ConfigRawEditorView: View {
             // Info banner
             HStack {
                 Image(systemName: "info.circle")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.Status.info)
                 Text("Changes made here will update the form view when you switch tabs")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -206,7 +206,7 @@ struct ConfigRawEditorView: View {
             if hasParseError {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.Status.warning)
                     Text(parseErrorMessage)
                         .font(.caption)
                     Spacer()

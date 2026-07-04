@@ -70,7 +70,7 @@ struct TemplateEditorView: View {
             if let error = errorMessage {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.Status.error)
             }
 
             EditorToolbarDivider()

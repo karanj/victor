@@ -121,12 +121,12 @@ private struct PermalinksSectionView: View {
                 if let sectionError = sectionValidationError {
                     Label(sectionError, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.Status.warning)
                 }
                 if let patternError = patternValidationError {
                     Label(patternError, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.Status.warning)
                 }
             }
         } header: {
@@ -228,7 +228,7 @@ private struct PermalinkRowView: View {
             if let error = validationError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.Status.warning)
                     .padding(.leading, 136) // Align under the pattern field
             }
         }

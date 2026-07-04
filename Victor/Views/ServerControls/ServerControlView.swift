@@ -18,6 +18,7 @@ struct ServerControlView: View {
     
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 12) {
@@ -232,13 +233,13 @@ struct ServerControlView: View {
         // Set up callbacks to update UI when server state changes
         Task {
             await HugoServerService.shared.setOnStatusChange { @MainActor newStatus in
-                withAnimation {
+                withAnimation(reduceMotion ? nil : .default) {
                     serverStatus = newStatus
                 }
             }
 
             await HugoServerService.shared.setOnBuildErrorsChange { @MainActor errors in
-                withAnimation {
+                withAnimation(reduceMotion ? nil : .default) {
                     buildErrors = errors
                 }
             }

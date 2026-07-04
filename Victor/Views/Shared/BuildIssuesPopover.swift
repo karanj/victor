@@ -144,11 +144,11 @@ private struct IssueRow: View {
                             HStack(spacing: 4) {
                                 Text(filePath)
                                     .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(Color.Status.info)
 
                                 Image(systemName: "arrow.up.right")
                                     .font(.system(size: 9))
-                                    .foregroundStyle(.blue.opacity(0.7))
+                                    .foregroundStyle(Color.Status.info.opacity(0.7))
                             }
                         }
                         .buttonStyle(.plain)
@@ -156,7 +156,7 @@ private struct IssueRow: View {
                     } else {
                         Text(filePath)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Color.Status.info)
                     }
                 }
 

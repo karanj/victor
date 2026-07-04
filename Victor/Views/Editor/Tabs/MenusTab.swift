@@ -37,7 +37,7 @@ struct MenusTab: View {
                     Label("Add to Menu", systemImage: "plus.circle")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.blue)
+                .foregroundStyle(Color.accentColor)
             }
         }
     }

@@ -392,7 +392,7 @@ struct SaveButton: View {
 
     private var savedIndicator: some View {
         Label("Saved", systemImage: "checkmark.circle.fill")
-            .foregroundStyle(.green)
+            .foregroundStyle(Color.Status.saved)
             .font(.callout)
             .scaleEffect(indicatorScale)
             .opacity(indicatorOpacity)

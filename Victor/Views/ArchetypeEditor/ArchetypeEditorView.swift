@@ -43,7 +43,7 @@ struct ArchetypeEditorView: View {
         HStack {
             // Archetype icon and name
             Image(systemName: "doc.text.fill.viewfinder")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.FileIcon.config)
 
             Text(archetype.fileName)
                 .font(.headline)
@@ -89,7 +89,7 @@ struct ArchetypeEditorView: View {
             if let error = errorMessage {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.Status.error)
             }
 
             EditorToolbarDivider()

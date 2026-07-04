@@ -10,6 +10,8 @@ struct PreferencesView: View {
     @State private var hugoVersion: String = "Checking..."
     @State private var isHugoInstalled: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Binding to convert hex string to Color for ColorPicker
     private var draftColor: Binding<Color> {
         Binding(
@@ -155,7 +157,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .animation(.easeInOut(duration: 0.2), value: settings.isAutoSaveEnabled)
+        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.isAutoSaveEnabled)
     }
 
     // MARK: - Appearance Tab
@@ -194,12 +196,12 @@ struct PreferencesView: View {
                     Spacer()
                     if isHugoInstalled {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Color.Status.saved)
                         Text("Installed")
                             .foregroundStyle(.secondary)
                     } else {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.Status.error)
                         Text("Not found")
                             .foregroundStyle(.secondary)
                     }

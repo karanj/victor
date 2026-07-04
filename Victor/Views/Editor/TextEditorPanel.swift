@@ -85,7 +85,7 @@ struct TextEditorPanel: View {
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Color.Status.error)
             }
 
             // Saving indicator

@@ -267,7 +267,7 @@ struct FolderItemListRow: View {
                     if node.isPageBundle {
                         Text("bundle")
                             .font(.caption2)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.Badge.pageBundle.contrastingTextColor)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(Color.Badge.pageBundle)

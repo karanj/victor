@@ -8,6 +8,8 @@ struct ServerLogView: View {
     /// ScrollView proxy for auto-scrolling
     @Namespace private var bottomID
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
@@ -91,7 +93,7 @@ struct ServerLogView: View {
             }
             .onChange(of: logLines.count) { _, _ in
                 if autoScroll {
-                    withAnimation {
+                    withAnimation(reduceMotion ? nil : .default) {
                         proxy.scrollTo(bottomID, anchor: .bottom)
                     }
                 }

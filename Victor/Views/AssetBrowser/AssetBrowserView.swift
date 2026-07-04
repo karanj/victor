@@ -94,7 +94,7 @@ struct AssetBrowserView: View {
         VStack(spacing: 8) {
             HStack {
                 Image(systemName: "photo.on.rectangle.angled")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.FileIcon.image)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isAssetsDir ? "assets/" : "static/")
@@ -287,6 +287,7 @@ struct AssetGridItem: View {
     let onInsert: ((String) -> Void)?
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 8) {
@@ -319,7 +320,7 @@ struct AssetGridItem: View {
                         .transition(.opacity.combined(with: .scale))
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: isHovered)
+            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: isHovered)
 
             // Filename
             Text(asset.url.lastPathComponent)
@@ -370,6 +371,7 @@ struct AssetListRow: View {
     let onInsert: ((String) -> Void)?
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 12) {
@@ -400,7 +402,7 @@ struct AssetListRow: View {
                         .transition(.opacity.combined(with: .scale))
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: isHovered)
+            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: isHovered)
 
             // Info
             VStack(alignment: .leading, spacing: 2) {

@@ -192,7 +192,7 @@ struct FileRowView: View, Equatable {
                     if viewModel.isPageBundle {
                         Text("bundle")
                             .font(.caption2)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.Badge.pageBundle.contrastingTextColor)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(Color.Badge.pageBundle)
@@ -203,7 +203,7 @@ struct FileRowView: View, Equatable {
                     if viewModel.isConfigFile {
                         Text("config")
                             .font(.caption2)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.Badge.config.contrastingTextColor)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(Color.Badge.config)
@@ -275,7 +275,7 @@ struct FileStatusIndicator: View {
                     .transition(reduceMotion ? .identity : .scale.combined(with: .opacity))
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: status)
+        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: status)
     }
 }
 

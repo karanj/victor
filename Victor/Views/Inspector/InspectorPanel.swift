@@ -59,7 +59,7 @@ struct InspectorPanel: View {
             .padding(12)
         }
         .frame(width: 260)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(.ultraThinMaterial)
         .onAppear {
             // Compute initial stats when panel appears
             updateStatsImmediately()
@@ -126,12 +126,13 @@ struct InspectorSection<Content: View>: View {
     @ViewBuilder let content: Content
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Section header
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard)) {
                     isExpanded.toggle()
                 }
             } label: {

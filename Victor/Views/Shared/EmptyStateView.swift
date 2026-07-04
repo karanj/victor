@@ -86,7 +86,7 @@ struct ErrorStateView: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.Status.warning)
             Text(title)
                 .font(.headline)
             Text(message)

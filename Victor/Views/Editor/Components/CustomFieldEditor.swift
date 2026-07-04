@@ -49,7 +49,7 @@ struct CustomFieldEditor: View {
                     Label("Add Custom Field", systemImage: "plus.circle")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.blue)
+                .foregroundStyle(Color.accentColor)
             }
         }
     }

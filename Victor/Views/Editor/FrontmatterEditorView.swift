@@ -136,7 +136,7 @@ struct TagInputView: View {
                 if !newTag.isEmpty {
                     Button(action: addTag) {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Color.accentColor)
                     }
                     .buttonStyle(.plain)
                 }

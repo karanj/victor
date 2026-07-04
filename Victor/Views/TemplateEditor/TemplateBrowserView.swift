@@ -179,7 +179,7 @@ struct TemplateBrowserView: View {
             } header: {
                 HStack {
                     Image(systemName: "folder")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.FileIcon.folder)
                     Text(dir.isEmpty ? "Root" : dir)
                     Spacer()
                     Text("\(dirTemplates.count)")

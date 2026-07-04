@@ -9,6 +9,9 @@ struct AssetDetailPanel: View {
 
     @State private var copyFeedback: String?
     @State private var quickLookURL: URL?
+    @State private var copyFeedbackTask: Task<Void, Never>?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -166,7 +169,7 @@ struct AssetDetailPanel: View {
             if let feedback = copyFeedback {
                 Text(feedback)
                     .font(.caption)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.Status.saved)
                     .transition(.opacity)
             }
         }
@@ -235,13 +238,16 @@ struct AssetDetailPanel: View {
         pasteboard.setString(text, forType: .string)
 
         // Show feedback
-        withAnimation {
+        withAnimation(reduceMotion ? nil : .default) {
             copyFeedback = "Copied!"
         }
 
-        // Clear feedback after delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation {
+        // Clear feedback after delay - cancellable so a re-copy resets the timer
+        copyFeedbackTask?.cancel()
+        copyFeedbackTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .default) {
                 copyFeedback = nil
             }
         }

@@ -137,8 +137,8 @@ struct TranslationEditorView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: dataFile.hasUnsavedChanges)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: showSavedIndicator)
+        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value:dataFile.hasUnsavedChanges)
+        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value:showSavedIndicator)
     }
 
     private var translationFormEditor: some View {
@@ -403,7 +403,7 @@ struct TranslationRawEditorView: View {
         VStack(spacing: 0) {
             HStack {
                 Image(systemName: "info.circle")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.Status.info)
                 Text("Changes made here will update the form view when you switch tabs")
                     .font(.caption)
                     .foregroundStyle(.secondary)

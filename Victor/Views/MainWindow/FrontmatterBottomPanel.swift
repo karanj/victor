@@ -19,6 +19,8 @@ struct FrontmatterBottomPanel: View {
     /// Panel height - persisted via AppSettings
     @Bindable private var settings = AppSettings.shared
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// Minimum and maximum heights for the panel
     private let minHeight: CGFloat = 150
     private let maxHeight: CGFloat = 600
@@ -92,7 +94,7 @@ struct FrontmatterBottomPanel: View {
                         if let parseError = parseError {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.Status.warning)
                                 Text(parseError)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -104,7 +106,7 @@ struct FrontmatterBottomPanel: View {
                                 .font(.caption)
                             }
                             .padding(8)
-                            .background(Color.orange.opacity(0.1))
+                            .background(Color.Status.warning.opacity(0.1))
 
                             Divider()
                         }
@@ -118,7 +120,7 @@ struct FrontmatterBottomPanel: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: isExpanded)
         .onAppear {
             // Initialize raw text when first loaded
             if rawText.isEmpty {

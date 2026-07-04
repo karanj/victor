@@ -135,13 +135,13 @@ private struct ShortcodeFormHeader: View {
             if shortcode.isDeprecated, let note = shortcode.deprecationNote {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.Status.warning)
                     Text(note)
                         .font(.callout)
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.orange.opacity(0.1))
+                .background(Color.Status.warning.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
@@ -193,7 +193,7 @@ private struct ParameterField: View {
 
                 if parameter.isRequired {
                     Text("*")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.Shortcode.required)
                 }
             }
 

@@ -71,7 +71,7 @@ struct NewArchetypeView: View {
                 if let error = errorMessage {
                     Section {
                         Text(error)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.Status.error)
                     }
                 }
             }
