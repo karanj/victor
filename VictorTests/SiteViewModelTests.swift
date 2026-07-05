@@ -1,4 +1,5 @@
 import XCTest
+import Observation
 @testable import Victor
 
 /// Tests for SiteViewModel
@@ -82,6 +83,111 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.clearFileModified(nodeID)
 
         XCTAssertFalse(viewModel.isFileModified(nodeID))
+    }
+
+    // MARK: - Observation Storm Guard Tests
+    //
+    // Diagnosed keystroke-lag mechanism: EditorViewModel.handleContentChange runs on
+    // every keystroke and calls markFileModified/clearFileModified. An unconditional
+    // Set.insert/remove mutates `modifiedFileIDs` (and fires Observation) even when
+    // the member is already present/absent. Since Phase 1, two expensive listeners
+    // read `hasUnsavedChanges` (which reads `modifiedFileIDs`): ContentView's body
+    // (edited-dot) and VictorApp's .commands .disabled() validation - so an
+    // unguarded mutation re-renders the window body AND rebuilds NSMenu items on
+    // every keystroke, not just on the rare state transitions. These tests assert
+    // the guarded, no-mutation-on-repeat behavior directly via Observation itself
+    // (not just the end state), since the end state looks identical either way.
+
+    /// Sanity check for the tracking mechanism itself: a genuine state transition
+    /// (not-modified -> modified) MUST still fire Observation. Without this, the
+    /// no-fire assertions below could pass vacuously if tracking were set up wrong.
+    func testMarkFileModifiedFiresObservationOnActualTransition() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.modifiedFileIDs
+        } onChange: {
+            observedChange = true
+        }
+
+        viewModel.markFileModified(nodeID) // not-present -> present: must fire
+
+        XCTAssertTrue(observedChange, "Sanity check: an actual transition must still fire Observation")
+    }
+
+    /// The keystroke-lag fix: once a file is already marked modified, repeated
+    /// markFileModified calls for the same id (i.e. every subsequent keystroke)
+    /// must not mutate modifiedFileIDs again, and therefore must not fire Observation.
+    func testMarkFileModifiedIsNoOpWhenAlreadyModified() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+
+        viewModel.markFileModified(nodeID) // first transition: not-present -> present
+        XCTAssertTrue(viewModel.isFileModified(nodeID))
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.modifiedFileIDs
+        } onChange: {
+            observedChange = true
+        }
+
+        viewModel.markFileModified(nodeID) // already present - must be a no-op
+
+        XCTAssertFalse(
+            observedChange,
+            "Repeated markFileModified for an already-modified file must not fire Observation " +
+            "(this is what re-renders ContentView's body and rebuilds NSMenu items on every keystroke)"
+        )
+    }
+
+    /// Mirror of the above for clearFileModified: clearing a file that was never
+    /// (or is no longer) modified must not mutate modifiedFileIDs or fire Observation.
+    func testClearFileModifiedIsNoOpWhenNotModified() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+
+        XCTAssertFalse(viewModel.isFileModified(nodeID))
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.modifiedFileIDs
+        } onChange: {
+            observedChange = true
+        }
+
+        viewModel.clearFileModified(nodeID) // already absent - must be a no-op
+
+        XCTAssertFalse(observedChange, "clearFileModified on an already-clear file must not fire Observation")
+    }
+
+    /// markFileSaved's internal modifiedFileIDs.remove must also go through the
+    /// guarded clearFileModified path: saving a file that was never marked modified
+    /// (e.g. a redundant Save with no pending edits) must not fire modifiedFileIDs'
+    /// Observation, even though recentlySavedFileIDs does legitimately change.
+    func testMarkFileSavedDoesNotFireModifiedFileIDsObservationWhenNotPreviouslyModified() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+
+        XCTAssertFalse(viewModel.isFileModified(nodeID))
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.modifiedFileIDs
+        } onChange: {
+            observedChange = true
+        }
+
+        viewModel.markFileSaved(nodeID)
+
+        XCTAssertFalse(
+            observedChange,
+            "markFileSaved must route its internal modifiedFileIDs.remove through the guarded " +
+            "clearFileModified path, not mutate unconditionally"
+        )
+        XCTAssertTrue(viewModel.isFileRecentlySaved(nodeID), "recentlySavedFileIDs should still be updated")
     }
 
     func testMarkFileSaved() {

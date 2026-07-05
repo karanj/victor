@@ -558,13 +558,24 @@ final class EditorViewModelTests: XCTestCase {
 
     /// Integration test: Verifies auto-save uses captured content, not current editableContent
     /// This test uses REAL TIMING to verify the race condition fix works in practice.
-    /// The debounce interval is 2 seconds, so this test takes ~3 seconds to run.
+    ///
+    /// Strengthened (keystroke-lag perf ticket): the original version relied on the
+    /// default 2s debounce and a fixed 3s wait - "the flaky-but-related one" per the
+    /// redesign review, since a hardcoded absolute sleep against a hardcoded default
+    /// delay is exactly the kind of timing coupling that gets flaky under load. Now
+    /// sets `autoSaveDelay` explicitly to a short, deterministic value (like
+    /// AutoSaveServiceTests already does) and injects its own `AutoSaveService()`
+    /// instance for cross-test isolation (victor-zw4) rather than the process-wide
+    /// `.shared` actor. Same critical assertions as before, now proving the guarantee
+    /// holds under EditorViewModel's redesigned debounce (a MainActor Task in
+    /// EditorViewModel itself, building the full document once at fire time) - not
+    /// just the old design (actor-side debounce, content captured at schedule time).
     func testAutoSaveUsesCorrectContentAfterFileSwitchDuringDebounce() async throws {
-        // Ensure auto-save is enabled for this test
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+        UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
         defer {
-            // Reset to default after test
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
         }
 
         // Create actual test files on disk
@@ -599,11 +610,13 @@ final class EditorViewModelTests: XCTestCase {
         siteViewModel.selectedNode = fileNode1
         siteViewModel.currentEditingContent = contentFile1.markdownContent
 
-        // Create editor view model for file 1
+        // Create editor view model for file 1, with its own isolated AutoSaveService
+        // instance (victor-zw4) rather than the process-wide singleton.
         let editorVM1 = EditorViewModel(
             fileNode: fileNode1,
             contentFile: contentFile1,
-            siteViewModel: siteViewModel
+            siteViewModel: siteViewModel,
+            autoSaveService: AutoSaveService()
         )
 
         // Keep a strong reference to prevent deallocation
@@ -618,11 +631,11 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertTrue(siteViewModel.isFileModified(fileNode1.id),
                       "File 1 should be marked as modified")
 
-        // Give a tiny delay to ensure the auto-save task is created
+        // Give a tiny delay to ensure the debounce Task is created
         try await Task.sleep(for: .milliseconds(50))
 
         // CRITICAL: Switch to file 2 BEFORE the auto-save debounce completes
-        // The debounce is 2 seconds, so we switch immediately
+        // (debounce is 0.4s here, well before we switch away)
         siteViewModel.selectedNode = fileNode2
         siteViewModel.currentEditingContent = contentFile2.markdownContent
 
@@ -630,8 +643,8 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertEqual(siteViewModel.selectedNode?.id, fileNode2.id,
                        "Should have switched to file 2")
 
-        // Wait for auto-save to complete (debounce is 2 seconds, wait 3 to be safe)
-        try await Task.sleep(for: .seconds(3))
+        // Wait for auto-save to complete (debounce is 0.4s, wait 1s to be safe)
+        try await Task.sleep(for: .seconds(1))
 
         // Read file 1 from disk - it should have the MODIFIED content, not file 2's content
         let file1SavedContent = try String(contentsOf: testURL1, encoding: .utf8)
@@ -651,6 +664,145 @@ final class EditorViewModelTests: XCTestCase {
         let file2Content = try String(contentsOf: testURL2, encoding: .utf8)
         XCTAssertTrue(file2Content.contains("Original content of file 2"),
                       "File 2 should remain unchanged")
+    }
+
+    /// FIX (keystroke-lag perf ticket): frontmatter serialization now happens once, at
+    /// fire time, from LIVE state - not captured as a fixed string back when the
+    /// debounce was scheduled. This edits the frontmatter DIRECTLY on the model
+    /// (deliberately NOT calling handleContentChange() again) while the debounce from
+    /// an earlier markdown edit is still in flight, simulating any edit path that
+    /// doesn't happen to re-trigger scheduling. Under the OLD design
+    /// (`buildFullContent` captured synchronously inside `scheduleAutoSave`, before the
+    /// actor's debounce even started), this edit is silently lost - the string handed
+    /// to the actor was already finalized. RED under the pre-fix code; green once the
+    /// full document is built once, at fire time, from `contentFile.frontmatter` live.
+    func testFrontmatterEditedDuringDebounceWindowReachesDisk() async throws {
+        UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+        UserDefaults.standard.set(0.5, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        defer {
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EditorViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("frontmatter_race.md")
+        try "---\ntitle: Original Title\n---\n\nOriginal body".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let fileNode = FileNode(url: fileURL, isDirectory: false, isPageBundle: false)
+        let contentFile = try await FileSystemService.shared.readContentFile(at: fileURL)
+        fileNode.contentFile = contentFile
+        XCTAssertEqual(contentFile.frontmatter?.title, "Original Title") // sanity check on the fixture
+
+        siteViewModel.selectedNode = fileNode
+        siteViewModel.currentEditingContent = contentFile.markdownContent
+
+        let editorVM = EditorViewModel(
+            fileNode: fileNode,
+            contentFile: contentFile,
+            siteViewModel: siteViewModel,
+            autoSaveService: AutoSaveService()
+        )
+        _ = editorVM // keep a strong reference to prevent deallocation
+
+        // Start the debounce with a markdown edit.
+        editorVM.editableContent = "Body edited"
+        editorVM.handleContentChange()
+
+        // While the debounce is still pending, edit frontmatter directly on the model -
+        // NOT calling handleContentChange() again, to isolate "does fire-time build
+        // read live state" from "does re-triggering recapture" (already covered by the
+        // rapid-keystrokes test below).
+        try await Task.sleep(for: .milliseconds(150))
+        contentFile.frontmatter?.title = "Changed During Debounce"
+
+        // Wait past the debounce interval for the save to land.
+        try await Task.sleep(for: .seconds(1.0))
+
+        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertTrue(
+            onDisk.contains("Changed During Debounce"),
+            "Frontmatter edited during the debounce window must reach disk - the full " +
+            "document must be built from LIVE frontmatter at fire time, not a snapshot " +
+            "captured when the debounce was scheduled. Actual on disk:\n\(onDisk)"
+        )
+        XCTAssertFalse(onDisk.contains("Original Title"), "Stale frontmatter must not linger on disk")
+    }
+
+    /// Rapid keystrokes must coalesce into exactly one disk write, containing only the
+    /// FINAL edit's content. Each `handleContentChange()` call cancels and respawns
+    /// EditorViewModel's own debounce Task; this proves that coalescing still holds
+    /// after moving the debounce out of the actor and skipping per-keystroke
+    /// serialization. (Caveat documented where the assertions are: black-box disk
+    /// reads can't literally count write syscalls without instrumenting
+    /// AutoSaveService itself, which the DI design deliberately avoids doing via a
+    /// protocol/spy - "no behavioral fakes". What's provable, and what this test
+    /// proves, is the equivalent externally-observable contract: no premature write
+    /// lands before the debounce elapses, and exactly the final content lands once it
+    /// does, with nothing further arriving afterward.)
+    func testRapidKeystrokesResultInExactlyOneDiskWriteAfterDelay() async throws {
+        UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+        UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        defer {
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EditorViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("rapid_keystrokes.md")
+        let initialContent = "---\ntitle: Test\n---\n\nOriginal"
+        try initialContent.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let fileNode = FileNode(url: fileURL, isDirectory: false, isPageBundle: false)
+        let contentFile = try await FileSystemService.shared.readContentFile(at: fileURL)
+        fileNode.contentFile = contentFile
+
+        siteViewModel.selectedNode = fileNode
+        siteViewModel.currentEditingContent = contentFile.markdownContent
+
+        let editorVM = EditorViewModel(
+            fileNode: fileNode,
+            contentFile: contentFile,
+            siteViewModel: siteViewModel,
+            autoSaveService: AutoSaveService()
+        )
+        _ = editorVM
+
+        // Simulate rapid typing: each keystroke restarts the debounce, well under the
+        // configured 0.4s delay apart.
+        for i in 1...10 {
+            editorVM.editableContent = "Original edited \(i) times"
+            editorVM.handleContentChange()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        // Immediately after the last keystroke, nothing should be on disk yet - proves
+        // each keystroke actually cancelled the previous debounce rather than an
+        // earlier one firing independently mid-sequence.
+        let immediatelyAfter = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertEqual(immediatelyAfter, initialContent, "No premature write should have landed yet")
+
+        // Wait past the debounce interval for the single coalesced save to land.
+        try await Task.sleep(for: .seconds(1.0))
+
+        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertTrue(
+            onDisk.hasSuffix("Original edited 10 times"),
+            "The single coalesced write must contain the FINAL keystroke's content. Actual:\n\(onDisk)"
+        )
+        XCTAssertFalse(onDisk.hasSuffix("Original edited 9 times"), "Must not have written an intermediate keystroke's content")
+
+        // No further writes should land after this - exactly one save fired.
+        try await Task.sleep(for: .milliseconds(600))
+        let stillOnDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        XCTAssertEqual(stillOnDisk, onDisk, "No additional write should occur after the single coalesced save")
     }
 
     /// Integration test: Verifies manual save captures content correctly even with await suspension

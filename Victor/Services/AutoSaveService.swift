@@ -89,6 +89,55 @@ actor AutoSaveService {
         saveTasks.removeValue(forKey: fileURL)
     }
 
+    /// Perform a conflict-checked save immediately, without this actor's own debounce.
+    ///
+    /// (Perf ticket, post-victor-zw4): `EditorViewModel` now owns its own MainActor
+    /// debounce Task (reading `AppSettings.currentAutoSaveDelay()` directly) and builds
+    /// the full document - frontmatter serialization + markdown concat - exactly once,
+    /// at fire time, from LIVE state, rather than on every keystroke. By the time that
+    /// Task calls this method the wait is already over, so debouncing again here would
+    /// just add a second, redundant delay. This still reuses `performSave` for the
+    /// conflict-detection/`NSFileCoordinator` write - only the debounce wrapper is
+    /// skipped.
+    ///
+    /// `scheduleAutoSave` (above) is kept rather than removed or converted: nothing
+    /// currently calls it (TextEditorViewModel was never wired to `AutoSaveService` -
+    /// it has always had its own separate hand-rolled MainActor debounce + direct
+    /// `FileSystemService.writeFile` call, with no conflict detection), so there's no
+    /// compatibility need to preserve. It's kept because it's still correct, still
+    /// covered by AutoSaveServiceTests, and deleting/rewriting working, tested code
+    /// purely to shrink the file isn't worth the churn this session - see the
+    /// implementation report for victor's keystroke-lag fix.
+    func scheduleImmediateSave(
+        fileURL: URL,
+        content: String,
+        lastModified: Date,
+        onConflict: @escaping @Sendable @MainActor () -> ConflictResolution,
+        onSuccess: @escaping @Sendable @MainActor (Date) -> Void,
+        onError: @escaping @Sendable @MainActor (Error) -> Void
+    ) async {
+        // Supersede any still-pending debounced save for this file (defensive -
+        // callers aren't expected to mix the two paths for the same URL, but this
+        // guarantees exactly one write wins if they ever do).
+        saveTasks[fileURL]?.cancel()
+        saveTasks.removeValue(forKey: fileURL)
+        saveTokens.removeValue(forKey: fileURL)
+
+        do {
+            let newModificationDate = try await performSave(
+                fileURL: fileURL,
+                content: content,
+                lastModified: lastModified,
+                onConflict: onConflict
+            )
+            await onSuccess(newModificationDate)
+        } catch is CancellationError {
+            // Caller's own Task was cancelled (e.g. superseded by a newer debounce) - ignore
+        } catch {
+            await onError(error)
+        }
+    }
+
     /// Cancel the pending auto-save for a specific file
     func cancelAutoSave(for fileURL: URL) {
         saveTasks[fileURL]?.cancel()

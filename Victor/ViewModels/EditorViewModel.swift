@@ -193,23 +193,61 @@ class EditorViewModel {
         }
     }
 
-    /// Schedule auto-save with conflict detection
+    /// Schedule auto-save with conflict detection.
+    ///
+    /// Redesigned (keystroke-lag perf ticket): previously this ran `buildFullContent`
+    /// (frontmatter YAML serialization + full-document concat) on EVERY keystroke,
+    /// before handing a fixed string off to AutoSaveService's actor-side debounce.
+    /// Now the debounce itself lives here, as a plain MainActor `Task.sleep` (mirroring
+    /// TextEditorViewModel's pattern) - a keystroke only cancels-and-respawns this
+    /// Task, with no content capture and no serialization. The full document is built
+    /// exactly once, at fire time, from LIVE state (`siteViewModel.getEditedContent`/
+    /// `contentFile.frontmatter`) - this is a deliberate design decision (not just a
+    /// perf win): it also fixes a real bug where frontmatter edited during the
+    /// debounce window was silently lost, since the old code's captured string was
+    /// already finalized before that edit happened (see
+    /// testFrontmatterEditedDuringDebounceWindowReachesDisk).
+    ///
+    /// CRITICAL: `nodeID`/`nodeURL`/`capturedContentFile`/`capturedSiteViewModel`/
+    /// `service` are captured as local lets and used directly in the Task body below -
+    /// NOT via `self.xxx` - so this Task does not capture `self` at all. That's what
+    /// lets a file switch mid-debounce still complete the save: `cleanup()` releases
+    /// this EditorViewModel's own reference to `autoSaveTask`, and if nothing else
+    /// retains this ViewModel, it can be deallocated while the Task is still sleeping
+    /// - the save must not depend on `self` surviving that. Only the callbacks
+    /// (onConflict/onSuccess/onError), which update UI-indicator/model state that's
+    /// meaningless once this ViewModel might be stale, use `[weak self]` - same
+    /// no-op-after-dealloc contract `cleanup()` already documents.
     private func scheduleAutoSave() {
-        // CRITICAL: Capture all values NOW before any async operations
-        // This prevents race conditions if the user switches files before auto-save completes
-        let markdownToSave = editableContent  // Read once and capture
-        let fullContent = buildFullContent(markdownContent: markdownToSave)
-        let nodeID = fileNode.id  // Capture node ID to validate later
-        let nodeURL = fileNode.url  // Capture URL (shouldn't change, but be safe)
+        let nodeID = fileNode.id
+        let nodeURL = fileNode.url
+        let capturedContentFile = contentFile
+        let capturedSiteViewModel = siteViewModel
+        let service = autoSaveService
 
-        // Cancel any pending auto-save task before scheduling a new one
+        // Cancel any pending debounce before scheduling a new one - this alone (no
+        // content capture, no serialization) is now the entire per-keystroke cost.
         autoSaveTask?.cancel()
 
         autoSaveTask = Task {
-            await autoSaveService.scheduleAutoSave(
+            try? await Task.sleep(for: .seconds(AppSettings.currentAutoSaveDelay()))
+            guard !Task.isCancelled else { return } // superseded by a newer keystroke
+
+            // Build the full document ONCE, now, from LIVE state - not a snapshot
+            // taken back when this debounce was scheduled.
+            let markdownToSave = capturedSiteViewModel.getEditedContent(for: nodeID)
+                ?? capturedContentFile.markdownContent
+            let fullContent: String
+            if let frontmatter = capturedContentFile.frontmatter {
+                fullContent = FrontmatterParser.shared.serializeFrontmatter(frontmatter) + "\n" + markdownToSave
+            } else {
+                fullContent = markdownToSave
+            }
+
+            await service.scheduleImmediateSave(
                 fileURL: nodeURL,
                 content: fullContent,
-                lastModified: contentFile.lastModified,
+                lastModified: capturedContentFile.lastModified,
                 onConflict: { @MainActor [weak self] in
                     guard let self = self else { return .cancel }
                     // Only show conflict alert if this is still the selected file
@@ -236,7 +274,7 @@ class EditorViewModel {
 
                     // Update modification date
                     self.contentFile.lastModified = newModificationDate
-                    // Use the captured markdown content, not editableContent
+                    // Use the same markdown content that was actually written
                     self.contentFile.markdownContent = markdownToSave
 
                     // Record frontmatter version after successful auto-save

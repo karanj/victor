@@ -867,20 +867,29 @@ class SiteViewModel {
 
     // MARK: - File Status Management
 
-    /// Mark a file as having unsaved changes
+    /// Mark a file as having unsaved changes.
+    /// Transition-guarded (keystroke-lag fix): `handleContentChange` calls this on every
+    /// keystroke, and `modifiedFileIDs` is an `@Observable` stored property - an
+    /// unconditional `Set.insert` fires Observation even when the id is already present,
+    /// which re-renders ContentView's body (edited-dot) and rebuilds VictorApp's .commands
+    /// menu validation on every keystroke, not just on the rare present/absent transitions.
     func markFileModified(_ nodeID: UUID) {
+        guard !modifiedFileIDs.contains(nodeID) else { return }
         modifiedFileIDs.insert(nodeID)
     }
 
-    /// Clear the modified state for a file
+    /// Clear the modified state for a file. Transition-guarded - see markFileModified.
     func clearFileModified(_ nodeID: UUID) {
+        guard modifiedFileIDs.contains(nodeID) else { return }
         modifiedFileIDs.remove(nodeID)
     }
 
     /// Mark a file as recently saved (shows green checkmark that fades)
     func markFileSaved(_ nodeID: UUID) {
-        // Clear modified state
-        modifiedFileIDs.remove(nodeID)
+        // Clear modified state - routed through the guarded path (see markFileModified)
+        // rather than a direct Set.remove, so a redundant save (nothing was modified)
+        // doesn't fire modifiedFileIDs' Observation either.
+        clearFileModified(nodeID)
 
         // Add to recently saved
         recentlySavedFileIDs[nodeID] = Date()
