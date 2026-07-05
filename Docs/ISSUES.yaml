@@ -825,6 +825,37 @@ issues:
       and the server silently drifts to port+1. Set SO_REUSEADDR on the probe
       socket before bind.
 
+  - id: victor-adp
+    title: "AssetService: no in-flight guard against duplicate metadata loads"
+    status: open
+    priority: P3
+    type: bug
+    files: [Victor/Views/AssetBrowser/AssetBrowserView.swift]
+    estimate: 1-2h
+    detail: >
+      From Phase 3 review (2026-07-05): loadMetadataIfNeeded checks
+      !asset.isMetadataLoaded before an await; SwiftUI re-invokes a grid
+      cell's .task on fast scroll, so two overlapping invocations both pass
+      the guard and duplicate the NSImage decode + actor call. Idempotent
+      (last-write-wins) so not a correctness break - wasted CPU and
+      possible thumbnail flicker. Add an in-progress Set<URL> guard at the
+      call site or in the actor.
+
+  - id: victor-frv
+    title: "FileRowView: delete nonisolated(unsafe) by snapshotting into FileRowViewModel"
+    status: open
+    priority: P4
+    type: task
+    files: [Victor/Views/MainWindow/FileListView.swift]
+    estimate: 1h
+    detail: >
+      From Phase 3 review (2026-07-05): the nonisolated(unsafe) let node
+      suppression is judged safe today (Equatable only consulted by
+      MainActor SwiftUI diffing) but could be deleted outright by folding
+      the row's remaining direct node reads into FileRowViewModel's
+      existing snapshot pattern, so Equatable never holds the raw class
+      reference.
+
   - id: victor-sbx
     title: "App Sandbox is not actually enabled (empty entitlements)"
     status: open

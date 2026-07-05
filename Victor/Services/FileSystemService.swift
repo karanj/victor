@@ -350,10 +350,13 @@ final class FileSystemService: @unchecked Sendable {
 
     /// Write content to file at URL, off the caller's actor.
     /// `writeFile` itself carries no actor annotation (`FileSystemService` is a plain
-    /// `@unchecked Sendable` class, not `@MainActor`), so being `nonisolated async` is
-    /// already enough to leave the caller's actor (verified for the victor-tdt audit) -
-    /// `Task.detached` here was doing a job the function signature already did, so it's
-    /// removed rather than converted to a helper.
+    /// `@unchecked Sendable` class, not `@MainActor`), so `Task.detached` here was doing
+    /// a job the function signature already did - removed rather than converted to a
+    /// helper (victor-tdt audit). `@concurrent` (SE-0461, verified to compile in this
+    /// project's Swift 6.0 language mode with no upcoming-feature flag) compiler-pins
+    /// the blocking `NSFileCoordinator`/`write(to:)` calls off the concurrent executor,
+    /// regardless of the `NonisolatedNonsendingByDefault` setting.
+    @concurrent
     func writeFile(to url: URL, content: String) async throws {
         let coordinator = NSFileCoordinator()
         var coordinatorError: NSError?
@@ -657,9 +660,11 @@ final class FileSystemService: @unchecked Sendable {
 
     /// Read only the frontmatter portion of a markdown file (first ~4KB)
     /// This is much faster than reading the entire file for large content
-    /// Off the caller's actor: `readFrontmatterOnly` is `nonisolated async` on a plain
-    /// (non-`@MainActor`) class, which already leaves the caller's actor for its whole
-    /// body - `Task.detached` was redundant here (victor-tdt audit), so it's removed.
+    /// Off the caller's actor: `readFrontmatterOnly` is on a plain (non-`@MainActor`)
+    /// class, so `Task.detached` was redundant here - removed (victor-tdt audit).
+    /// `@concurrent` (SE-0461) compiler-pins the blocking `FileHandle` read off the
+    /// concurrent executor, regardless of the `NonisolatedNonsendingByDefault` setting.
+    @concurrent
     func readFrontmatterOnly(at url: URL) async -> FileStatusMetadata? {
         do {
             // Read first 4KB - more than enough for any reasonable frontmatter

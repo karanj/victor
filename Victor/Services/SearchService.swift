@@ -189,11 +189,12 @@ actor SearchService {
     }
 
     /// Write content to file with coordination.
-    /// `nonisolated` replaces `Task.detached` here (victor-tdt audit): `SearchService`
-    /// is an `actor`, so this private method was actor-isolated purely by inheriting
-    /// that isolation, not because it touches actor state - `nonisolated` already gets
-    /// the blocking coordinated write off the actor's executor under this project's
-    /// current default, without spawning a detached task.
+    /// `nonisolated` + `@concurrent` replaces `Task.detached` here (victor-tdt audit):
+    /// `SearchService` is an `actor`, so this private method was actor-isolated purely
+    /// by inheriting that isolation, not because it touches actor state. `@concurrent`
+    /// (SE-0461) compiler-pins the blocking coordinated write off the actor's executor,
+    /// regardless of the `NonisolatedNonsendingByDefault` setting.
+    @concurrent
     private nonisolated func writeFile(to url: URL, content: String) async throws {
         let coordinator = NSFileCoordinator()
         var coordinatorError: NSError?

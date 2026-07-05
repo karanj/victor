@@ -213,29 +213,34 @@ final class LiveReloadClientTests: XCTestCase {
     /// `events()` is single-consumer per call - two independent subscribers
     /// must each get their own stream, not split a single shared stream's
     /// elements between them (WP3.5 Cluster 9).
+    /// Confirms actual multicast, not just that two `AsyncStream`s can coexist:
+    /// drives one event through the actor's real `broadcast(_:)` path (via the
+    /// `broadcastForTesting` test seam - `broadcast(_:)` itself is `private`,
+    /// exercised identically by `handleReload`) and asserts BOTH
+    /// independently-obtained subscribers receive it. The previous version of
+    /// this test never triggered a broadcast at all, so it didn't actually back
+    /// up its own "independent streams" doc comment - only that two streams
+    /// could be created and torn down without crashing.
     func testEventsReturnsIndependentStreamsPerSubscriber() async throws {
         let streamA = await LiveReloadClient.shared.events()
         let streamB = await LiveReloadClient.shared.events()
 
-        // Two independently-obtained AsyncStreams over the same event type -
-        // confirm both can be iterated concurrently without one starving the
-        // other (each has cancelled below via task cancellation, matching the
-        // "cancellation is the only deregistration mechanism" contract).
-        let taskA = Task {
-            for await _ in streamA { break }
-        }
-        let taskB = Task {
-            for await _ in streamB { break }
-        }
+        // `AsyncStream.makeStream(of:)` defaults to `.unbounded` buffering, so
+        // yielding before either subscriber starts consuming is safe - the
+        // event is buffered and delivered on the first `first(where:)` below
+        // (verified: this ordering is deterministic, not a race).
+        await LiveReloadClient.shared.broadcastForTesting(.navigate("/posts/my-post/"))
 
-        // Neither task should ever receive an element here (no server is
-        // connected to broadcast one) - this just confirms both streams exist
-        // independently and can be set up/torn down without interfering with
-        // each other or crashing.
-        taskA.cancel()
-        taskB.cancel()
-        _ = await taskA.value
-        _ = await taskB.value
+        let receivedA = await streamA.first { _ in true }
+        let receivedB = await streamB.first { _ in true }
+
+        for received in [receivedA, receivedB] {
+            guard case .navigate(let path) = received else {
+                XCTFail("Expected .navigate event, got \(String(describing: received))")
+                continue
+            }
+            XCTAssertEqual(path, "/posts/my-post/")
+        }
     }
 
     /// `LiveReloadEvent` itself is a plain `Sendable` enum wrapping the two

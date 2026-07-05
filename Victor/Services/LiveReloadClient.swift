@@ -297,6 +297,15 @@ actor LiveReloadClient {
         }
     }
 
+    /// Drives an event through the exact same fan-out path `handleReload`/
+    /// `handleMessage` use, without needing a real WebSocket connection.
+    /// Exposed for testing purposes (LiveReloadClientTests - proves `events()`
+    /// delivers to every independently-obtained subscriber, not just that
+    /// multiple streams can coexist).
+    func broadcastForTesting(_ event: LiveReloadEvent) {
+        broadcast(event)
+    }
+
     private func handleReload(_ message: LiveReloadMessage) {
         guard let path = message.path else {
             Logger.shared.debug("[LiveReload] Reload message without path, refreshing")

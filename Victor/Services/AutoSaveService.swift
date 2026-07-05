@@ -164,17 +164,24 @@ actor AutoSaveService {
     }
 
     /// Get the modification date of a file, off the actor.
-    /// `nonisolated` replaces `Task.detached` here (victor-tdt audit): this private
-    /// method was actor-isolated purely by inheriting `AutoSaveService`'s isolation, not
-    /// because it touches any actor state - `nonisolated` already gets the blocking
-    /// `FileManager` call off the actor's executor under this project's current
-    /// `NonisolatedNonsendingByDefault = false` default, without spawning a detached task.
+    /// `nonisolated` + `@concurrent` replaces `Task.detached` here (victor-tdt audit):
+    /// this private method was actor-isolated purely by inheriting `AutoSaveService`'s
+    /// isolation, not because it touches any actor state. `@concurrent` (SE-0461)
+    /// compiler-pins this to the concurrent executor - verified to compile in this
+    /// project's Swift 6.0 language mode with no upcoming-feature flag - so the blocking
+    /// `FileManager` call is guaranteed off the actor regardless of the
+    /// `NonisolatedNonsendingByDefault` setting, not merely under today's default.
+    @concurrent
     private nonisolated func getFileModificationDate(url: URL) async throws -> Date {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
         return attributes[.modificationDate] as? Date ?? Date()
     }
 
-    /// Get the current content of a file, off the actor (see `getFileModificationDate` above).
+    /// Get the current content of a file, off the actor (see `getFileModificationDate`
+    /// above). `@concurrent` here is belt-and-suspenders: this method's own body just
+    /// awaits the already-`@concurrent` `readFileContentsOffActor`, but pinning it too
+    /// keeps the guarantee compiler-enforced at every layer, not just the leaf call.
+    @concurrent
     private nonisolated func getFileContent(url: URL) async throws -> String {
         try await readFileContentsOffActor(at: url)
     }

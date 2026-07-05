@@ -67,7 +67,9 @@ final class ArchetypeManager: @unchecked Sendable {
     @MainActor
     func parseArchetype(at url: URL) async throws -> Archetype {
         // Off-actor read (victor-tdt audit): see `DataFileParser.parseDataFile`'s
-        // identical comment for why `readFileContentsOffActor` replaces `Task.detached`.
+        // identical comment for why `readFileContentsOffActor` (now `@concurrent`,
+        // compiler-pinned) replaces `Task.detached`, and why `@concurrent` goes on the
+        // helper rather than on this `@MainActor` method.
         let content = try await readFileContentsOffActor(at: url)
 
         let (frontmatter, body, format) = parseFrontmatterAndBody(content)

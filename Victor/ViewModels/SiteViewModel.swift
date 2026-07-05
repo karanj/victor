@@ -1026,11 +1026,13 @@ class SiteViewModel {
             // Extract the Sendable URL before crossing the actor boundary - the
             // read must not capture `node` itself (a non-Sendable FileNode class),
             // same boundary-snapshot fix as Cluster 1's ContentFile handling.
-            // `readFileContentsOffActor` (shared `nonisolated` helper) replaces
-            // `Task.detached` here (victor-tdt audit): `SiteViewModel` is `@MainActor`,
-            // so this still needs to leave the actor for the blocking read, but a plain
-            // `nonisolated async` call does that while staying in the caller's
-            // structured task.
+            // `readFileContentsOffActor` (shared `nonisolated` + `@concurrent` helper)
+            // replaces `Task.detached` here (victor-tdt audit): `SiteViewModel` is
+            // `@MainActor`, so this still needs to leave the actor for the blocking
+            // read - `@concurrent` on the helper compiler-pins that, staying inside
+            // the caller's structured task. `@concurrent` can't also go on this method
+            // itself: `loadTextFileContent` stays `@MainActor` to mutate `node` after
+            // the read returns.
             let url = node.url
             let content = try await readFileContentsOffActor(at: url)
 

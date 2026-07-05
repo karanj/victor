@@ -19,9 +19,12 @@ final class DataFileParser: @unchecked Sendable {
     @MainActor
     func parseDataFile(at url: URL) async throws -> DataFile {
         // `parseDataFile` is `@MainActor`, so this read needs to genuinely leave that
-        // actor - `readFileContentsOffActor` (shared `nonisolated` helper) replaces
-        // `Task.detached` here (victor-tdt audit): same "off the actor" effect, but
-        // stays inside the caller's structured task.
+        // actor - `readFileContentsOffActor` (shared `nonisolated` + `@concurrent`
+        // helper) replaces `Task.detached` here (victor-tdt audit): same "off the
+        // actor" effect, but stays inside the caller's structured task. `@concurrent`
+        // lives on the helper itself (compiler-pinned there, not default-dependent);
+        // it can't also go on `parseDataFile` - this method stays `@MainActor` because
+        // it constructs the `@MainActor`-isolated `DataFile` after the read returns.
         let content = try await readFileContentsOffActor(at: url)
 
         guard let format = DataFormat.from(url: url) else {

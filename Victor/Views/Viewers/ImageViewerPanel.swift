@@ -122,8 +122,8 @@ struct ImageViewerPanel: View {
 
         do {
             // Off the actor for the blocking `NSImage(contentsOf:)` load. `nonisolated`
-            // replaces `Task.detached` here (victor-tdt audit) - same effect, but stays
-            // inside this view's structured task.
+            // + `@concurrent` replaces `Task.detached` here (victor-tdt audit) - same
+            // effect, but stays inside this view's structured task.
             let loadedImage = try await Self.loadImage(at: url)
 
             await MainActor.run {
@@ -138,6 +138,11 @@ struct ImageViewerPanel: View {
         }
     }
 
+    /// `@concurrent` (SE-0461, verified to compile in this project's Swift 6.0 language
+    /// mode with no upcoming-feature flag) compiler-pins the blocking
+    /// `NSImage(contentsOf:)` load off the concurrent executor, regardless of the
+    /// `NonisolatedNonsendingByDefault` setting.
+    @concurrent
     private nonisolated static func loadImage(at url: URL) async throws -> NSImage {
         guard let image = NSImage(contentsOf: url) else {
             throw ImageError.failedToLoad

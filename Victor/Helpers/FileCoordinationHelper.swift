@@ -30,6 +30,17 @@ import os
 /// - Returns: Whatever `resume` was called with on success.
 /// - Throws: Whatever `resume` was called with on failure, or the coordinator's own
 ///   error if the accessor block never ran.
+///
+/// `@concurrent` (SE-0461, verified to compile in this project's Swift 6.0 language
+/// mode without any upcoming-feature flag - see `OffActorFileIO.swift`'s doc comment
+/// for the full reasoning) pins this function - and, transitively, the blocking
+/// `NSFileCoordinator.coordinate(...)` call each `body` closure makes synchronously
+/// inside it - to the concurrent executor, compiler-enforced rather than
+/// default-setting-dependent. Callers (`AutoSaveService.performSave`,
+/// `FileSystemService.renameFile`/`duplicateFile`) don't need `@concurrent` themselves;
+/// awaiting this already-pinned function is what gets their blocking coordination work
+/// off the actor.
+@concurrent
 nonisolated func withFileCoordination<T: Sendable>(
     _ body: (_ resume: @escaping @Sendable (Result<T, Error>) -> Void) -> NSError?
 ) async throws -> T {

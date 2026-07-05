@@ -35,10 +35,14 @@ final class HugoConfigParser: @unchecked Sendable {
 
     /// Parse a Hugo config file from disk
     /// `parseConfig` carries no actor annotation (`HugoConfigParser` is a plain
-    /// `@unchecked Sendable` class), so being `nonisolated async` is already enough to
-    /// leave the caller's actor for this whole function body (verified for the
-    /// victor-tdt audit) - `Task.detached` here was redundant, so it's removed rather
-    /// than converted to a helper.
+    /// `@unchecked Sendable` class), so `Task.detached` here was redundant - removed
+    /// rather than converted to a helper (victor-tdt audit). `@concurrent` (SE-0461,
+    /// verified to compile in this project's Swift 6.0 language mode with no
+    /// upcoming-feature flag) compiler-pins the blocking `String(contentsOf:)` read off
+    /// the concurrent executor regardless of the `NonisolatedNonsendingByDefault`
+    /// setting, rather than relying on today's default the way a bare `nonisolated
+    /// async` function would.
+    @concurrent
     func parseConfig(at url: URL) async throws -> HugoConfig {
         let content = try String(contentsOf: url, encoding: .utf8)
 
@@ -207,8 +211,9 @@ final class HugoConfigParser: @unchecked Sendable {
     // MARK: - Raw Content
 
     /// Read raw file content from disk
-    /// Same reasoning as `parseConfig` above: already `nonisolated async` on a
-    /// non-`@MainActor` class, so `Task.detached` was redundant here.
+    /// Same reasoning as `parseConfig` above: `Task.detached` was redundant here, and
+    /// `@concurrent` now compiler-pins the blocking read off the actor.
+    @concurrent
     func readRawContent(from url: URL) async throws -> String {
         try String(contentsOf: url, encoding: .utf8)
     }

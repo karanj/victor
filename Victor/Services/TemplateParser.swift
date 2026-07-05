@@ -73,12 +73,16 @@ final class TemplateParser: @unchecked Sendable {
         template.markAsSaved()
     }
 
-    /// Off-actor write for `save(_:)` above. `nonisolated` replaces `Task.detached`
-    /// (victor-tdt audit): `save` is `@MainActor`, so this private helper needs to
-    /// actually leave that actor for the blocking write - `nonisolated async` does
-    /// that under this project's current default, while keeping the call inside the
-    /// caller's structured task (priority/cancellation/task-locals still propagate,
-    /// unlike a genuinely detached task).
+    /// Off-actor write for `save(_:)` above. `nonisolated` + `@concurrent` replaces
+    /// `Task.detached` (victor-tdt audit): `save` is `@MainActor`, so this private
+    /// helper needs to actually leave that actor for the blocking write. `@concurrent`
+    /// (SE-0461, verified to compile in this project's Swift 6.0 language mode with no
+    /// upcoming-feature flag) compiler-pins this to the concurrent executor, so the
+    /// guarantee holds regardless of the `NonisolatedNonsendingByDefault` setting - not
+    /// merely under today's default - while keeping the call inside the caller's
+    /// structured task (priority/cancellation/task-locals still propagate, unlike a
+    /// genuinely detached task).
+    @concurrent
     private nonisolated func writeTemplateContent(_ content: String, to url: URL) async throws {
         try content.write(to: url, atomically: true, encoding: .utf8)
     }
