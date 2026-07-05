@@ -44,6 +44,16 @@ class TextEditorViewModel {
 
     private var autoSaveTask: Task<Void, Never>?
 
+    /// Defaults to the process-wide singleton; tests inject their own instance for
+    /// isolation (victor-zw4).
+    private let fileSystemService: FileSystemService
+
+    // MARK: - Initialization
+
+    init(fileSystemService: FileSystemService = .shared) {
+        self.fileSystemService = fileSystemService
+    }
+
     /// Whether auto-save is enabled
     private var isAutoSaveEnabled: Bool {
         AppSettings.shared.isAutoSaveEnabled
@@ -90,7 +100,7 @@ class TextEditorViewModel {
         errorMessage = nil
 
         do {
-            try await FileSystemService.shared.writeFile(to: file.url, content: editableContent)
+            try await fileSystemService.writeFile(to: file.url, content: editableContent)
             file.content = editableContent
             file.markAsSaved()
             file.lastModified = Date()

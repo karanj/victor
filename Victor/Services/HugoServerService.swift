@@ -103,6 +103,11 @@ struct HugoBuildError: Identifiable, Equatable {
 
 /// Actor-based service for managing Hugo development server subprocess
 actor HugoServerService {
+    /// Non-private (victor-zw4): tests construct their own instance for
+    /// isolation from the process-wide singleton. `init()` only reads
+    /// UserDefaults (via `HugoServerConfig.fromUserDefaults()`'s `AppSettings`
+    /// calls for the `config` property default) - no process/subprocess side
+    /// effects, so plain construction is safe.
     static let shared = HugoServerService()
 
     // MARK: - Published State (accessed via async getters)
@@ -153,7 +158,7 @@ actor HugoServerService {
     private var buildErrorContinuations: [UUID: AsyncStream<[HugoBuildError]>.Continuation] = [:]
     private var outputContinuations: [UUID: AsyncStream<[String]>.Continuation] = [:]
 
-    private init() {}
+    init() {}
 
     // MARK: - Configuration
 

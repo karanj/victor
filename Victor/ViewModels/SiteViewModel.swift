@@ -273,14 +273,20 @@ class SiteViewModel {
     /// Duration to show "saved" indicator before fading
     private let savedIndicatorDuration: TimeInterval = 3.0
 
-    /// File system service (for site loading, content reading)
-    private let fileSystemService = FileSystemService.shared
+    /// File system service (for site loading, content reading). Not `private`
+    /// (victor-zw4): EditorTextView's Coordinator reaches this via `siteViewModel.fileSystemService`
+    /// so a test-injected instance flows through to the drag-and-drop import path too.
+    let fileSystemService: FileSystemService
 
-    /// File operations service (for create, rename, duplicate, trash)
-    private let fileOperationsService = FileOperationsService.shared
+    /// File operations service (for create, rename, duplicate, trash). Always built from
+    /// this instance's `fileSystemService` (victor-zw4) rather than `FileOperationsService.shared`,
+    /// so an injected `fileSystemService` isolates file operations too, not just reads.
+    private let fileOperationsService: FileOperationsService
 
-    /// Hugo server service (for start/stop/status streams - WP3.5 Cluster 9)
-    private let hugoServerService = HugoServerService.shared
+    /// Hugo server service (for start/stop/status streams - WP3.5 Cluster 9). Not `private`
+    /// (victor-zw4): ServerControlView/LivePreviewPanel/ServerConfigPopover reach this via
+    /// `siteViewModel.hugoServerService` instead of `HugoServerService.shared`.
+    let hugoServerService: HugoServerService
 
     /// Specialized file manager (for Hugo config, data files, templates, archetypes)
     let specializedFileManager = SpecializedFileManager()
@@ -457,7 +463,20 @@ class SiteViewModel {
     /// busy SwiftUI re-render loop.
     private(set) var initialSiteRestoreTask: Task<Void, Never>?
 
-    init() {
+    /// `fileSystemService`/`hugoServerService` default to the process-wide singletons;
+    /// tests pass their own instances for isolation (victor-zw4) - a fresh `FileSystemService`
+    /// per test needs no isolation itself (it's stateless), but a fresh `HugoServerService`
+    /// actor means a test's server-status assertions can't be polluted by another test (or a
+    /// real subprocess) touching the same `.shared` actor. `fileOperationsService` isn't a
+    /// constructor parameter - it's derived from `fileSystemService` so both stay in sync.
+    init(
+        fileSystemService: FileSystemService = .shared,
+        hugoServerService: HugoServerService = .shared
+    ) {
+        self.fileSystemService = fileSystemService
+        self.fileOperationsService = FileOperationsService(fileSystemService: fileSystemService)
+        self.hugoServerService = hugoServerService
+
         // Try to load previously opened site
         initialSiteRestoreTask = Task { [weak self] in
             await self?.loadSavedSite()
@@ -620,7 +639,7 @@ class SiteViewModel {
     func closeSite() {
         // Stop Hugo server if running
         Task {
-            await HugoServerService.shared.stop()
+            await hugoServerService.stop()
         }
         hugoServerStatus = .stopped
         hugoBuildErrors = []
@@ -990,7 +1009,7 @@ class SiteViewModel {
             guard let self = self else { return }
 
             // Load all metadata in parallel (on background threads)
-            let metadataMap = await FileSystemService.shared.loadStatusMetadata(for: urls)
+            let metadataMap = await self.fileSystemService.loadStatusMetadata(for: urls)
 
             // Update all nodes in a batch - since we're on @MainActor,
             // SwiftUI will coalesce these updates into a single render pass
@@ -1265,7 +1284,7 @@ class SiteViewModel {
         guard let canonicalFolder = findNode(url: folder.url), canonicalFolder.isDirectory else { return }
 
         do {
-            let destURL = try FileSystemService.shared.importFile(from: sourceURL, into: canonicalFolder.url, siteRoot: siteRoot)
+            let destURL = try fileSystemService.importFile(from: sourceURL, into: canonicalFolder.url, siteRoot: siteRoot)
 
             let newNode = FileNode(url: destURL, isDirectory: false, isPageBundle: false)
             canonicalFolder.addChild(newNode)
@@ -1298,7 +1317,7 @@ class SiteViewModel {
     func reloadFile(node: FileNode) async {
         do {
             // Read the file from disk
-            let freshContent = try await FileSystemService.shared.readContentFile(at: node.url)
+            let freshContent = try await fileSystemService.readContentFile(at: node.url)
 
             // Update the node's content file
             node.contentFile = freshContent
@@ -1636,13 +1655,13 @@ class SiteViewModel {
         guard let siteURL = site?.rootURL else {
             throw HugoServerError.notRunning
         }
-        try await HugoServerService.shared.start(siteURL: siteURL)
-        hugoServerURL = await HugoServerService.shared.serverURL
+        try await hugoServerService.start(siteURL: siteURL)
+        hugoServerURL = await hugoServerService.serverURL
     }
 
     /// Stop the Hugo development server
     func stopHugoServer() async {
-        await HugoServerService.shared.stop()
+        await hugoServerService.stop()
         hugoServerURL = nil
     }
 

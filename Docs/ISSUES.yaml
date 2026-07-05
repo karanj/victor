@@ -21,13 +21,22 @@ issues:
 
   - id: victor-zw4
     title: "ARCH-2: Dependency injection for the three fakeable services"
-    status: open
+    status: done
     priority: P2
     type: task
     files:
       - Victor/Services/FileSystemService.swift
       - Victor/Services/AutoSaveService.swift
       - Victor/Services/HugoServerService.swift
+      - Victor/ViewModels/SiteViewModel.swift
+      - Victor/ViewModels/EditorViewModel.swift
+      - Victor/ViewModels/TextEditorViewModel.swift
+      - Victor/Views/Editor/EditorTextView.swift
+      - Victor/Views/ServerControls/ServerControlView.swift
+      - Victor/Views/ServerControls/ServerConfigPopover.swift
+      - Victor/Views/Preview/LivePreviewPanel.swift
+      - VictorTests/AutoSaveServiceTests.swift
+      - VictorTests/SiteViewModelTests.swift
     estimate: 1d
     detail: >
       RE-SCOPED 2026-07-03 (see Docs/MAC-POLISH-DESIGN.md, Modernisation
@@ -37,6 +46,32 @@ issues:
       tests actually need to fake (FileSystemService, AutoSaveService,
       HugoServerService) via SwiftUI Environment or initializer, as
       @Observable/actor references. Stateless parsers keep static shared.
+
+      AS-BUILT 2026-07-05: initializer-parameter injection (`init(fileSystemService:
+      FileSystemService = .shared)`, stored `let`), not Environment - no consumer
+      needed Environment plumbing once threaded through existing references. All
+      three services gained a non-private `init()` (construction is side-effect-free
+      in each). SiteViewModel takes `fileSystemService`/`hugoServerService` init
+      params, exposes them as non-private `let`s, and builds `fileOperationsService`
+      from the injected `fileSystemService` rather than `FileOperationsService.shared`;
+      also fixed 6 pre-existing inconsistent direct `.shared` call sites inside
+      SiteViewModel's own methods that bypassed its own stored properties.
+      EditorViewModel/TextEditorViewModel take their own injected
+      AutoSaveService/FileSystemService param. ServerControlView, ServerConfigPopover
+      (via a new param from ServerControlView), and LivePreviewPanel thread
+      `siteViewModel.hugoServerService` instead of `HugoServerService.shared`;
+      EditorTextView's Coordinator threads `siteViewModel.fileSystemService`.
+      ServerLogView (separate Window scene, no SiteViewModel) and PreferencesView
+      (zero-arg Settings scene) keep `.shared` - no seam to inject through without
+      adding Environment plumbing for a single call site, which the design scopes
+      out. FileViewerRouter's `@State private var textEditorViewModel =
+      TextEditorViewModel()` also keeps the `.shared` default: a SwiftUI `@State`
+      property default can't reference `self.siteViewModel`. Tests: AutoSaveServiceTests
+      converted to a fresh `AutoSaveService()` per test plus a new
+      testTwoInstancesHaveIndependentPendingSaves isolation proof; one
+      SiteViewModelTests case now constructs `SiteViewModel(fileSystemService:
+      FileSystemService())` to exercise the injection seam end-to-end. Full suite
+      (481 tests) green; clean build, zero warnings.
 
   - id: victor-stn
     title: "Settings: typed @Observable AppSettings layer (UserDefaults-backed)"

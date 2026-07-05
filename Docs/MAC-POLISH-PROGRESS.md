@@ -73,7 +73,9 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 **PHASE 3 COMPLETE.** M-series modernisation target: victor-sc6/str/tdt/mod all closed. Remaining from original modernisation recommendations: victor-zw4 only (in flight).
 
-**Next up:** victor-zw4 (DI for the three fakeable services) → then Phase 4 optionals (mbe, 3l6, icn) at user's discretion.
+| zw4 | DI via initializer params w/ .shared defaults for FileSystemService/AutoSaveService/HugoServerService; consumers threaded through existing references (3 documented .shared exceptions: ServerLogView, PreferencesView, FileViewerRouter @State default); isolation-proof test; 6 pre-existing inconsistent call sites fixed. 481/481. **Original modernisation recommendation set now 100% complete** | victor-zw4 | **done** | this commit |
+
+**Next up:** PERF package (user-reported typing lag, same agent): (1) transition guards on markFileModified/clearFileModified — per-keystroke Set mutation invalidates menu bar + ContentView body via Observation; (2) move auto-save debounce into EditorViewModel (TextEditorViewModel pattern), frontmatter serialization at fire time only — captures contentFile refs not self, preserving save-after-switch. Test-first both. Then Phase 4 optionals at user's discretion.
 
 **USER manual — Phase 3 additions:**
 13. Server lifecycle (AsyncStream, highest priority): start/stop repeatedly; toolbar status + LivePreviewPanel + ServerControlView + a Server Logs window opened AFTER start all show correct state; kill hugo externally → crash-recovery + background notification still fire; LiveReload navigate/reload across a server restart.

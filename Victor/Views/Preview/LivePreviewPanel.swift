@@ -201,10 +201,13 @@ struct LivePreviewPanel: View {
     /// off of it) fixes that as a direct consequence of wiring the new
     /// per-status-change source of truth correctly, not a separate change.
     private func observeServerStatus() async {
-        for await newStatus in await HugoServerService.shared.statusUpdates() {
+        // Routed through the already-available `siteViewModel` reference (not `.shared`
+        // directly) so a test-injected `hugoServerService` isolates this observer too
+        // (victor-zw4).
+        for await newStatus in await siteViewModel.hugoServerService.statusUpdates() {
             status = newStatus
             if newStatus.isRunning {
-                serverURL = await HugoServerService.shared.serverURL
+                serverURL = await siteViewModel.hugoServerService.serverURL
             } else {
                 serverURL = nil
             }

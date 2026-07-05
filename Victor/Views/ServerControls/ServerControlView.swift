@@ -154,7 +154,10 @@ struct ServerControlView: View {
         .accessibilityLabel("Server Settings")
         .accessibilityHint("Configure Hugo server options")
         .popover(isPresented: $isConfigPopoverPresented) {
-            ServerConfigPopover(isPresented: $isConfigPopoverPresented)
+            ServerConfigPopover(
+                isPresented: $isConfigPopoverPresented,
+                hugoServerService: siteViewModel.hugoServerService
+            )
         }
     }
 
@@ -210,12 +213,12 @@ struct ServerControlView: View {
 
         if serverStatus.isRunning {
             // Stop the server
-            await HugoServerService.shared.stop()
+            await siteViewModel.hugoServerService.stop()
             dismissWindow(id: "server-logs")
         } else {
             // Start the server
             do {
-                try await HugoServerService.shared.start(siteURL: siteURL)
+                try await siteViewModel.hugoServerService.start(siteURL: siteURL)
             } catch {
                 showError(title: "Failed to Start Server", message: error.localizedDescription)
             }
@@ -224,7 +227,7 @@ struct ServerControlView: View {
 
     private func openInBrowser() {
         Task {
-            let serverURL = await HugoServerService.shared.serverURL
+            let serverURL = await siteViewModel.hugoServerService.serverURL
             guard let url = serverURL else { return }
             NSWorkspace.shared.open(url)
         }
@@ -242,7 +245,7 @@ struct ServerControlView: View {
     /// improvement over the old callback registration, which never
     /// deregistered and leaked for the toolbar's lifetime.
     private func observeServerStatus() async {
-        for await newStatus in await HugoServerService.shared.statusUpdates() {
+        for await newStatus in await siteViewModel.hugoServerService.statusUpdates() {
             withAnimation(reduceMotion ? nil : .default) {
                 serverStatus = newStatus
             }
@@ -250,7 +253,7 @@ struct ServerControlView: View {
     }
 
     private func observeBuildErrors() async {
-        for await errors in await HugoServerService.shared.buildErrorUpdates() {
+        for await errors in await siteViewModel.hugoServerService.buildErrorUpdates() {
             withAnimation(reduceMotion ? nil : .default) {
                 buildErrors = errors
             }
@@ -259,7 +262,7 @@ struct ServerControlView: View {
 
     private func checkHugoInstallation() {
         Task {
-            isHugoInstalled = await HugoServerService.shared.isHugoInstalled()
+            isHugoInstalled = await siteViewModel.hugoServerService.isHugoInstalled()
 
             if !isHugoInstalled {
                 showError(

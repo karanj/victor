@@ -11,6 +11,10 @@ class EditorViewModel {
     private let contentFile: ContentFile
     private let siteViewModel: SiteViewModel
 
+    /// Defaults to the process-wide singleton; tests inject their own instance for
+    /// isolation (victor-zw4) - see AutoSaveServiceTests.
+    private let autoSaveService: AutoSaveService
+
     // MARK: - State
 
     /// Local content storage - doesn't depend on selectedNode
@@ -69,10 +73,16 @@ class EditorViewModel {
 
     // MARK: - Initialization
 
-    init(fileNode: FileNode, contentFile: ContentFile, siteViewModel: SiteViewModel) {
+    init(
+        fileNode: FileNode,
+        contentFile: ContentFile,
+        siteViewModel: SiteViewModel,
+        autoSaveService: AutoSaveService = .shared
+    ) {
         self.fileNode = fileNode
         self.contentFile = contentFile
         self.siteViewModel = siteViewModel
+        self.autoSaveService = autoSaveService
 
         // Initialize local content from per-file storage if it exists (preserves unsaved edits),
         // otherwise fall back to the saved content from the file
@@ -196,7 +206,7 @@ class EditorViewModel {
         autoSaveTask?.cancel()
 
         autoSaveTask = Task {
-            await AutoSaveService.shared.scheduleAutoSave(
+            await autoSaveService.scheduleAutoSave(
                 fileURL: nodeURL,
                 content: fullContent,
                 lastModified: contentFile.lastModified,

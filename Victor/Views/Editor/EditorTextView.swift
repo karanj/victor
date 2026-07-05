@@ -134,7 +134,10 @@ final class HighlightingTextView: NSTextView {
             )
 
             do {
-                let destURL = try FileSystemService.shared.importFile(
+                // Routed through the already-available `siteViewModel` reference (not
+                // `.shared` directly) so a test-injected `fileSystemService` covers this
+                // drag-and-drop import path too (victor-zw4).
+                let destURL = try siteViewModel.fileSystemService.importFile(
                     from: droppedURL, into: destination.directory, siteRoot: siteRoot
                 )
                 let markdown = ImageDropPathResolver.markdownImageReference(for: destURL, style: destination.style)

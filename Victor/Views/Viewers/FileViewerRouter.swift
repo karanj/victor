@@ -5,7 +5,11 @@ struct FileViewerRouter: View {
     let node: FileNode
     @Bindable var siteViewModel: SiteViewModel
 
-    // ViewModel for text file editing (created per-file)
+    // ViewModel for text file editing (created per-file). victor-zw4: this `@State`
+    // default-value expression runs before `siteViewModel` is available (struct
+    // property defaults can't reference `self`), so there's no seam here to thread
+    // `siteViewModel.fileSystemService` through - kept on `TextEditorViewModel`'s
+    // `.shared` default parameter instead.
     @State private var textEditorViewModel = TextEditorViewModel()
 
     var body: some View {

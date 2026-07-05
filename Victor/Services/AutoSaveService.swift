@@ -2,6 +2,10 @@ import Foundation
 
 /// Service for handling auto-save with debouncing and conflict detection
 actor AutoSaveService {
+    /// Non-private (victor-zw4): tests construct their own instance for
+    /// isolation from the process-wide singleton (fresh actor per test = no
+    /// cross-test interference via shared pending-save state). Construction
+    /// is side-effect-free — no I/O, no UserDefaults read.
     static let shared = AutoSaveService()
 
     /// Pending debounced saves keyed by file URL.
@@ -16,7 +20,7 @@ actor AutoSaveService {
         AppSettings.currentAutoSaveDelay()
     }
 
-    private init() {}
+    init() {}
 
     /// Schedule an auto-save operation with debouncing
     /// - Parameters:

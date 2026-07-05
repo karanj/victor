@@ -96,6 +96,10 @@ struct PreferencesView: View {
         }
     }
 
+    /// victor-zw4: kept on `.shared` rather than injected - `PreferencesView()` is
+    /// constructed with zero args from a `Settings` scene (`VictorApp.swift`) with no
+    /// `SiteViewModel` or other seam available, so threading an instance through would
+    /// mean adding SwiftUI Environment plumbing solely for this one version check.
     private func checkHugoInstallation() {
         Task {
             isHugoInstalled = await HugoServerService.shared.isHugoInstalled()

@@ -283,6 +283,11 @@ final class SiteViewModelTests: XCTestCase {
 
     // MARK: - Save All Modified Files Tests
 
+    /// victor-zw4: constructs `SiteViewModel` with its own `FileSystemService()` instance
+    /// rather than relying on the `fileSystemService: FileSystemService = .shared` default,
+    /// proving the injection seam actually works end-to-end (site load, edited-content
+    /// cache, and the write-to-disk path all go through the injected instance) rather
+    /// than only compiling.
     func testSaveAllModifiedFilesWritesEditedContentNotStaleContent() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
@@ -292,7 +297,7 @@ final class SiteViewModelTests: XCTestCase {
         let fileURL = tempDir.appendingPathComponent("post.md")
         try "original content".write(to: fileURL, atomically: true, encoding: .utf8)
 
-        let viewModel = SiteViewModel()
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
         let node = FileNode(url: fileURL, isDirectory: false)
         node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "original content")
         viewModel.fileNodes = [node]

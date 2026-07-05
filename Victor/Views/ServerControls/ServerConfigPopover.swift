@@ -7,8 +7,13 @@ struct ServerConfigPopover: View {
     @State private var config: HugoServerConfig
     @State private var hasChanges = false
 
-    init(isPresented: Binding<Bool>) {
+    /// Defaults to the process-wide singleton; the caller passes its own
+    /// `siteViewModel.hugoServerService` when one is available (victor-zw4).
+    private let hugoServerService: HugoServerService
+
+    init(isPresented: Binding<Bool>, hugoServerService: HugoServerService = .shared) {
         self._isPresented = isPresented
+        self.hugoServerService = hugoServerService
 
         // Load initial config from service
         let initialConfig = HugoServerConfig()
@@ -117,7 +122,7 @@ struct ServerConfigPopover: View {
 
     private func loadCurrentConfig() {
         Task {
-            let currentConfig = await HugoServerService.shared.config
+            let currentConfig = await hugoServerService.config
             await MainActor.run {
                 config = currentConfig
                 hasChanges = false
@@ -129,7 +134,7 @@ struct ServerConfigPopover: View {
         guard isValidConfig else { return }
 
         Task {
-            await HugoServerService.shared.updateConfig(config)
+            await hugoServerService.updateConfig(config)
             await MainActor.run {
                 hasChanges = false
                 isPresented = false

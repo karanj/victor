@@ -2,11 +2,13 @@ import Foundation
 import AppKit
 
 /// Service for file system operations and folder management
-/// Stateless aside from `private init()` — safe to hand across actor boundaries.
+/// Stateless — safe to hand across actor boundaries. `init()` is non-private
+/// (victor-zw4) so tests can construct isolated instances instead of sharing
+/// the process-wide `.shared` singleton; construction has no side effects.
 final class FileSystemService: @unchecked Sendable {
     static let shared = FileSystemService()
 
-    private init() {}
+    init() {}
 
     // MARK: - Path Security
 
