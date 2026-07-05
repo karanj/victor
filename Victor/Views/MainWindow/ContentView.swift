@@ -210,42 +210,49 @@ struct ContentView: View {
         .toolbar(id: "com.victor.mainToolbar") {
             // Note: NavigationSplitView automatically provides a sidebar toggle button
             // so we don't need to add our own
+            //
+            // CRASH FIX (2026-07-05): item CONTENT must be as stable as item
+            // identity. `if condition { View }` with no else makes AppKit
+            // remove/re-insert the underlying NSToolbarItem whenever the
+            // condition flips (twice per file switch via isLoadingFile and
+            // contentFile), which both thrashes toolbar layout and races the
+            // customization controller's item array - crashing with
+            // "index>=0 && index<[_currentItems count]". Items are therefore
+            // always present; state is expressed via .disabled/.opacity only
+            // (also the HIG-correct behavior: toolbar items grey out, they
+            // don't vanish).
 
-            // Hugo server controls (only when a site is loaded)
             ToolbarItem(id: "serverControls", placement: .automatic, showsByDefault: true) {
-                if siteViewModel.site != nil {
-                    ServerControlView(siteViewModel: siteViewModel)
-                }
+                ServerControlView(siteViewModel: siteViewModel)
+                    .disabled(siteViewModel.site == nil)
             }
 
             ToolbarItem(id: "loadingIndicator", placement: .automatic, showsByDefault: true) {
-                if siteViewModel.isLoading || siteViewModel.isLoadingFile {
-                    ProgressView()
-                        .controlSize(.small)
-                        .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
-                }
+                ProgressView()
+                    .controlSize(.small)
+                    .opacity(siteViewModel.isLoading || siteViewModel.isLoadingFile ? 1 : 0)
+                    .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
             }
 
-            // Only show inspector toggle for markdown content files
+            // Inspector toggle: enabled only for markdown content files
             // (Assets have their own built-in detail panel)
             ToolbarItem(id: "inspectorToggle", placement: .primaryAction, showsByDefault: true) {
-                if siteViewModel.selectedNode?.contentFile != nil {
-                    Button {
-                        if reduceMotion {
+                Button {
+                    if reduceMotion {
+                        siteViewModel.toggleInspector()
+                    } else {
+                        withAnimation(.easeInOut(duration: AppConstants.Animation.standard)) {
                             siteViewModel.toggleInspector()
-                        } else {
-                            withAnimation(.easeInOut(duration: AppConstants.Animation.standard)) {
-                                siteViewModel.toggleInspector()
-                            }
                         }
-                    } label: {
-                        Label(
-                            settings.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
-                            systemImage: "sidebar.right"
-                        )
                     }
-                    .help("Toggle Inspector (⌥⌘I)")
+                } label: {
+                    Label(
+                        settings.isInspectorVisible ? "Hide Inspector" : "Show Inspector",
+                        systemImage: "sidebar.right"
+                    )
                 }
+                .help("Toggle Inspector (⌥⌘I)")
+                .disabled(siteViewModel.selectedNode?.contentFile == nil)
             }
         }
         .alert("Error", isPresented: Binding(

@@ -68,7 +68,20 @@ Plan: `MAC-POLISH-IMPLEMENTATION-PLAN.md` · Design: `MAC-POLISH-DESIGN.md`
 
 | 3.6 | Task.detached audit: 14 converted to nonisolated async (semantics verified empirically w/ pthread probe), 1 kept+justified (readContentFile); OffActorFileIO helper dedupes 6 read sites. M4: os.Logger engine (categories+privacy), Date.FormatStyle in 7 files (parseDate cascade kept on DateFormatter, documented), FileCoordinationHelper w/ OSAllocatedUnfairLock (Swift 6 rejected the naive guard — flip already paying off) + 4 tests, @Entry macro for FocusedValues. 480/480, zero warnings | victor-tdt/mod | **done** | this commit |
 
-**Next up:** 3.R (Opus review of d2d8832..HEAD; scrutiny list: FileRowView nonisolated(unsafe), AsyncStream behavior surface, WP3.5 undocumented-gap fixes, WP3.6 nonisolated conversions, FileCoordinationHelper lock design) → Phase 3 gate: full suite, push, USER manual checklist.
+| 3.R | Opus review: no gate-blockers. All 5 scrutiny targets adjudicated (nonisolated(unsafe) safe-as-scoped; AsyncStream consumers traced, no double-processing; test assertions intact). P1 fixed: @concurrent pins on 11 blocking-I/O functions (MainActor-touching wrappers correctly NOT annotated — pin lives on the shared helper; empirically verified conflict); LiveReload multicast test strengthened via broadcastForTesting seam. Backlog filed: victor-adp, victor-frv. Agent survived 5th session-limit kill (4-file/15-annotation checkpoint recovered) | victor-sc6 | **done** | this commit |
+| HF-1 | **Toolbar crash hotfix** (user-reported: NSException index>=0 && index<[_currentItems count] loading a draft post): WP1.2's stable-identity workaround was insufficient — conditional item CONTENT (if with no else) still removes/re-inserts the underlying NSToolbarItem, racing the customization controller and thrashing layout twice per file switch (also the reported perf degradation). All 3 items now permanently present; state via .disabled/.opacity (HIG-correct: grey out, don't vanish). USER to verify: crash gone + file-switch feel restored | victor-wc1 | **done** | this commit |
+
+**PHASE 3 COMPLETE.** M-series modernisation target: victor-sc6/str/tdt/mod all closed. Remaining from original modernisation recommendations: victor-zw4 only (in flight).
+
+**Next up:** victor-zw4 (DI for the three fakeable services) → then Phase 4 optionals (mbe, 3l6, icn) at user's discretion.
+
+**USER manual — Phase 3 additions:**
+13. Server lifecycle (AsyncStream, highest priority): start/stop repeatedly; toolbar status + LivePreviewPanel + ServerControlView + a Server Logs window opened AFTER start all show correct state; kill hugo externally → crash-recovery + background notification still fire; LiveReload navigate/reload across a server restart.
+14. Asset browser: scroll grid fast — thumbnails load once each, no flicker.
+15. Editors: markdown typing + image drop, focus mode, template editor highlight + save (Cluster 11 Coordinator changes).
+16. Visual: light/dark pass on status colors + badges; Reduce Motion ON kills all listed animations; inspector shows vibrancy.
+17. Keyboard: ⌥⌘←/→ pane cycle; ⌥⌘J sidebar filter; ⌥⌘F Find & Replace; Help > Keyboard Shortcuts window.
+18. Toolbar (HF-1): switch between files incl. uncached drafts rapidly — no crash, no lag; server controls grey out (not vanish) with no site; Customize Toolbar still persists placement across relaunch.
 
 **USER manual smoke — Phase 2 additions** (Phase 1 list above still stands):
 7. Drag a site folder onto the Dock icon → opens (with confirm if dirty); drag TWO folders at once → only the first opens, no hang. Finder "Open With ▸ Victor" on a site folder works. A non-Hugo folder shows an error without disturbing the current site.
