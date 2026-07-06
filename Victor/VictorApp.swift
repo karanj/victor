@@ -173,7 +173,21 @@ enum SharingHelper {
 /// editor supports Markdown formatting or shortcodes (e.g. TextEditorPanel
 /// for plain-text files) - the Format menu simply disables those items when
 /// the focused editor doesn't provide them.
-struct EditorActions {
+///
+/// Equatable, keyed on `editorID` ONLY (keystroke-lag fix, part 2): this value
+/// is published from editor-panel `body`s that re-evaluate on every keystroke,
+/// constructing a fresh instance each time. Closures can't be compared, so
+/// without Equatable SwiftUI must treat every publish as a change - invalidating
+/// VictorApp's body (a `@FocusedValue` holder) and rebuilding the entire
+/// `.commands` NSMenu tree per character typed. Comparing by the publishing
+/// editor's identity is sound because the closures read live `@State`/
+/// `@Observable` values at call time: two instances published for the same file
+/// node are behaviorally interchangeable. Do NOT add per-keystroke state (e.g. a
+/// dirty flag) to this struct or its equality - that reintroduces the storm.
+/// Pinned by EditorActionsTests.
+struct EditorActions: Equatable {
+    /// Identity of the publishing editor - the file node's id. Drives Equatable.
+    let editorID: UUID
     /// Apply Markdown formatting at the cursor/selection. `nil` when the
     /// focused editor doesn't support Markdown formatting.
     var formatting: ((MarkdownFormat) -> Void)?
@@ -183,8 +197,15 @@ struct EditorActions {
     var save: () async -> Bool
     /// Reload the focused document from disk, discarding local edits.
     var revert: () async -> Void
-    /// Whether the focused document currently has unsaved changes.
+    /// Whether the focused document currently has unsaved changes. Menu
+    /// validation calls this - it must consult transition-guarded state
+    /// (SiteViewModel.isFileModified), never per-keystroke @Observable state
+    /// like EditorViewModel.hasUnsavedChanges (see keystroke-lag notes).
     var hasUnsavedChanges: () -> Bool
+
+    static func == (lhs: EditorActions, rhs: EditorActions) -> Bool {
+        lhs.editorID == rhs.editorID
+    }
 }
 
 extension FocusedValues {

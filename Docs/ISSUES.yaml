@@ -107,6 +107,37 @@ issues:
 
   # ── Editor ─────────────────────────────────────────────────────
 
+  - id: victor-cjp
+    title: "Plain-text editor: cursor jumps to end of file ~1s after pausing typing"
+    status: open
+    priority: P2
+    type: bug
+    files:
+      - Victor/Views/Editor/TextEditorPanel.swift
+      - Victor/Services/SyntaxHighlighter.swift
+      - Victor/ViewModels/TextEditorViewModel.swift
+    estimate: 2-4h
+    detail: >
+      User-reported (2026-07-06, while typing in a JavaScript file): pause typing
+      for about a second and the insertion point jumps to the bottom of the file,
+      making the plain-text editor unusable for real editing. Two suspects, both
+      on ~1s-after-last-keystroke timers, in likely order: (1) the syntax
+      highlighting debounce in TextEditorTextView.Coordinator.textDidChange
+      (0.3s Timer -> applySyntaxHighlighting) — if SyntaxHighlighter.applyHighlighting
+      replaces the whole attributed string (setAttributedString) rather than
+      applying attribute runs in place, AppKit resets the insertion point to the
+      end of the replaced range; (2) the auto-save writeback path — if the save
+      mutates state that flows back into TextEditorTextView.updateNSView's
+      `textView.string != text` branch with a stale/normalized string, the full
+      `textView.string = text` replacement moves the cursor (its
+      selectedRanges save/restore may not survive the replacement). Repro first
+      with highlighting disabled (non-highlighted file type, e.g. .txt) to split
+      the two. Fix should preserve selection across whichever mutation is at
+      fault; add a regression test at the coordinator/viewmodel level if the
+      cause is (2), or a highlighting-preserves-selection test if (1).
+      Markdown editor (EditorTextView/HighlightingTextView) is unaffected — it
+      has no highlighting timer and its updateNSView guards by count+equality.
+
   - id: victor-lnr
     title: "Line numbers gutter in editor"
     status: open

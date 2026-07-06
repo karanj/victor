@@ -21,13 +21,21 @@ class EditorViewModel {
     /// This eliminates the race condition class where stale EditorViewModels could read/write wrong file's content
     private var localContent: String
 
-    /// Editable content - reads from local storage and syncs back to SiteViewModel
+    /// Editable content - reads from local storage and syncs back to SiteViewModel.
+    ///
+    /// The setter OWNS change handling (dirty flag + auto-save scheduling):
+    /// a keystroke is one binding write from NSTextView's textDidChange, handled
+    /// entirely here. Previously the view delivered this via
+    /// `.onChange(of: viewModel.editableContent)`, which made EditorPanelView's
+    /// body read per-keystroke state and re-evaluate on every character typed
+    /// (keystroke-lag fix, part 2 - see EditorViewModelTests).
     var editableContent: String {
         get { localContent }
         set {
             localContent = newValue
             // Sync back to per-file storage in SiteViewModel
             siteViewModel.setEditedContent(newValue, for: fileNode.id)
+            handleContentChange()
         }
     }
 
@@ -102,6 +110,10 @@ class EditorViewModel {
         siteViewModel.setEditedContent(newMarkdown, for: fileNode.id)
         // Also update frontmatter version when content is externally updated
         lastSavedFrontmatterVersion = contentFile.frontmatter?.version ?? 0
+        // Re-evaluate dirty state (e.g. clears the modified flag after an external
+        // reload). The view's onChange(of: editableContent) used to provide this
+        // as a side effect; the model owns it now.
+        handleContentChange()
     }
 
     /// Handle content changes for file status tracking and auto-save

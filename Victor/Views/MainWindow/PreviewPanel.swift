@@ -36,7 +36,14 @@ struct PreviewPanel: View {
                     updatePreview(content: currentContent)
                 }
             }
-            .onChange(of: siteViewModel.currentEditingContent) { _, newContent in
+            // Observes editedContentVersion, NOT currentEditingContent: the
+            // content cache (FileCacheManager) is deliberately not @Observable,
+            // so watching the string only ever fired when unrelated invalidations
+            // happened to re-render this view - pre keystroke-lag fix, that was
+            // the per-keystroke focused-value storm doing the preview's job by
+            // accident. The version counter is the explicit typing signal
+            // (keystroke-lag fix, part 2).
+            .onChange(of: siteViewModel.editedContentVersion) { _, _ in
                 // Only do live updates if enabled (for split view performance)
                 // In Preview-only mode, onAppear handles the update
                 guard siteViewModel.isLivePreviewEnabled else { return }
@@ -48,7 +55,9 @@ struct PreviewPanel: View {
                     oldTask?.cancel()
                     try? await Task.sleep(for: .seconds(AppConstants.Preview.debounceInterval))
                     if !Task.isCancelled {
-                        updatePreview(content: newContent)
+                        // Read at fire time, not capture time - renders the text
+                        // as it stands after the debounce window.
+                        updatePreview(content: currentContent)
                     }
                 }
             }

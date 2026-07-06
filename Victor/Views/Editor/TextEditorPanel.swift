@@ -15,8 +15,10 @@ struct TextEditorPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar
-            textEditorToolbar
+            // Toolbar - extracted subview so its per-keystroke reads
+            // (hasUnsavedChanges etc.) invalidate only the toolbar, not this
+            // body and the focused-value publish below (keystroke-lag fix, part 2).
+            TextEditorToolbar(textFile: textFile, viewModel: viewModel)
 
             Divider()
 
@@ -39,7 +41,11 @@ struct TextEditorPanel: View {
         }
         // Publish this editor's actions to the menu bar (File > Save/Revert).
         // No Markdown formatting or shortcode picker for plain-text files.
+        // Equatable by editorID + transition-guarded hasUnsavedChanges, for the
+        // same per-keystroke menu-storm reasons as EditorPanelView's publish -
+        // see EditorActions' doc comment (keystroke-lag fix, part 2).
         .focusedValue(\.editorActions, EditorActions(
+            editorID: nodeID,
             formatting: nil,
             showShortcodePicker: nil,
             save: {
@@ -50,12 +56,23 @@ struct TextEditorPanel: View {
                 await viewModel.reloadFromDisk()
             },
             hasUnsavedChanges: {
-                viewModel.hasUnsavedChanges
+                siteViewModel.isFileModified(nodeID)
             }
         ))
     }
+}
 
-    private var textEditorToolbar: some View {
+/// Toolbar for the plain-text editor. Separate view (not a computed property of
+/// TextEditorPanel) so its reads of per-keystroke viewModel state re-render only
+/// this subtree (keystroke-lag fix, part 2).
+private struct TextEditorToolbar: View {
+    let textFile: TextFile
+    @Bindable var viewModel: TextEditorViewModel
+
+    // Accessibility
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
         HStack {
             // File type icon and name
             Image(systemName: textFile.fileType.systemImage)

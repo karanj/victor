@@ -190,6 +190,96 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isFileRecentlySaved(nodeID), "recentlySavedFileIDs should still be updated")
     }
 
+    // MARK: - Edited-Content Version Tests (keystroke-lag fix, part 2)
+    //
+    // The live preview and inspector must learn about typing WITHOUT piggybacking
+    // on unrelated view invalidations (the old behavior: they watched
+    // `currentEditingContent`, whose backing FileCacheManager is not @Observable,
+    // so their onChange only re-evaluated when the per-keystroke focused-value
+    // storm happened to re-render everything). `editedContentVersion` is the
+    // deliberate, narrow signal: bumped on every content edit, observed ONLY by
+    // views that genuinely need per-keystroke wake-ups (each with its own
+    // debounce). Menu validation must NOT depend on it - see the test below.
+
+    /// Every setEditedContent call must bump the version so content observers
+    /// (preview, inspector stats) get a change signal.
+    func testSetEditedContentBumpsEditedContentVersion() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+
+        let before = viewModel.editedContentVersion
+        viewModel.setEditedContent("hello", for: nodeID)
+
+        XCTAssertEqual(viewModel.editedContentVersion, before + 1)
+    }
+
+    /// The currentEditingContent setter (used by Focus Mode's binding) must route
+    /// through the same versioned path, not silently write to the cache.
+    func testCurrentEditingContentSetterBumpsEditedContentVersion() {
+        let viewModel = SiteViewModel()
+        let node = FileNode(
+            url: FileManager.default.temporaryDirectory.appendingPathComponent("version-test.md"),
+            isDirectory: false,
+            isPageBundle: false
+        )
+        viewModel.selectedNode = node
+
+        let before = viewModel.editedContentVersion
+        viewModel.currentEditingContent = "typed in focus mode"
+
+        XCTAssertEqual(viewModel.editedContentVersion, before + 1)
+        XCTAssertEqual(viewModel.getEditedContent(for: node.id), "typed in focus mode")
+    }
+
+    /// Observation sanity check: a view tracking editedContentVersion (the
+    /// preview) must be invalidated by a keystroke.
+    func testEditedContentVersionFiresObservationOnEdit() {
+        let viewModel = SiteViewModel()
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.editedContentVersion
+        } onChange: {
+            observedChange = true
+        }
+
+        viewModel.setEditedContent("x", for: UUID())
+
+        XCTAssertTrue(observedChange, "Preview/inspector rely on editedContentVersion firing per edit")
+    }
+
+    /// The menu-validation contract: menu items' .disabled() closures consult
+    /// isFileModified (backed by transition-guarded modifiedFileIDs). Once a file
+    /// is already dirty, a subsequent keystroke - content write plus the redundant
+    /// markFileModified that handleContentChange issues - must not fire Observation
+    /// for an isFileModified reader. This is the invariant that keeps NSMenu
+    /// rebuilds off the per-keystroke path; if it regresses, typing lag returns.
+    func testKeystrokeOnAlreadyDirtyFileDoesNotFireMenuValidationObservation() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+
+        // First keystroke: file transitions to dirty (fires, legitimately).
+        viewModel.setEditedContent("first keystroke", for: nodeID)
+        viewModel.markFileModified(nodeID)
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.isFileModified(nodeID)
+        } onChange: {
+            observedChange = true
+        }
+
+        // Every subsequent keystroke does exactly this pair.
+        viewModel.setEditedContent("second keystroke", for: nodeID)
+        viewModel.markFileModified(nodeID)
+
+        XCTAssertFalse(
+            observedChange,
+            "A keystroke on an already-dirty file must not invalidate isFileModified readers " +
+            "(menu .disabled() validation) - that path rebuilds NSMenu items"
+        )
+    }
+
     func testMarkFileSaved() {
         let viewModel = SiteViewModel()
         let nodeID = UUID()

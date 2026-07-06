@@ -124,6 +124,20 @@ Content is stored in two places for file switching without data loss:
 
 **Source of truth**: `EditorViewModel.localContent` during active editing; `SiteViewModel.editedContentByFile` when file is not actively edited.
 
+### Per-Keystroke Invalidation Contract (typing latency)
+Two keystroke-lag incidents (2026-07-05/06) came from @Observable state that mutates per keystroke leaking into wide-blast-radius SwiftUI scopes. The rules, pinned by tests in `SiteViewModelTests`, `EditorViewModelTests`, `EditorActionsTests`:
+
+**State tiers** — know which you're reading:
+- *Per-keystroke*: `EditorViewModel.localContent`/`hasUnsavedChanges`/`cursorLine`/`cursorColumn`, `TextEditorViewModel.editableContent`/`hasUnsavedChanges`, `SiteViewModel.editedContentVersion`, `Frontmatter.version` (while typing in a frontmatter field)
+- *Transition-only*: `SiteViewModel.modifiedFileIDs` / `isFileModified(_:)` — mutate only on clean↔dirty transitions (guarded in `markFileModified`/`clearFileModified`)
+
+**Rules**:
+1. Menu bar (`.commands`), App body, ContentView body, and toolbar content may only depend on transition-only state. Menu `.disabled()` closures call `siteViewModel.isFileModified(id)`, never `viewModel.hasUnsavedChanges`.
+2. `EditorActions` (focused value) is Equatable **by `editorID` only**. It's republished on every editor-body evaluation; without that equality every keystroke invalidates VictorApp's `@FocusedValue` → full `.commands` NSMenu rebuild. Never add per-keystroke state to it.
+3. Per-keystroke reads live in leaf views only (`SaveButton`, `EditorStatusBarView`, `TextEditorToolbar`) so invalidation stays contained. Don't pass per-keystroke values as plain params through parent bodies, and don't add `.onChange(of: <per-keystroke state>)` to a large body — the read itself subscribes the whole body.
+4. Typing is handled in the model, not the view: `EditorViewModel.editableContent`'s setter owns dirty-flag + auto-save scheduling. No view `.onChange` on editor content.
+5. Views that genuinely need typing signals (PreviewPanel, InspectorPanel stats) observe `SiteViewModel.editedContentVersion` (bumped in `setEditedContent`, the single write path) behind their own debounce. `FileCacheManager` is deliberately NOT @Observable — the raw content string must never be an observation dependency.
+
 ### Service Concurrency Strategy
 Services use different patterns based on their state and access patterns:
 

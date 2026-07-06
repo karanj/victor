@@ -39,13 +39,14 @@ struct EditorPanelView: View {
             // Breadcrumb navigation
             BreadcrumbBar(fileNode: fileNode, siteViewModel: siteViewModel)
 
-            // Toolbar
+            // Toolbar. Takes the viewModel rather than plain isSaving/
+            // hasUnsavedChanges values: reading those here would make THIS body
+            // (and everything below it) re-evaluate on every keystroke. The
+            // toolbar's leaf views read them instead (keystroke-lag fix, part 2).
             EditorToolbar(
                 isLivePreviewEnabled: $siteViewModel.isLivePreviewEnabled,
                 showShortcodePicker: $showShortcodePicker,
-                isSaving: viewModel.isSaving,
-                showSavedIndicator: viewModel.showSavedIndicator,
-                hasUnsavedChanges: viewModel.hasUnsavedChanges,
+                viewModel: viewModel,
                 reduceMotion: reduceMotion,
                 contentPaths: siteViewModel.contentPaths,
                 onSave: { Task { await viewModel.save() } },
@@ -80,11 +81,10 @@ struct EditorPanelView: View {
             )
             .opacity(contentOpacity)
 
-            // Status bar with cursor position
-            EditorStatusBar(
-                cursorLine: viewModel.cursorLine,
-                cursorColumn: viewModel.cursorColumn
-            )
+            // Status bar with cursor position. Wrapped so the per-keystroke
+            // cursorLine/cursorColumn reads invalidate only this leaf, not the
+            // whole panel body (keystroke-lag fix, part 2).
+            EditorStatusBarView(viewModel: viewModel)
 
             // Bottom Frontmatter Panel (collapsible)
             if let frontmatter = contentFile.frontmatter {
@@ -109,9 +109,17 @@ struct EditorPanelView: View {
             viewModel.cleanup()
         }
         .navigationTitle(viewModel.navigationTitle)
-        // Publish this editor's actions to the menu bar (Format menu, File > Save/Revert).
-        // See EditorActions in VictorApp.swift for the consolidated focused-value shape.
+        // Publish this editor's actions to the menu bar (Format menu, File >
+        // Save/Revert). EditorActions is Equatable by editorID, so re-running
+        // this body does NOT invalidate VictorApp's @FocusedValue (and with it
+        // the whole .commands NSMenu tree) - only a file switch does. The
+        // hasUnsavedChanges closure consults isFileModified (transition-guarded
+        // modifiedFileIDs), NOT viewModel.hasUnsavedChanges, so menu validation
+        // never registers a dependency on per-keystroke content state. Both
+        // halves are load-bearing for typing latency (keystroke-lag fix, part 2;
+        // see EditorActions' doc comment and EditorActionsTests).
         .focusedValue(\.editorActions, EditorActions(
+            editorID: fileNode.id,
             formatting: { format in
                 editorCoordinator?.applyFormat(format)
             },
@@ -125,7 +133,7 @@ struct EditorPanelView: View {
                 await viewModel.reloadFromDisk()
             },
             hasUnsavedChanges: {
-                viewModel.hasUnsavedChanges
+                siteViewModel.isFileModified(fileNode.id)
             }
         ))
         // When the selected file changes, reset the editor view model so it
@@ -153,10 +161,10 @@ struct EditorPanelView: View {
         .onChange(of: contentFile.markdownContent) { _, newValue in
             viewModel.updateContent(from: newValue)
         }
-        // Handle content changes (live preview + auto-save)
-        .onChange(of: viewModel.editableContent) { _, _ in
-            viewModel.handleContentChange()
-        }
+        // NOTE deliberately absent: no .onChange(of: viewModel.editableContent).
+        // That read would re-register this whole body against per-keystroke
+        // content state. Typing is handled entirely inside the editableContent
+        // setter (dirty flag + auto-save) - keystroke-lag fix, part 2.
         // Handle frontmatter changes using lightweight version counter
         // This avoids expensive snapshot creation/comparison on every render cycle
         .onChange(of: contentFile.frontmatter?.version) { _, _ in
@@ -180,9 +188,10 @@ struct EditorPanelView: View {
 struct EditorToolbar: View {
     @Binding var isLivePreviewEnabled: Bool
     @Binding var showShortcodePicker: Bool
-    let isSaving: Bool
-    let showSavedIndicator: Bool
-    let hasUnsavedChanges: Bool
+    /// Passed through to SaveButton, which reads the per-keystroke save state
+    /// (isSaving/showSavedIndicator/hasUnsavedChanges) in its own body so those
+    /// reads invalidate only that leaf (keystroke-lag fix, part 2).
+    let viewModel: EditorViewModel
     let reduceMotion: Bool
     let contentPaths: [ContentPathSuggestion]
     let onSave: () -> Void
@@ -196,9 +205,7 @@ struct EditorToolbar: View {
             LivePreviewToggle(isEnabled: $isLivePreviewEnabled)
             actionSeparator
             SaveButton(
-                isSaving: isSaving,
-                showSavedIndicator: showSavedIndicator,
-                hasUnsavedChanges: hasUnsavedChanges,
+                viewModel: viewModel,
                 reduceMotion: reduceMotion,
                 onSave: onSave
             )
@@ -368,11 +375,15 @@ struct LivePreviewToggle: View {
     }
 }
 
-/// Save button with animated indicator showing save state
+/// Save button with animated indicator showing save state.
+///
+/// Reads isSaving/showSavedIndicator/hasUnsavedChanges from the viewModel in its
+/// OWN body - hasUnsavedChanges reads per-keystroke content state, and taking it
+/// as a plain value would force every ancestor that constructs this view to
+/// re-evaluate per keystroke (keystroke-lag fix, part 2). This leaf re-rendering
+/// per keystroke is cheap; EditorPanelView's whole body doing so is not.
 struct SaveButton: View {
-    let isSaving: Bool
-    let showSavedIndicator: Bool
-    let hasUnsavedChanges: Bool
+    let viewModel: EditorViewModel
     let reduceMotion: Bool
     let onSave: () -> Void
 
@@ -380,9 +391,9 @@ struct SaveButton: View {
     @State private var indicatorOpacity: Double = 0
 
     var body: some View {
-        if showSavedIndicator {
+        if viewModel.showSavedIndicator {
             savedIndicator
-        } else if isSaving {
+        } else if viewModel.isSaving {
             ProgressView()
                 .controlSize(.small)
         } else {
@@ -424,7 +435,21 @@ struct SaveButton: View {
         }
         // No .keyboardShortcut here - File > Save (Cmd+S) is the single owner,
         // routed through the focusedValue(\.editorActions) published above.
-        .disabled(!hasUnsavedChanges)
+        .disabled(!viewModel.hasUnsavedChanges)
         .buttonStyle(.bordered)
+    }
+}
+
+/// Leaf wrapper isolating the per-keystroke cursorLine/cursorColumn reads from
+/// EditorPanelView's body (keystroke-lag fix, part 2). EditorStatusBar itself
+/// stays a dumb Int-taking component (previewable without a viewModel).
+private struct EditorStatusBarView: View {
+    let viewModel: EditorViewModel
+
+    var body: some View {
+        EditorStatusBar(
+            cursorLine: viewModel.cursorLine,
+            cursorColumn: viewModel.cursorColumn
+        )
     }
 }

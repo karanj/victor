@@ -76,6 +76,16 @@ class SiteViewModel {
         }
     }
 
+    /// Monotonic counter bumped on every edited-content write (keystroke-lag fix,
+    /// part 2). FileCacheManager is deliberately NOT @Observable, so this is the
+    /// one narrow signal views may observe to react to typing (live preview,
+    /// inspector stats - each behind its own debounce). Before this existed, those
+    /// views watched `currentEditingContent` and only updated because unrelated
+    /// per-keystroke invalidations happened to re-render them. Menu validation and
+    /// window chrome must NOT read this - use isFileModified, which only changes
+    /// on clean<->dirty transitions. Pinned by SiteViewModelTests.
+    private(set) var editedContentVersion: Int = 0
+
     /// Current editing content (for preview sync across layout modes)
     /// Computed property that reads/writes from cache based on selected node
     var currentEditingContent: String {
@@ -85,7 +95,7 @@ class SiteViewModel {
         }
         set {
             guard let nodeID = selectedNode?.id else { return }
-            fileCacheManager.setContent(newValue, for: nodeID)
+            setEditedContent(newValue, for: nodeID)
         }
     }
 
@@ -96,9 +106,11 @@ class SiteViewModel {
     }
 
     /// Set edited content for a specific file by ID (regardless of which file is selected)
-    /// Used by EditorViewModel to update content for its specific file
+    /// Used by EditorViewModel to update content for its specific file.
+    /// The single write path for edited content - bumps editedContentVersion.
     func setEditedContent(_ content: String, for nodeID: UUID) {
         fileCacheManager.setContent(content, for: nodeID)
+        editedContentVersion += 1
     }
 
     /// Live preview enabled state (controls real-time updates in split view)

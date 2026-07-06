@@ -68,7 +68,10 @@ struct InspectorPanel: View {
             // File changed - update stats immediately
             updateStatsImmediately()
         }
-        .onChange(of: siteViewModel.currentEditingContent) { _, _ in
+        // editedContentVersion, not currentEditingContent - same reasoning as
+        // PreviewPanel: the content cache isn't @Observable, the version counter
+        // is the explicit typing signal (keystroke-lag fix, part 2).
+        .onChange(of: siteViewModel.editedContentVersion) { _, _ in
             // Content changed - debounce the stats update
             // Only update if statistics section is expanded (visible)
             if isStatisticsExpanded {

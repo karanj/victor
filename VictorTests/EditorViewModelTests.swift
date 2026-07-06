@@ -123,6 +123,59 @@ final class EditorViewModelTests: XCTestCase {
                       "Stale ViewModel should not clear modified state of its file")
     }
 
+    // MARK: - Setter-Owned Change Handling (keystroke-lag fix, part 2)
+
+    /// Typing must be fully handled by the editableContent setter itself -
+    /// dirty-flag and auto-save scheduling included. Previously the view layer
+    /// drove this via `.onChange(of: viewModel.editableContent)`, which forced
+    /// EditorPanelView's whole body to re-evaluate (and the focused value to
+    /// republish) on every keystroke just to deliver this call.
+    func testSettingEditableContentMarksFileModifiedWithoutExplicitHandleContentChange() {
+        siteViewModel.selectedNode = testFileNode1
+
+        let editorVM = EditorViewModel(
+            fileNode: testFileNode1,
+            contentFile: testContentFile1,
+            siteViewModel: siteViewModel
+        )
+
+        XCTAssertFalse(siteViewModel.isFileModified(testFileNode1.id))
+
+        // A keystroke is just a binding write - no view-layer onChange follow-up.
+        editorVM.editableContent = "Modified by typing"
+
+        XCTAssertTrue(
+            siteViewModel.isFileModified(testFileNode1.id),
+            "The editableContent setter must own change handling; no view onChange call should be needed"
+        )
+    }
+
+    /// updateContent (external reload / save writeback) must also re-evaluate
+    /// dirty state itself, preserving the clear-on-reload behavior the removed
+    /// view onChange used to provide.
+    func testUpdateContentClearsModifiedStateWhenContentMatchesSaved() {
+        siteViewModel.selectedNode = testFileNode1
+
+        let editorVM = EditorViewModel(
+            fileNode: testFileNode1,
+            contentFile: testContentFile1,
+            siteViewModel: siteViewModel
+        )
+
+        editorVM.editableContent = "Dirty edit"
+        siteViewModel.markFileModified(testFileNode1.id) // belt-and-braces: dirty either way
+        XCTAssertTrue(siteViewModel.isFileModified(testFileNode1.id))
+
+        // External reload: disk content becomes the truth and matches the editor.
+        testContentFile1.markdownContent = "Reloaded from disk"
+        editorVM.updateContent(from: "Reloaded from disk")
+
+        XCTAssertFalse(
+            siteViewModel.isFileModified(testFileNode1.id),
+            "After an external reload that matches the editor content, the file must read as clean"
+        )
+    }
+
     // MARK: - False Unsaved Changes Tests
 
     /// Test that handleContentChange() guards against spurious onChange triggers after file switch
@@ -421,6 +474,12 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertTrue(result,
                       "FIXED: hasUnsavedChanges correctly reports file 1 has unsaved changes, " +
                       "using local content storage instead of computed property")
+
+        // The editableContent write at the top of this test happened while file 1
+        // was still selected, so it legitimately marked file 1 modified (the setter
+        // owns change handling now - keystroke-lag fix, part 2). Clear that flag to
+        // isolate what this assertion actually pins: the stale-ViewModel guard.
+        siteViewModel.clearFileModified(testFileNode1.id)
 
         // The guard in handleContentChange() is still present for defense-in-depth
         editorVM1.handleContentChange()
