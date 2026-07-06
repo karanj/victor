@@ -300,4 +300,100 @@ final class HugoServerTests: XCTestCase {
         task.cancel()
         await fulfillment(of: [loopEnded], timeout: 2.0)
     }
+
+    // MARK: - Output-Pump Line Bridge (server stuck-on-starting fix)
+    //
+    // WP3.5b's `FileHandle.bytes.lines` pumps wedged in production: AsyncBytes
+    // funnels its BLOCKING reads through a shared per-process IO executor, so
+    // with stdout and stderr iterated concurrently, the pipe with no data
+    // (hugo writes little to stderr) parks a blocking read that starves the
+    // other pipe's reader. Hugo's "Web Server is available" line was never
+    // consumed -> status stuck at .starting forever while the real server
+    // served requests fine. `HugoServerService.lines(from:)` bridges
+    // readabilityHandler (GCD: callback only when data exists, no blocking
+    // reads) into an AsyncStream so the for-await consumption shape survives.
+
+    /// The exact production failure, reduced: two pipes consumed concurrently,
+    /// one stays silent. The active pipe's line MUST still arrive. Under the
+    /// bytes.lines implementation this times out; under the bridge it passes.
+    func testSilentSecondPipeDoesNotStarveActivePipe() async throws {
+        let activePipe = Pipe()
+        let silentPipe = Pipe() // write end stays open, never written: no EOF, no data
+
+        let silentConsumer = Task {
+            for await _ in HugoServerService.lines(from: silentPipe.fileHandleForReading) {}
+        }
+
+        let lineArrived = XCTestExpectation(description: "active pipe's line arrives despite silent sibling")
+        let activeConsumer = Task {
+            for await line in HugoServerService.lines(from: activePipe.fileHandleForReading) {
+                if line.contains("Web Server is available") {
+                    lineArrived.fulfill()
+                }
+            }
+        }
+
+        // Give the silent consumer a head start so its (hypothetical) blocking
+        // read is already parked - the wedge ordering seen in production.
+        try await Task.sleep(for: .milliseconds(100))
+        activePipe.fileHandleForWriting.write(Data("Web Server is available at http://localhost:1313/\n".utf8))
+
+        await fulfillment(of: [lineArrived], timeout: 3.0)
+
+        activeConsumer.cancel()
+        silentConsumer.cancel()
+        try? activePipe.fileHandleForWriting.close()
+        try? silentPipe.fileHandleForWriting.close()
+    }
+
+    /// Complete lines arrive in order; EOF (write end closing) finishes the stream.
+    func testLineBridgeYieldsLinesAndFinishesOnEOF() async throws {
+        let pipe = Pipe()
+        pipe.fileHandleForWriting.write(Data("one\ntwo\n".utf8))
+        try pipe.fileHandleForWriting.close()
+
+        var received: [String] = []
+        for await line in HugoServerService.lines(from: pipe.fileHandleForReading) {
+            received.append(line)
+        }
+
+        XCTAssertEqual(received, ["one", "two"])
+    }
+
+    /// A trailing partial line (no terminating newline) must be flushed at EOF,
+    /// not silently dropped - error output often ends without a newline.
+    func testLineBridgeFlushesPartialFinalLineOnEOF() async throws {
+        let pipe = Pipe()
+        pipe.fileHandleForWriting.write(Data("complete\npartial-tail".utf8))
+        try pipe.fileHandleForWriting.close()
+
+        var received: [String] = []
+        for await line in HugoServerService.lines(from: pipe.fileHandleForReading) {
+            received.append(line)
+        }
+
+        XCTAssertEqual(received, ["complete", "partial-tail"])
+    }
+
+    /// A line split across separate writes is assembled once its newline
+    /// arrives (readabilityHandler chunks don't align with line boundaries).
+    func testLineBridgeAssemblesLineSplitAcrossWrites() async throws {
+        let pipe = Pipe()
+
+        let collector = Task { () -> [String] in
+            var received: [String] = []
+            for await line in HugoServerService.lines(from: pipe.fileHandleForReading) {
+                received.append(line)
+            }
+            return received
+        }
+
+        pipe.fileHandleForWriting.write(Data("hel".utf8))
+        try await Task.sleep(for: .milliseconds(50))
+        pipe.fileHandleForWriting.write(Data("lo\nworld\n".utf8))
+        try pipe.fileHandleForWriting.close()
+
+        let received = await collector.value
+        XCTAssertEqual(received, ["hello", "world"])
+    }
 }

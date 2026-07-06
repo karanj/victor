@@ -72,6 +72,55 @@ struct HugoServerConfig: Equatable {
     }
 }
 
+// MARK: - Line Buffer
+
+/// Accumulates raw pipe chunks and splits out complete lines for
+/// `HugoServerService.lines(from:)`. Chunk boundaries don't align with line
+/// boundaries, so a partial line is held until its newline arrives; `drain()`
+/// flushes whatever remains at EOF.
+///
+/// `@unchecked Sendable` + NSLock: the readabilityHandler that feeds `append`
+/// runs on a GCD queue while `drain` can race it at EOF/termination, and this
+/// type is captured by a `@Sendable` closure. All state access is inside the
+/// lock; the class is otherwise a leaf (no callbacks out while locked).
+private final class LineBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending = Data()
+
+    /// Append a chunk; returns any lines completed by it (newlines stripped,
+    /// trailing CR removed so CRLF input behaves).
+    func append(_ chunk: Data) -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        pending.append(chunk)
+        var lines: [String] = []
+        while let newlineIndex = pending.firstIndex(of: UInt8(ascii: "\n")) {
+            let lineData = pending.subdata(in: pending.startIndex..<newlineIndex)
+            pending.removeSubrange(pending.startIndex...newlineIndex)
+            lines.append(Self.decode(lineData))
+        }
+        return lines
+    }
+
+    /// Flush the trailing partial line (if any) at EOF.
+    func drain() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !pending.isEmpty else { return nil }
+        let line = Self.decode(pending)
+        pending.removeAll()
+        return line
+    }
+
+    private static func decode(_ data: Data) -> String {
+        var line = String(decoding: data, as: UTF8.self)
+        if line.hasSuffix("\r") {
+            line.removeLast()
+        }
+        return line
+    }
+}
+
 // MARK: - Build Error
 
 /// Represents a Hugo build error or warning
@@ -125,9 +174,9 @@ actor HugoServerService {
     private var errorPipe: Pipe?
     private var siteRootURL: URL?
 
-    /// Line-pumping tasks reading `outputPipe`/`errorPipe` via
-    /// `fileHandleForReading.bytes.lines` (WP3.5 Cluster 9 / M2 - replaces
-    /// `Pipe.readabilityHandler`).
+    /// Line-pumping tasks reading `outputPipe`/`errorPipe` via the
+    /// `lines(from:)` readabilityHandler bridge (see setupOutputHandlers for
+    /// why NOT `FileHandle.bytes.lines` - the stuck-on-starting fix).
     private var stdoutTask: Task<Void, Never>?
     private var stderrTask: Task<Void, Never>?
 
@@ -475,39 +524,67 @@ actor HugoServerService {
 
     // MARK: - Output Handling
 
-    /// Pump stdout/stderr line-by-line via `AsyncLineSequence` instead of
-    /// `Pipe.readabilityHandler` (WP3.5 Cluster 9 / M2). EOF (the process's pipe
-    /// write end closing) simply finishes the sequence - the `for try await`
-    /// loop exits normally, no error, no special-casing needed. A genuine read
-    /// error (rare - bad descriptor) throws out of the loop and is logged via
-    /// `logPumpFailure`, matching the file's existing silent
-    /// swallow-and-continue behavior for parse errors elsewhere.
+    /// Pump stdout/stderr line-by-line via the `lines(from:)` readabilityHandler
+    /// bridge below. NOT `FileHandle.bytes.lines`: AsyncBytes funnels its
+    /// BLOCKING `read(2)` calls through a shared per-process IO executor, so
+    /// two pipes iterated concurrently starve each other - the pipe with no
+    /// data (hugo writes little to stderr) parks a blocking read that stops the
+    /// stdout reader from ever being serviced again. In production that meant
+    /// hugo's "Web Server is available" line was never consumed and status
+    /// stuck at `.starting` forever while the real server served fine
+    /// (stuck-on-starting fix, 2026-07-06; pinned by
+    /// testSilentSecondPipeDoesNotStarveActivePipe). EOF (the process's pipe
+    /// write end closing) finishes the stream and the loop exits normally.
     private func setupOutputHandlers(outputPipe: Pipe, errorPipe: Pipe) {
         stdoutTask = Task { [weak self] in
-            do {
-                for try await line in outputPipe.fileHandleForReading.bytes.lines {
-                    guard let self else { return }
-                    await self.processLine(line, isError: false)
-                }
-            } catch {
-                await self?.logPumpFailure(error, isError: false)
+            for await line in Self.lines(from: outputPipe.fileHandleForReading) {
+                guard let self else { return }
+                await self.processLine(line, isError: false)
             }
         }
         stderrTask = Task { [weak self] in
-            do {
-                for try await line in errorPipe.fileHandleForReading.bytes.lines {
-                    guard let self else { return }
-                    await self.processLine(line, isError: true)
-                }
-            } catch {
-                await self?.logPumpFailure(error, isError: true)
+            for await line in Self.lines(from: errorPipe.fileHandleForReading) {
+                guard let self else { return }
+                await self.processLine(line, isError: true)
             }
         }
     }
 
-    /// `.bytes.lines` already yields one line at a time, so unlike the old
-    /// `processOutput(_:isError:)` this needs no manual
-    /// `.components(separatedBy: .newlines)` splitting/filtering.
+    /// Bridge a pipe's read end into an `AsyncStream` of lines using
+    /// `readabilityHandler` - GCD invokes the handler only when data actually
+    /// exists (or at EOF), so nothing ever blocks waiting on a silent pipe.
+    /// Empty `availableData` signals EOF: flush any partial trailing line,
+    /// clear the handler, finish the stream. Cancelling the consuming task
+    /// fires `onTermination`, which also clears the handler - the same
+    /// teardown contract `stop()` relied on with the old direct
+    /// readabilityHandler code.
+    ///
+    /// `nonisolated static` (not an actor method): the handler runs on GCD's
+    /// arbitrary queue and must not hop through this actor - the whole point
+    /// is that pumping never contends with actor work.
+    nonisolated static func lines(from handle: FileHandle) -> AsyncStream<String> {
+        AsyncStream { continuation in
+            let buffer = LineBuffer()
+            handle.readabilityHandler = { readHandle in
+                let chunk = readHandle.availableData
+                if chunk.isEmpty { // EOF
+                    if let tail = buffer.drain() {
+                        continuation.yield(tail)
+                    }
+                    readHandle.readabilityHandler = nil
+                    continuation.finish()
+                    return
+                }
+                for line in buffer.append(chunk) {
+                    continuation.yield(line)
+                }
+            }
+            continuation.onTermination = { _ in
+                handle.readabilityHandler = nil
+            }
+        }
+    }
+
     private func processLine(_ line: String, isError: Bool) async {
         guard !line.isEmpty else { return }
 
@@ -520,11 +597,6 @@ actor HugoServerService {
         await parseLine(line)
 
         notifyOutputChange()
-    }
-
-    private func logPumpFailure(_ error: Error, isError: Bool) {
-        let streamName = isError ? "stderr" : "stdout"
-        Logger.shared.debug("[HugoServer] \(streamName) pump ended with error: \(error.localizedDescription)")
     }
 
     private func parseLine(_ line: String) async {
