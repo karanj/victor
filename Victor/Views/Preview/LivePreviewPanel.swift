@@ -52,11 +52,18 @@ struct LivePreviewPanel: View {
                         currentURL: $currentURL
                     )
                 }
+            } else if status == .starting {
+                LoadingStateView(message: "Starting Hugo server…")
             } else {
                 // Server not running placeholder
                 serverNotRunningPlaceholder
             }
         }
+        // Fill the pane in ALL branches. The webview branch is naturally greedy,
+        // but ContentUnavailableView (the placeholder) hugs its content - inside
+        // ContentView's nested HSplitViews that collapses the whole detail band
+        // to its fitting height, vertically centered in a sea of empty window.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             await observeServerStatus()
         }
@@ -167,20 +174,21 @@ struct LivePreviewPanel: View {
         EmptyStateView(
             icon: "server.rack",
             title: "Hugo Server Not Running",
-            message: "Start the Hugo development server to see live preview of your site."
-        )
-        // TODO: Add start server action when ServerControlPanel is implemented
-        // EmptyStateView(
-        //     icon: "server.rack",
-        //     title: "Hugo Server Not Running",
-        //     message: "Start the Hugo development server to see live preview of your site.",
-        //     actionLabel: "Start Server",
-        //     actionIcon: "play.fill"
-        // ) {
-        //     Task {
-        //         try? await HugoServerService.shared.start(siteURL: siteViewModel.site!.rootURL)
-        //     }
-        // }
+            message: "Start the Hugo development server to see live preview of your site.",
+            actionLabel: "Start Server",
+            actionIcon: "play.fill"
+        ) {
+            // Routed through SiteViewModel (not the service directly) so start
+            // failures land in siteViewModel.errorMessage, which ContentView
+            // already presents. The guard covers the race where the server came
+            // up between render and tap - toggling then would STOP it. Status
+            // flips to .starting via the stream, so this placeholder is replaced
+            // by the loading state above as soon as the tap lands.
+            Task {
+                guard !siteViewModel.isHugoServerRunning else { return }
+                await siteViewModel.toggleHugoServer()
+            }
+        }
     }
 
     // MARK: - Server State Management

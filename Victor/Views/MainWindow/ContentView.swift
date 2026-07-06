@@ -314,10 +314,15 @@ struct ContentView: View {
         }
     }
 
-    /// Returns the appropriate preview panel based on Hugo server state
+    /// Returns the appropriate preview panel based on the user's preview choice.
+    /// Routed on `useLivePreview` ALONE - deliberately not `&&
+    /// isHugoServerRunning`: with the server stopped, LivePreviewPanel shows its
+    /// "server not running" placeholder with a Start Server button. The old
+    /// double gate made that placeholder unreachable, so the live-preview
+    /// feature was invisible until the user found Start in the window toolbar.
     @ViewBuilder
     private func previewPanel(for node: FileNode) -> some View {
-        if siteViewModel.useLivePreview && siteViewModel.isHugoServerRunning {
+        if siteViewModel.useLivePreview {
             // Use live preview from Hugo server
             LivePreviewPanel(
                 siteViewModel: siteViewModel,

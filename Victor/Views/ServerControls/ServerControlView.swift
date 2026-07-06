@@ -13,9 +13,6 @@ struct ServerControlView: View {
     @State private var errorTitle = ""
     @State private var errorMessage = ""
 
-    /// Tracks whether we've auto-shown the errors popover this server session
-    @State private var hasAutoShownErrorsThisSession = false
-    
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -61,19 +58,10 @@ struct ServerControlView: View {
         } message: {
             Text(errorMessage)
         }
-        .onChange(of: serverStatus) { oldStatus, newStatus in
-            // Reset auto-show flag when server stops
-            if !newStatus.isRunning {
-                hasAutoShownErrorsThisSession = false
-            }
-        }
-        .onChange(of: buildErrors) { _, newErrors in
-            // Auto-show popover on first errors after server start
-            if serverStatus.isRunning && !newErrors.isEmpty && !hasAutoShownErrorsThisSession {
-                hasAutoShownErrorsThisSession = true
-                isErrorsPopoverPresented = true
-            }
-        }
+        // Build errors deliberately do NOT auto-present anything from here.
+        // The old auto-showing popover interrupted the user on every new batch
+        // of errors; the passive surfaces are the badge below (click for
+        // details) and TabBarView's build-issues pill.
     }
 
     // MARK: - Status Indicator

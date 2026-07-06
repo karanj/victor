@@ -280,6 +280,29 @@ final class SiteViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - Live Preview Auto-Enable (server-status stream)
+
+    /// The status stream replays the CURRENT status to every new subscriber
+    /// (HugoServerService replay-on-subscribe). Auto-enabling live preview must
+    /// key off genuine stopped->running TRANSITIONS, not off any .running value
+    /// observed - otherwise every re-subscribe (window re-appear re-running
+    /// setupHugoServerObservers) forces the user back to live preview after
+    /// they deliberately switched to markdown preview.
+    func testAutoEnableLivePreviewOnlyOnActualStartTransition() {
+        // Replayed current state (no previous value) is not a transition.
+        XCTAssertFalse(SiteViewModel.shouldAutoEnableLivePreview(previous: nil, new: .running(port: 1313)))
+        XCTAssertFalse(SiteViewModel.shouldAutoEnableLivePreview(previous: nil, new: .stopped))
+
+        // Genuine startup transitions.
+        XCTAssertTrue(SiteViewModel.shouldAutoEnableLivePreview(previous: .stopped, new: .running(port: 1313)))
+        XCTAssertTrue(SiteViewModel.shouldAutoEnableLivePreview(previous: .starting, new: .running(port: 1313)))
+
+        // Steady states and shutdowns never auto-enable.
+        XCTAssertFalse(SiteViewModel.shouldAutoEnableLivePreview(previous: .running(port: 1313), new: .running(port: 1313)))
+        XCTAssertFalse(SiteViewModel.shouldAutoEnableLivePreview(previous: .running(port: 1313), new: .stopped))
+        XCTAssertFalse(SiteViewModel.shouldAutoEnableLivePreview(previous: .stopped, new: .starting))
+    }
+
     func testMarkFileSaved() {
         let viewModel = SiteViewModel()
         let nodeID = UUID()

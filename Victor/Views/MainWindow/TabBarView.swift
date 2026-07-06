@@ -7,6 +7,8 @@ struct TabBarView: View {
     @Bindable var viewModel: SiteViewModel
     @Bindable private var settings = AppSettings.shared
 
+    @State private var isBuildIssuesPopoverPresented = false
+
     var body: some View {
         HStack {
             Picker("Layout Mode", selection: $settings.layoutMode) {
@@ -22,9 +24,24 @@ struct TabBarView: View {
 
             Spacer()
 
-            // Live Preview toggle (shown when Hugo server is running and in preview/split mode)
-            if viewModel.isHugoServerRunning && settings.layoutMode != .editor {
-                livePreviewToggle
+            // Build issues pill: passive surface for Hugo build errors/warnings.
+            // Deliberately never auto-presents anything - it replaced
+            // ServerControlView's auto-showing popover, which interrupted on
+            // every new batch of errors. Count + latest message, details on click.
+            if !viewModel.hugoBuildErrors.isEmpty {
+                buildIssuesPill
+            }
+
+            // Preview-source switcher (preview/split mode). Not gated on the
+            // server running: with the server stopped, choosing "Live Server"
+            // routes to LivePreviewPanel's placeholder, which offers to start
+            // the server - previously this control (and with it the whole
+            // live-preview feature) was invisible until the user found Start in
+            // the window toolbar. A labelled segmented control, not a toggle
+            // pill: the pill read as a status chip, not as "click to swap the
+            // preview pane between rendered markdown and the Hugo server".
+            if settings.layoutMode != .editor {
+                previewSourcePicker
             }
         }
         .padding(.horizontal, 12)
@@ -35,29 +52,73 @@ struct TabBarView: View {
         }
     }
 
-    private var livePreviewToggle: some View {
+    // MARK: - Build Issues Pill
+
+    private var hasActualErrors: Bool {
+        viewModel.hugoBuildErrors.contains { $0.level == .error }
+    }
+
+    private var buildIssuesPill: some View {
         Button {
-            viewModel.useLivePreview.toggle()
+            isBuildIssuesPopoverPresented.toggle()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: viewModel.useLivePreview ? "server.rack" : "doc.richtext")
+                Image(systemName: hasActualErrors ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.caption)
-                Text(viewModel.useLivePreview ? "Live Preview" : "Markdown Preview")
-                    .font(.caption)
+                Text("\(viewModel.hugoBuildErrors.count)")
+                    .font(.caption.bold())
+                if let latest = viewModel.hugoBuildErrors.last {
+                    Text(latest.message)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 280, alignment: .leading)
+                }
             }
+            .foregroundStyle(hasActualErrors ? Color.red : Color.orange)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(viewModel.useLivePreview ? Color.accentColor.opacity(0.15) : Color(nsColor: .controlBackgroundColor))
+                    .fill((hasActualErrors ? Color.red : Color.orange).opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(viewModel.useLivePreview ? Color.accentColor : Color(nsColor: .separatorColor), lineWidth: 1)
+                    .stroke(hasActualErrors ? Color.red : Color.orange, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
-        .help(viewModel.useLivePreview ? "Using Hugo server for preview. Click to switch to Markdown preview." : "Using Markdown preview. Click to switch to Hugo server live preview.")
+        .help("Hugo reported \(viewModel.hugoBuildErrors.count) build issue\(viewModel.hugoBuildErrors.count == 1 ? "" : "s") - click for details")
+        .accessibilityLabel("\(viewModel.hugoBuildErrors.count) build issues")
+        .popover(isPresented: $isBuildIssuesPopoverPresented) {
+            BuildIssuesPopover(
+                errors: viewModel.hugoBuildErrors,
+                onFileClick: nil,
+                onDismiss: { isBuildIssuesPopoverPresented = false }
+            )
+        }
+    }
+
+    // MARK: - Preview Source Picker
+
+    /// Labelled segmented control choosing what the preview pane renders:
+    /// this app's own markdown rendering, or the running Hugo server's output.
+    private var previewSourcePicker: some View {
+        HStack(spacing: 6) {
+            Text("Preview:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Picker("Preview Source", selection: $viewModel.useLivePreview) {
+                Text("Markdown").tag(false)
+                Text("Hugo Server").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        }
+        .help("Choose the preview pane's source: Victor's rendered markdown, or the live site from the Hugo development server")
+        .accessibilityLabel("Preview source")
     }
 }
 

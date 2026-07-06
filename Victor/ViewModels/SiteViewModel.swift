@@ -1639,17 +1639,39 @@ class SiteViewModel {
     private var statusObservationTask: Task<Void, Never>?
     private var buildErrorsObservationTask: Task<Void, Never>?
 
-    /// Set up observers for Hugo server state changes
+    /// Whether a status change should auto-enable the Hugo-server live preview.
+    /// Only a genuine (re)start transition qualifies: the status stream replays
+    /// the current value to every new subscriber, and treating that replay as
+    /// "server started" would force `useLivePreview` back on every time this
+    /// observer is (re)installed - overriding a user who deliberately switched
+    /// to markdown preview while the server kept running. `previous == nil`
+    /// means "first value seen by this subscription", i.e. the replay.
+    /// Pinned by SiteViewModelTests.
+    static func shouldAutoEnableLivePreview(previous: HugoServerStatus?, new: HugoServerStatus) -> Bool {
+        guard let previous else { return false }
+        return !previous.isRunning && new.isRunning
+    }
+
+    /// Set up observers for Hugo server state changes.
+    /// Idempotent: cancels any observers from a previous call first. This is
+    /// called from ContentView's .onAppear, which can fire more than once per
+    /// app lifetime - without the cancellation, each call would stack another
+    /// pair of live `for await` consumers onto the actor's continuation
+    /// registries (duplicate work, and duplicate auto-enable writes).
     func setupHugoServerObservers() {
+        statusObservationTask?.cancel()
+        buildErrorsObservationTask?.cancel()
+
         statusObservationTask = Task { [weak self] in
             guard let stream = await self?.hugoServerService.statusUpdates() else { return }
+            var previousStatus: HugoServerStatus? = nil
             for await status in stream {
                 guard let self else { return }
                 self.hugoServerStatus = status
-                // Auto-enable live preview when server starts running
-                if status.isRunning {
+                if Self.shouldAutoEnableLivePreview(previous: previousStatus, new: status) {
                     self.useLivePreview = true
                 }
+                previousStatus = status
             }
         }
         buildErrorsObservationTask = Task { [weak self] in
