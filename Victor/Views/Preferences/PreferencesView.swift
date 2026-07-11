@@ -134,6 +134,18 @@ struct PreferencesView: View {
 
                 Toggle("Highlight current line", isOn: $settings.highlightCurrentLine)
                     .toggleStyle(.checkbox)
+
+                Toggle("Check spelling while typing", isOn: $settings.checkSpellingWhileTyping)
+                    .toggleStyle(.checkbox)
+
+                Toggle("Check grammar with spelling", isOn: $settings.checkGrammarWithSpelling)
+                    .toggleStyle(.checkbox)
+
+                Toggle("Correct spelling automatically", isOn: $settings.correctSpellingAutomatically)
+                    .toggleStyle(.checkbox)
+
+                Toggle("Use Text Replacement", isOn: $settings.useTextReplacement)
+                    .toggleStyle(.checkbox)
             } header: {
                 Text("Editor")
             }

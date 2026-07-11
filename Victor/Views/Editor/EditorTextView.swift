@@ -389,6 +389,14 @@ struct EditorTextView: NSViewRepresentable {
     var highlightCurrentLine: Bool
     var fontSize: CGFloat
     var fontName: String
+    /// Spelling/grammar/substitution settings (victor-spl) - sourced from
+    /// `AppSettings`, wired through the same param-in/updateNSView-out path as
+    /// `highlightCurrentLine`/`fontSize`/`fontName` above so toggling them in
+    /// Preferences or the Edit menu applies live to an open editor.
+    var checkSpellingWhileTyping: Bool
+    var checkGrammarWithSpelling: Bool
+    var correctSpellingAutomatically: Bool
+    var useTextReplacement: Bool
     var onCoordinatorReady: ((Coordinator) -> Void)?
     var onCursorPositionChange: ((CursorPosition) -> Void)?
     var onShowShortcodePicker: (() -> Void)?
@@ -402,6 +410,10 @@ struct EditorTextView: NSViewRepresentable {
         highlightCurrentLine: Bool = true,
         fontSize: CGFloat = 13,
         fontName: String = "SF Mono",
+        checkSpellingWhileTyping: Bool = true,
+        checkGrammarWithSpelling: Bool = false,
+        correctSpellingAutomatically: Bool = false,
+        useTextReplacement: Bool = true,
         onCoordinatorReady: ((Coordinator) -> Void)? = nil,
         onCursorPositionChange: ((CursorPosition) -> Void)? = nil,
         onShowShortcodePicker: (() -> Void)? = nil,
@@ -412,6 +424,10 @@ struct EditorTextView: NSViewRepresentable {
         self.highlightCurrentLine = highlightCurrentLine
         self.fontSize = fontSize
         self.fontName = fontName
+        self.checkSpellingWhileTyping = checkSpellingWhileTyping
+        self.checkGrammarWithSpelling = checkGrammarWithSpelling
+        self.correctSpellingAutomatically = correctSpellingAutomatically
+        self.useTextReplacement = useTextReplacement
         self.onCoordinatorReady = onCoordinatorReady
         self.onCursorPositionChange = onCursorPositionChange
         self.onShowShortcodePicker = onShowShortcodePicker
@@ -463,10 +479,18 @@ struct EditorTextView: NSViewRepresentable {
         textView.importsGraphics = false
         textView.usesFindBar = true
 
-        // Disable smart quotes and dashes (important for code/markdown)
+        // Smart quotes/dashes stay hardcoded off regardless of AppSettings -
+        // markdown syntax breaks if `"`/`-` get auto-substituted (important for
+        // code/markdown). Text Replacement is a separate substitution gate
+        // (user-defined shortcuts, not punctuation) and is settings-driven below.
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
-        textView.isAutomaticTextReplacementEnabled = false
+
+        // Spelling/grammar/substitution settings (victor-spl)
+        textView.isContinuousSpellCheckingEnabled = checkSpellingWhileTyping
+        textView.isGrammarCheckingEnabled = checkGrammarWithSpelling
+        textView.isAutomaticSpellingCorrectionEnabled = correctSpellingAutomatically
+        textView.isAutomaticTextReplacementEnabled = useTextReplacement
 
         // Enable drag-and-drop for asset insertion
         textView.registerForDraggedTypes([.string, .fileURL])
@@ -540,6 +564,21 @@ struct EditorTextView: NSViewRepresentable {
         if let currentFont = textView.font,
            currentFont.pointSize != fontSize || currentFont.fontName != expectedFont.fontName {
             textView.font = expectedFont
+        }
+
+        // Apply spelling/grammar/substitution settings live (victor-spl) -
+        // assign-only-if-different, same pattern as highlightCurrentLine/font above.
+        if textView.isContinuousSpellCheckingEnabled != checkSpellingWhileTyping {
+            textView.isContinuousSpellCheckingEnabled = checkSpellingWhileTyping
+        }
+        if textView.isGrammarCheckingEnabled != checkGrammarWithSpelling {
+            textView.isGrammarCheckingEnabled = checkGrammarWithSpelling
+        }
+        if textView.isAutomaticSpellingCorrectionEnabled != correctSpellingAutomatically {
+            textView.isAutomaticSpellingCorrectionEnabled = correctSpellingAutomatically
+        }
+        if textView.isAutomaticTextReplacementEnabled != useTextReplacement {
+            textView.isAutomaticTextReplacementEnabled = useTextReplacement
         }
 
         // Only update if text has changed (avoid cursor jumping)

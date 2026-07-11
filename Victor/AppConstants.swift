@@ -194,5 +194,9 @@ enum AppConstants {
         static let badgeColorScheduled = "badgeColorScheduled"
         static let badgeColorExpired = "badgeColorExpired"
         static let frontmatterPanelHeight = "frontmatterPanelHeight"
+        static let checkSpellingWhileTyping = "checkSpellingWhileTyping"
+        static let checkGrammarWithSpelling = "checkGrammarWithSpelling"
+        static let correctSpellingAutomatically = "correctSpellingAutomatically"
+        static let useTextReplacement = "useTextReplacement"
     }
 }

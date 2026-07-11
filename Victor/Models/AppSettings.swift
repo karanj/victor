@@ -63,6 +63,38 @@ final class AppSettings {
         }
     }
 
+    // MARK: - Spelling & Text Services (victor-spl)
+
+    /// Continuous spell checking while typing in the markdown editor.
+    var checkSpellingWhileTyping: Bool {
+        didSet {
+            UserDefaults.standard.set(checkSpellingWhileTyping, forKey: AppConstants.UserDefaultsKeys.checkSpellingWhileTyping)
+        }
+    }
+
+    /// Grammar checking alongside spelling.
+    var checkGrammarWithSpelling: Bool {
+        didSet {
+            UserDefaults.standard.set(checkGrammarWithSpelling, forKey: AppConstants.UserDefaultsKeys.checkGrammarWithSpelling)
+        }
+    }
+
+    /// Automatic spelling correction (autocorrect) in the markdown editor.
+    var correctSpellingAutomatically: Bool {
+        didSet {
+            UserDefaults.standard.set(correctSpellingAutomatically, forKey: AppConstants.UserDefaultsKeys.correctSpellingAutomatically)
+        }
+    }
+
+    /// Text Replacement (user-defined text substitutions, e.g. System Settings
+    /// shortcuts). Distinct from smart quotes/dashes, which stay hardcoded off
+    /// for markdown editing regardless of this setting (EditorTextView.swift).
+    var useTextReplacement: Bool {
+        didSet {
+            UserDefaults.standard.set(useTextReplacement, forKey: AppConstants.UserDefaultsKeys.useTextReplacement)
+        }
+    }
+
     // MARK: - Auto-Save
 
     /// Whether auto-save is enabled.
@@ -159,6 +191,11 @@ final class AppSettings {
 
         isInspectorVisible = defaults.object(forKey: AppConstants.UserDefaultsKeys.isInspectorVisible) as? Bool ?? false
         frontmatterPanelHeight = defaults.object(forKey: AppConstants.UserDefaultsKeys.frontmatterPanelHeight) as? Double ?? 300.0
+
+        checkSpellingWhileTyping = defaults.object(forKey: AppConstants.UserDefaultsKeys.checkSpellingWhileTyping) as? Bool ?? true
+        checkGrammarWithSpelling = defaults.object(forKey: AppConstants.UserDefaultsKeys.checkGrammarWithSpelling) as? Bool ?? false
+        correctSpellingAutomatically = defaults.object(forKey: AppConstants.UserDefaultsKeys.correctSpellingAutomatically) as? Bool ?? false
+        useTextReplacement = defaults.object(forKey: AppConstants.UserDefaultsKeys.useTextReplacement) as? Bool ?? true
 
         isAutoSaveEnabled = Self.readIsAutoSaveEnabled(from: defaults)
         autoSaveDelay = Self.readAutoSaveDelay(from: defaults)

@@ -29,7 +29,11 @@ final class AppSettingsTests: XCTestCase {
         AppConstants.UserDefaultsKeys.hugoServerBuildDrafts,
         AppConstants.UserDefaultsKeys.hugoServerBuildFuture,
         AppConstants.UserDefaultsKeys.hugoServerBuildExpired,
-        AppConstants.UserDefaultsKeys.notifyOnBuildFailure
+        AppConstants.UserDefaultsKeys.notifyOnBuildFailure,
+        AppConstants.UserDefaultsKeys.checkSpellingWhileTyping,
+        AppConstants.UserDefaultsKeys.checkGrammarWithSpelling,
+        AppConstants.UserDefaultsKeys.correctSpellingAutomatically,
+        AppConstants.UserDefaultsKeys.useTextReplacement
     ]
 
     override func setUp() {
@@ -69,6 +73,10 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertFalse(settings.hugoServerBuildExpired)
         XCTAssertEqual(settings.frontmatterPanelHeight, 300.0)
         XCTAssertTrue(settings.notifyOnBuildFailure, "notifyOnBuildFailure should default to true")
+        XCTAssertTrue(settings.checkSpellingWhileTyping, "checkSpellingWhileTyping should default to true")
+        XCTAssertFalse(settings.checkGrammarWithSpelling, "checkGrammarWithSpelling should default to false")
+        XCTAssertFalse(settings.correctSpellingAutomatically, "correctSpellingAutomatically should default to false")
+        XCTAssertTrue(settings.useTextReplacement, "useTextReplacement should default to true")
     }
 
     // MARK: - Round-trip: set -> UserDefaults -> fresh read
@@ -169,6 +177,34 @@ final class AppSettingsTests: XCTestCase {
         settings.notifyOnBuildFailure = false
         XCTAssertFalse(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.notifyOnBuildFailure))
         XCTAssertFalse(AppSettings.makeForTesting().notifyOnBuildFailure)
+    }
+
+    func testRoundTripCheckSpellingWhileTyping() {
+        let settings = AppSettings.makeForTesting()
+        settings.checkSpellingWhileTyping = false
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.checkSpellingWhileTyping))
+        XCTAssertFalse(AppSettings.makeForTesting().checkSpellingWhileTyping)
+    }
+
+    func testRoundTripCheckGrammarWithSpelling() {
+        let settings = AppSettings.makeForTesting()
+        settings.checkGrammarWithSpelling = true
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.checkGrammarWithSpelling))
+        XCTAssertTrue(AppSettings.makeForTesting().checkGrammarWithSpelling)
+    }
+
+    func testRoundTripCorrectSpellingAutomatically() {
+        let settings = AppSettings.makeForTesting()
+        settings.correctSpellingAutomatically = true
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.correctSpellingAutomatically))
+        XCTAssertTrue(AppSettings.makeForTesting().correctSpellingAutomatically)
+    }
+
+    func testRoundTripUseTextReplacement() {
+        let settings = AppSettings.makeForTesting()
+        settings.useTextReplacement = false
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: AppConstants.UserDefaultsKeys.useTextReplacement))
+        XCTAssertFalse(AppSettings.makeForTesting().useTextReplacement)
     }
 
     // MARK: - layoutMode invalid rawValue fallback

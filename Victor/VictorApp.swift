@@ -26,6 +26,24 @@ enum FindPanelHelper {
     }
 }
 
+// MARK: - Edit Menu Helper
+
+/// Generalizes `FindPanelHelper`'s responder-chain dispatch for the system
+/// Edit-menu submenus (Spelling and Grammar, Substitutions, Transformations,
+/// Speech) re-added by victor-spl after `CommandGroup(replacing: .textEditing)`
+/// dropped them. String-selector form deliberately used at call sites instead
+/// of `#selector` - these are AppKit responder-chain actions (`showGuessPanel:`,
+/// `uppercaseWord:`, etc.) implemented across NSText/NSTextView/NSResponder,
+/// not methods this target declares, so there's no single owning type to
+/// anchor a `#selector` expression to.
+/// `@MainActor`: calls `NSApp.sendAction` (WP3.5 Cluster 11).
+@MainActor
+enum EditMenuHelper {
+    static func send(_ selector: Selector) {
+        NSApp.sendAction(selector, to: nil, from: nil)
+    }
+}
+
 // MARK: - App Delegate for Quit Confirmation
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -372,6 +390,70 @@ struct VictorApp: App {
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
                 .disabled(siteViewModel.site == nil)
+
+                Divider()
+
+                // Spelling and Grammar / Substitutions / Transformations / Speech
+                // (victor-spl): these are the standard system submenus macOS
+                // installs in this same `.textEditing` CommandGroup slot -
+                // replacing the group for Find (above) silently dropped all
+                // four, so they're rebuilt here via responder-chain dispatch
+                // (EditMenuHelper) in standard Edit-menu order.
+                Menu("Spelling and Grammar") {
+                    Button("Show Spelling and Grammar") {
+                        EditMenuHelper.send(Selector("showGuessPanel:"))
+                    }
+                    .keyboardShortcut(":", modifiers: .command)
+
+                    Button("Check Document Now") {
+                        EditMenuHelper.send(Selector("checkSpelling:"))
+                    }
+                    .keyboardShortcut(";", modifiers: .command)
+
+                    Divider()
+
+                    Toggle("Check Spelling While Typing", isOn: $settings.checkSpellingWhileTyping)
+                    Toggle("Check Grammar With Spelling", isOn: $settings.checkGrammarWithSpelling)
+                    Toggle("Correct Spelling Automatically", isOn: $settings.correctSpellingAutomatically)
+                }
+
+                Menu("Substitutions") {
+                    Button("Show Substitutions") {
+                        EditMenuHelper.send(Selector("orderFrontSubstitutionsPanel:"))
+                    }
+
+                    Divider()
+
+                    // Smart Quotes/Dashes/Links are deliberately not exposed here:
+                    // smart punctuation is forced off in EditorTextView (~line
+                    // 467) because it corrupts markdown syntax, so there's no
+                    // live setting for those items to toggle.
+                    Toggle("Text Replacement", isOn: $settings.useTextReplacement)
+                }
+
+                Menu("Transformations") {
+                    Button("Make Upper Case") {
+                        EditMenuHelper.send(Selector("uppercaseWord:"))
+                    }
+
+                    Button("Make Lower Case") {
+                        EditMenuHelper.send(Selector("lowercaseWord:"))
+                    }
+
+                    Button("Capitalize") {
+                        EditMenuHelper.send(Selector("capitalizeWord:"))
+                    }
+                }
+
+                Menu("Speech") {
+                    Button("Start Speaking") {
+                        EditMenuHelper.send(Selector("startSpeaking:"))
+                    }
+
+                    Button("Stop Speaking") {
+                        EditMenuHelper.send(Selector("stopSpeaking:"))
+                    }
+                }
             }
 
             // File menu commands

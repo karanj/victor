@@ -64,6 +64,10 @@ struct EditorPanelView: View {
                 highlightCurrentLine: settings.highlightCurrentLine,
                 fontSize: settings.editorFontSize,
                 fontName: settings.editorFontName,
+                checkSpellingWhileTyping: settings.checkSpellingWhileTyping,
+                checkGrammarWithSpelling: settings.checkGrammarWithSpelling,
+                correctSpellingAutomatically: settings.correctSpellingAutomatically,
+                useTextReplacement: settings.useTextReplacement,
                 onCoordinatorReady: { coordinator in
                     editorCoordinator = coordinator
                 },
