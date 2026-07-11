@@ -188,11 +188,11 @@ Models use `@Observable class` pattern by design. Evaluation of struct alternati
 
 ## Outstanding Work
 
-Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, 34 open tickets). Key areas:
-- **Active program**: Mac polish + modernisation — design in `Docs/MAC-POLISH-DESIGN.md`, phased subagent execution plan in `Docs/MAC-POLISH-IMPLEMENTATION-PLAN.md` (Phase 0 = settings layer + strict-concurrency baseline)
-- **P2**: Settings layer (victor-stn), Swift 6 strict concurrency burn-down (victor-sc6, 103 warnings), AsyncStream observation (victor-str), DI for fakeable services (victor-zw4, re-scoped), FSEvents file watching (9 tickets, dependency chain)
-- **P3**: Git integration (6 tickets), preview syntax highlighting, Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), Task.detached audit (victor-tdt)
-- **P4**: VoiceOver audit, code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), modernisation grab-bag (victor-mod)
+Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, ~43 open/blocked tickets). Done tickets are removed on close (2026-07-11 policy); history lives in git log. Key areas:
+- **Active program**: Mac-arsed gap closure — audit findings and phased plan in `Docs/MAC-ARSED-GAP-PLAN.md` (Edit-menu text services victor-spl, rename UI victor-rnm, sidebar selection model victor-sel, file-op undo victor-und, VoiceOver victor-3l6). The predecessor Mac polish + modernisation program (`Docs/MAC-POLISH-DESIGN.md` + `MAC-POLISH-IMPLEMENTATION-PLAN.md`) shipped Phases 0–3 (2026-07-04/05: window chrome, menus, documents, drag&drop, Quick Look, notifications, appearance, keyboard, Swift 6); only victor-mbe/victor-icn remain from it
+- **P2**: editor track (cursor-jump bug victor-cjp, line numbers, tab bar → session restore, breadcrumbs, quick open), FSEvents file watching (9 tickets, dependency chain), Edit-menu regression victor-spl, rename victor-rnm
+- **P3**: sidebar selection victor-sel, undo victor-und, VoiceOver victor-3l6, Git integration (6 tickets), Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), App Sandbox (victor-sbx)
+- **P4**: code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), menu bar extra (victor-mbe)
 
 To find work ready to start: look for `status: open` (no blockers). `status: blocked` tickets list their `blocked_by` dependencies.
 
@@ -202,7 +202,8 @@ To find work ready to start: look for `status: open` (no blockers). `status: blo
 - `Docs/CODE-REVIEW-PLAN.md` - Code review findings and status
 - `Docs/CODE-ANALYSIS-2026-07-03.md` - Critical analysis session: 10 fixes (data loss, hang, dead prefs) + leftovers
 - `Docs/MAC-POLISH-DESIGN.md` - Mac polish design: window chrome, menus, system integration, modernisation track (approved 2026-07-04)
-- `Docs/MAC-POLISH-IMPLEMENTATION-PLAN.md` - Phased subagent orchestration plan for the above
+- `Docs/MAC-POLISH-IMPLEMENTATION-PLAN.md` - Phased subagent orchestration plan for the above (Phases 0-3 shipped)
+- `Docs/MAC-ARSED-GAP-PLAN.md` - Mac-arsed skill audit (2026-07-11) + gap-closure plan: text services, rename, selection model, undo, VoiceOver
 - `Docs/HUGO-SERVER-INTEGRATION.md` - Hugo server integration
 - `Docs/DATA-ARCHETYPES-GUIDE.md` - Data files and archetypes
 - `Docs/TODO.md` - Detailed ticket descriptions (reference/archive)

@@ -1,13 +1,13 @@
 # Victor Issue Tracker
-# Last updated: 2026-07-03
+# Last updated: 2026-07-11
 #
-# Schema: id, title, status (open|blocked|done), priority (P0-P4),
-#         type (epic|task|feature|bug), blocked_by, blocks, files, estimate, detail
+# Schema: id, title, status (open|blocked|wont-do), priority (P0-P4),
+#         type (epic|task|feature|bug), blocked_by, blocks, files, detail
+# Done tickets are removed on close (2026-07-11); history lives in git log.
 #
 # Dependency chains:
 #   FSEvents: bfs + 93p -> 5cl -> (u5y + 8cw + 8u1) -> rey
 #   Git:      04m -> (cit + 7zv + agi + 95t + 2d4)
-#   Settings: stn -> 8cw
 #   Syntax:   t5r -> (t5h + t5g) [ALL CLOSED wont-do]
 #   Tabs:     tab -> trs
 #
@@ -16,94 +16,6 @@
 #   t5r, t5h, t5g, thm, cfl. See git log for research details.
 
 issues:
-
-  # ── Architecture ──────────────────────────────────────────────
-
-  - id: victor-zw4
-    title: "ARCH-2: Dependency injection for the three fakeable services"
-    status: done
-    priority: P2
-    type: task
-    files:
-      - Victor/Services/FileSystemService.swift
-      - Victor/Services/AutoSaveService.swift
-      - Victor/Services/HugoServerService.swift
-      - Victor/ViewModels/SiteViewModel.swift
-      - Victor/ViewModels/EditorViewModel.swift
-      - Victor/ViewModels/TextEditorViewModel.swift
-      - Victor/Views/Editor/EditorTextView.swift
-      - Victor/Views/ServerControls/ServerControlView.swift
-      - Victor/Views/ServerControls/ServerConfigPopover.swift
-      - Victor/Views/Preview/LivePreviewPanel.swift
-      - VictorTests/AutoSaveServiceTests.swift
-      - VictorTests/SiteViewModelTests.swift
-    estimate: 1d
-    detail: >
-      RE-SCOPED 2026-07-03 (see Docs/MAC-POLISH-DESIGN.md, Modernisation
-      track). Original scope - protocol abstractions for all services (16
-      static shared singletons, 212 call sites) - is protocol-per-service
-      ceremony with little payoff. New scope: inject only the three services
-      tests actually need to fake (FileSystemService, AutoSaveService,
-      HugoServerService) via SwiftUI Environment or initializer, as
-      @Observable/actor references. Stateless parsers keep static shared.
-
-      AS-BUILT 2026-07-05: initializer-parameter injection (`init(fileSystemService:
-      FileSystemService = .shared)`, stored `let`), not Environment - no consumer
-      needed Environment plumbing once threaded through existing references. All
-      three services gained a non-private `init()` (construction is side-effect-free
-      in each). SiteViewModel takes `fileSystemService`/`hugoServerService` init
-      params, exposes them as non-private `let`s, and builds `fileOperationsService`
-      from the injected `fileSystemService` rather than `FileOperationsService.shared`;
-      also fixed 6 pre-existing inconsistent direct `.shared` call sites inside
-      SiteViewModel's own methods that bypassed its own stored properties.
-      EditorViewModel/TextEditorViewModel take their own injected
-      AutoSaveService/FileSystemService param. ServerControlView, ServerConfigPopover
-      (via a new param from ServerControlView), and LivePreviewPanel thread
-      `siteViewModel.hugoServerService` instead of `HugoServerService.shared`;
-      EditorTextView's Coordinator threads `siteViewModel.fileSystemService`.
-      ServerLogView (separate Window scene, no SiteViewModel) and PreferencesView
-      (zero-arg Settings scene) keep `.shared` - no seam to inject through without
-      adding Environment plumbing for a single call site, which the design scopes
-      out. FileViewerRouter's `@State private var textEditorViewModel =
-      TextEditorViewModel()` also keeps the `.shared` default: a SwiftUI `@State`
-      property default can't reference `self.siteViewModel`. Tests: AutoSaveServiceTests
-      converted to a fresh `AutoSaveService()` per test plus a new
-      testTwoInstancesHaveIndependentPendingSaves isolation proof; one
-      SiteViewModelTests case now constructs `SiteViewModel(fileSystemService:
-      FileSystemService())` to exercise the injection seam end-to-end. Full suite
-      (481 tests) green; clean build, zero warnings.
-
-  - id: victor-stn
-    title: "Settings: typed @Observable AppSettings layer (UserDefaults-backed)"
-    status: done
-    priority: P2
-    type: task
-    blocks: [victor-8cw]
-    files:
-      - Victor/Models/AppSettings.swift (new)
-      - Victor/Views/Preferences/PreferencesView.swift
-      - Victor/VictorApp.swift
-      - Victor/ViewModels/SiteViewModel.swift
-    estimate: 4-6h
-    detail: >
-      REVISED 2026-07-03 (design: Docs/MAC-POLISH-DESIGN.md, W0). Replaces the
-      original JSON-file design — JSON solved problems Victor doesn't have
-      (nested settings, importable themes) while losing UserDefaults benefits
-      and requiring key migration; revisit only if victor-thm ships
-      user-editable theme files.
-
-      Single @MainActor @Observable AppSettings class, UserDefaults-backed,
-      one explicit property per preference with didSet persistence; key and
-      default defined exactly once (~15 properties). Views bind via @Bindable
-      (replaces every @AppStorage in VictorApp/PreferencesView, making menu
-      toggle and Preferences mutually observing). SiteViewModel's persisted
-      settings properties are deleted. Actors get nonisolated static read
-      helpers (AutoSaveService.autoSaveDelay). App state (bookmark,
-      recentSitePaths, lastSelectedFilePath) explicitly stays out. No
-      migration: same keys, same store. Context: the 2026-07-03 analysis fixed
-      five readers of isAutoSaveEnabled disagreeing on defaults across three
-      access patterns - this layer removes that bug class structurally.
-      Do BEFORE Mac polish Phase 1 (W2/W3 add new settings onto this layer).
 
   # ── Editor ─────────────────────────────────────────────────────
 
@@ -116,7 +28,6 @@ issues:
       - Victor/Views/Editor/TextEditorPanel.swift
       - Victor/Services/SyntaxHighlighter.swift
       - Victor/ViewModels/TextEditorViewModel.swift
-    estimate: 2-4h
     detail: >
       User-reported (2026-07-06, while typing in a JavaScript file): pause typing
       for about a second and the insertion point jumps to the bottom of the file,
@@ -145,7 +56,6 @@ issues:
     type: feature
     files:
       - Victor/Views/Editor/EditorTextView.swift
-    estimate: 4-6h
     detail: >
       Add a line number gutter to the NSTextView-based editor. NSTextView supports
       this via NSRulerView — subclass NSRulerView to draw line numbers in the gutter
@@ -166,7 +76,6 @@ issues:
       - Victor/Views/Editor/TabBarView.swift (new)
       - Victor/Views/MainWindow/ContentView.swift
       - Victor/ViewModels/SiteViewModel.swift
-    estimate: 1-2d
     detail: >
       Horizontal tab bar above the editor area showing recently-opened files. Each
       tab shows the filename (with parent folder if ambiguous, e.g. two index.md files).
@@ -192,7 +101,6 @@ issues:
       - Victor/VictorApp.swift
       - Victor/ViewModels/SiteViewModel.swift
       - Victor/Models/SessionState.swift (new)
-    estimate: 4-6h
     detail: >
       Persist editor session state across app restarts. Save to JSON at
       ~/Library/Application Support/Victor/session.json on app termination
@@ -215,7 +123,6 @@ issues:
       - Victor/Views/Editor/BreadcrumbBarView.swift (new)
       - Victor/Views/MainWindow/ContentView.swift
       - Victor/ViewModels/SiteViewModel.swift
-    estimate: 4-6h
     detail: >
       Horizontal breadcrumb bar showing the selected file's path within the Hugo site,
       displayed between the tab bar and editor area. Example: content > posts > 2026 >
@@ -240,7 +147,6 @@ issues:
       - Victor/Views/GlobalSearch/QuickOpenView.swift (new)
       - Victor/Views/MainWindow/ContentView.swift
       - Victor/ViewModels/SiteViewModel.swift
-    estimate: 4-6h
     detail: >
       Keyboard-triggered (Cmd+P or Cmd+Shift+O) floating panel for fuzzy file name
       search. Shows a text field with results updating as user types. Results ranked by
@@ -267,7 +173,6 @@ issues:
       - Victor/ViewModels/SiteViewModel.swift
       - Victor/ViewModels/EditorViewModel.swift
       - Victor/Views/Editor/EditorTextView.swift
-    estimate: 3h
     detail: >
       Store NSRange (cursor) and CGFloat (scroll offset) per file UUID alongside
       editedContentByFile in SiteViewModel. Persist in EditorViewModel before
@@ -285,7 +190,6 @@ issues:
     type: task
     blocks: [victor-5cl, victor-so7]
     files: [Victor/Services/FileWatcherService.swift (new), Victor/AppConstants.swift]
-    estimate: 2-3h
     detail: >
       Actor managing FSEventStream lifecycle. startWatching/stopWatching,
       registerSaveIntent (5s expiry), event coalescing (100ms window in Swift).
@@ -306,7 +210,6 @@ issues:
     type: task
     blocks: [victor-rpt, victor-5cl]
     files: [Victor/Models/FileChangeNotification.swift (new)]
-    estimate: 30m
     detail: >
       Identifiable struct with type (.conflict/.autoReloaded/.deleted/.created),
       urls, message, timestamp. Actions: Reload, Keep Editing, Dismiss.
@@ -319,7 +222,6 @@ issues:
     blocked_by: [victor-bfs, victor-93p]
     blocks: [victor-u5y, victor-8cw, victor-8u1]
     files: [Victor/ViewModels/SiteViewModel.swift]
-    estimate: 2-3h
     detail: >
       Start/stop watcher in loadSite/closeSite. Implement FileWatcherDelegate:
       filter events, detect conflicts via editedContentByFile, auto-reload
@@ -332,7 +234,6 @@ issues:
     type: task
     blocked_by: [victor-bfs]
     files: [Victor/Services/AutoSaveService.swift, Victor/Services/FileSystemService.swift]
-    estimate: 1h
     detail: >
       Call registerSaveIntent(for: url) before every disk write in
       AutoSaveService.performSave, FileSystemService.writeFile/createFile/duplicateFile.
@@ -345,7 +246,6 @@ issues:
     blocked_by: [victor-93p]
     blocks: [victor-u5y]
     files: [Victor/Views/Notifications/FileChangeNotificationView.swift (new), Victor/Views/Notifications/FileChangeNotificationContainer.swift (new)]
-    estimate: 2h
     detail: >
       Toast banners: icon + message + action buttons, .ultraThinMaterial bg.
       Container: max 3 visible, animated entry/exit, 5s auto-dismiss.
@@ -358,7 +258,6 @@ issues:
     type: task
     blocked_by: [victor-rpt, victor-5cl]
     files: [Victor/Views/MainWindow/ContentView.swift, Victor/VictorApp.swift]
-    estimate: 1h
     detail: >
       .overlay(alignment: .top) with notification container.
       Queue during focus mode. stopFileWatching in applicationWillTerminate.
@@ -368,9 +267,8 @@ issues:
     status: blocked
     priority: P2
     type: task
-    blocked_by: [victor-5cl, victor-stn]
+    blocked_by: [victor-5cl]
     files: [Victor/Views/PreferencesView.swift, Victor/AppConstants.swift]
-    estimate: 30m
     detail: >
       Two toggles: isFileWatchingEnabled (master), autoReloadUnchangedFiles.
       onChange restarts watcher.
@@ -382,7 +280,6 @@ issues:
     type: task
     blocked_by: [victor-5cl]
     files: [Victor/ViewModels/SiteViewModel.swift, Victor/Services/FileWatcherService.swift]
-    estimate: 3-4h
     detail: >
       Handle: deleted files (save-to-new/close alert), renamed (update FileNode.url),
       new files (sidebar refresh), batch ops (coalesced notification),
@@ -395,7 +292,6 @@ issues:
     type: task
     blocked_by: [victor-u5y, victor-8cw, victor-8u1]
     files: [VictorTests/FileWatcherServiceTests.swift (new), VictorTests/FileWatcherIntegrationTests.swift (new)]
-    estimate: 3-4h
     detail: >
       Tests for: save intent registry, event coalescing, classification,
       delegate callbacks, lifecycle, conflict detection, notification mgmt,
@@ -411,7 +307,6 @@ issues:
     type: task
     blocks: [victor-cit, victor-7zv, victor-agi, victor-95t, victor-2d4]
     files: [Victor/Services/GitService.swift (new)]
-    estimate: 2-3h
     detail: >
       Shell out to git via Process. Methods: status() -> parsed file statuses,
       stage/unstage, commit(message:), push(), pull().
@@ -424,7 +319,6 @@ issues:
     type: task
     blocked_by: [victor-04m]
     files: [Victor/Views/MainWindow/FileListView.swift, Victor/ViewModels/SiteViewModel.swift]
-    estimate: 2h
     detail: Color-coded badges for modified, staged, untracked files.
 
   - id: victor-7zv
@@ -434,7 +328,6 @@ issues:
     type: task
     blocked_by: [victor-04m]
     files: [Victor/Views/Git/CommitDialog.swift (new)]
-    estimate: 2-3h
     detail: File list with staging checkboxes, commit message field, validation.
 
   - id: victor-agi
@@ -444,7 +337,6 @@ issues:
     type: feature
     blocked_by: [victor-04m]
     files: [Toolbar view, Victor/Services/GitService.swift]
-    estimate: 2h
     detail: Toolbar buttons with progress. SSH/credential helper auth. Conflict handling.
 
   - id: victor-95t
@@ -454,7 +346,6 @@ issues:
     type: task
     blocked_by: [victor-04m]
     files: [Victor/Views/Git/GitStatusView.swift (new), Victor/Services/GitService.swift]
-    estimate: 2h
     detail: Branch name display, picker/dropdown, create new, handle uncommitted changes.
 
   - id: victor-2d4
@@ -464,7 +355,6 @@ issues:
     type: task
     blocked_by: [victor-04m]
     files: [Victor/Views/Git/DiffViewer.swift (new)]
-    estimate: 3-4h
     detail: Side-by-side or inline diff with syntax highlighting and hunk navigation.
 
   # ── Syntax Highlighting (Tree-Sitter) ─────────────────────────
@@ -509,7 +399,6 @@ issues:
       - Victor/Services/ThemeService.swift (new)
       - Victor/Views/PreferencesView.swift
       - Victor/Services/MarkdownRenderer.swift
-    estimate: 1-2d
     detail: >
       Define EditorTheme model: background, text, cursor colors + per-token-type
       colors (keyword, string, comment, etc.) + preview CSS overrides. Ship 3 built-in
@@ -534,7 +423,6 @@ issues:
     type: feature
     files:
       - Victor/Views/Editor/EditorTextView.swift
-    estimate: 1d
     detail: >
       Add code folding to the editor, initially targeting two cases: (1) YAML/TOML
       frontmatter blocks (--- to ---) and (2) Go template blocks ({{ define }} to
@@ -559,7 +447,6 @@ issues:
     priority: P3
     type: task
     files: [Victor/Views/Preview/PreviewWebView.swift, Victor/Services/MarkdownRenderer.swift]
-    estimate: 2-3h
     detail: >
       Integrate highlight.js or Prism.js. Auto-detect language from fence info.
       Light/dark theme support.
@@ -579,159 +466,30 @@ issues:
   - id: victor-3l6
     title: "VoiceOver audit and improvements"
     status: open
-    priority: P4
+    priority: P3
     type: task
     files: [All view files]
-    estimate: 3-4h
     detail: >
       Labels/hints on remaining controls, navigation hints for complex views,
       accessibility traits, keyboard nav, screen reader announcements.
       Icon-only buttons already done (victor-0qe).
+      2026-07-11: bumped P4 -> P3 and pulled into the Mac-arsed gap-closure
+      plan (MAC-ARSED-GAP-PLAN.md Phase D) - the skill audit scores
+      accessibility as one of Victor's three weakest rubric categories, and
+      G3's new selection surfaces need VoiceOver treatment anyway.
 
   # ── Mac Polish (design: MAC-POLISH-DESIGN.md; plan: MAC-POLISH-IMPLEMENTATION-PLAN.md) ──
-
-  - id: victor-wc1
-    title: "W1: Window chrome - proxy icon, subtitle, edited-dot, customizable toolbar"
-    status: done
-    priority: P2
-    type: feature
-    files:
-      - Victor/Views/MainWindow/ContentView.swift
-      - Victor/Views/MainWindow/WindowAccessor.swift (new)
-    estimate: 1-1.5d
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W1.1-W1.4. navigationDocument(selected
-      file URL, site-root fallback) + navigationTitle/Subtitle; one shared
-      WindowAccessor NSViewRepresentable driving NSWindow.isDocumentEdited
-      from hasUnsavedChanges; toolbar(id:) customization (prototype first -
-      fallback per design risk 3); window restoration audit.
-      Decided: proxy icon is file-level.
-
-  - id: victor-mnu
-    title: "W2: Menu bar completeness - File/Go/Dock menus, validation"
-    status: done
-    priority: P2
-    type: feature
-    blocked_by: [victor-stn]
-    files:
-      - Victor/VictorApp.swift
-      - Victor/Views/MainWindow/ContentView.swift
-    estimate: 1.5-2d
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W2.1-W2.4. File menu (New Post Cmd+N,
-      New Folder, Open Recent submenu + noteNewRecentDocumentURL, Close
-      Site, Save/Save All, Revert to Saved, Reveal in Finder); new Go menu
-      (back/forward through recentFiles, section jumps); consolidate
-      focused values into one EditorActions struct; full menu validation;
-      applicationDockMenu (server toggle, recent sites).
-
-  - id: victor-doc
-    title: "W3.1: Open site folders as documents (Dock drop, Open With)"
-    status: done
-    priority: P2
-    type: feature
-    files: [project.yml, Victor/VictorApp.swift]
-    estimate: 0.5d
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W3.1. Declare public.folder in
-      CFBundleDocumentTypes, handle onOpenURL/application(_:open:) ->
-      validate Hugo site -> loadSite. Verify sandbox bookmark minting for
-      Dock-dropped URLs on a clean install (design risk 5).
-      From Phase 1 review (P2): Close Site / Revert confirmationDialog
-      state lives on the App struct, shared across all WindowGroup windows.
-      Currently unreachable (single window), but any work here that opens a
-      second window must first move that state per-window.
-
-  - id: victor-qlk
-    title: "W3.2+W3.6: Real Quick Look for assets; ShareLink"
-    status: done
-    priority: P2
-    type: bug
-    files:
-      - Victor/Views/AssetBrowser/AssetDetailPanel.swift
-      - Victor/Views/AssetBrowser/AssetBrowserView.swift
-      - Victor/Views/MainWindow/SidebarView.swift
-    estimate: 2-3h
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W3.2/W3.6. The asset panel's "Quick Look"
-      button actually calls NSWorkspace.open (opens default app) - replace
-      with .quickLookPreview binding (macOS 14), bind Space in asset grid
-      and sidebar file list. Add ShareLink for selected file and running
-      server URL.
-
-  - id: victor-dnd
-    title: "W3.3: Drag & drop both directions (sidebar/editor in, assets out)"
-    status: done
-    priority: P3
-    type: feature
-    files:
-      - Victor/Views/MainWindow/SidebarView.swift
-      - Victor/Views/Editor/EditorTextView.swift
-      - Victor/Views/AssetBrowser/AssetBrowserView.swift
-      - Victor/Services/AssetService.swift
-    estimate: 1d
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W3.3. In: image/file drops on sidebar
-      folders (copy via AssetService import path) and editor (copy asset +
-      insert markdown link at drop point). Out: asset browser items
-      draggable to Finder via .draggable/NSItemProvider.
-
-  - id: victor-ntf
-    title: "W3.4: Build-failure notifications when app inactive"
-    status: done
-    priority: P3
-    type: feature
-    blocked_by: [victor-stn]
-    files:
-      - Victor/Services/NotificationService.swift (new)
-      - Victor/Services/HugoServerService.swift
-    estimate: 0.5d
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W3.4. UNUserNotificationCenter alert on
-      Hugo build failure while app inactive; click focuses app + opens
-      Build Issues popover. Provisional auth, requested on first background
-      failure only (design risk 4). Settings toggle (on AppSettings layer).
 
   - id: victor-mbe
     title: "W3.5: Menu bar extra for server control (settings-gated, default off)"
     status: open
     priority: P4
     type: feature
-    blocked_by: [victor-stn]
     files: [Victor/VictorApp.swift]
-    estimate: 0.5d
     detail: >
       Spec in MAC-POLISH-DESIGN.md W3.5. MenuBarExtra: server status dot,
       start/stop, open in browser. Gated by AppSettings flag, default off.
       Cut first if Phase 4 runs long.
-
-  - id: victor-vis
-    title: "W4: Appearance audits - materials, semantic color, symbols, motion"
-    status: open
-    priority: P3
-    type: task
-    files: [All view files, Victor/Services/MarkdownRenderer.swift]
-    estimate: 1.5-2d
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W4.1-W4.4. Vibrancy audit (no opaque
-      backgrounds fighting sidebar material; inspector ultraThinMaterial);
-      finish Color+Semantic adoption + dark-mode pass incl. preview CSS
-      prefers-color-scheme; SF Symbols weights/hierarchical/symbolEffect;
-      animation sweep for ad-hoc durations + reduce-motion coverage.
-      App icon (W4.5) tracked separately as victor-icn.
-
-  - id: victor-kbd
-    title: "W5.1-W5.2: Keyboard traversal + shortcut coherence"
-    status: open
-    priority: P3
-    type: task
-    files: [Victor/Views/MainWindow/ContentView.swift, Victor/VictorApp.swift, Docs/MAC-POLISH-DESIGN.md]
-    estimate: 1d
-    detail: >
-      Spec in MAC-POLISH-DESIGN.md W5.1-W5.2. focusSection() on the three
-      panes, Cmd+Option+Left/Right pane focus movement; publish shortcut
-      table (doc appendix + Help menu item). Decided: Cmd+P = Quick Open
-      when victor-qop ships; sidebar filter focus moves to Cmd+Option+F.
 
   - id: victor-icn
     title: "W4.5: macOS app icon redesign"
@@ -739,93 +497,112 @@ issues:
     priority: P3
     type: task
     files: [Victor/Assets.xcassets]
-    estimate: external
     detail: >
       Current logo assets need a proper macOS 14-style icon (single rounded
       rect, no hardware chrome). External design task; wire into asset
       catalog when delivered.
 
-  # ── Modernisation (from 2026-07-03 analysis; design in MAC-POLISH-DESIGN.md) ──
+  # ── Mac-arsed gap closure (2026-07-11 skill audit; plan: MAC-ARSED-GAP-PLAN.md) ──
 
-  - id: victor-sc6
-    title: "Swift 6 strict concurrency: enable checking, burn down, flip language mode"
-    status: done
+  - id: victor-spl
+    title: "G1: Edit menu lost system text services; no spell checking"
+    status: open
     priority: P2
-    type: task
-    files: [project.yml, "hotspots: EditorTextView, AssetService, SiteViewModel, LivePreviewPanel"]
-    estimate: 3-5d cumulative
-    detail: >
-      Probe on 2026-07-03: SWIFT_STRICT_CONCURRENCY=complete on Swift 5.9
-      yields 103 unique warnings, all errors in Swift 6 mode. ~46 are
-      non-Sendable class models (ContentFile/FileNode/Template) crossing
-      actor boundaries, ~27 are main-actor isolation violations (latent
-      races), 8 are non-Sendable static shared singletons. Stage 1 (10 min,
-      do with victor-stn): set SWIFT_STRICT_CONCURRENCY complete in
-      project.yml so no new debt lands. Stage 2: burn down file-by-file -
-      prefer boundary snapshot structs (FrontmatterSnapshot pattern), then
-      @MainActor annotation, then Sendable conformance for immutable types.
-      Do NOT rewrite models as structs (CLAUDE.md rationale stands).
-      Stage 3: SWIFT_VERSION 6.0. Fix warnings in files each Mac-polish
-      phase touches plus one dedicated half-day per phase; target flip by
-      end of polish Phase 3.
-
-  - id: victor-str
-    title: "AsyncStream observation for HugoServerService/LiveReloadClient; bytes.lines for pipes"
-    status: done
-    priority: P2
-    type: task
+    type: bug
     files:
-      - Victor/Services/HugoServerService.swift
-      - Victor/Services/LiveReloadClient.swift
+      - Victor/VictorApp.swift
+      - Victor/Views/Editor/EditorTextView.swift
+      - Victor/Models/AppSettings.swift
+      - Victor/Views/Preferences/PreferencesView.swift
+    detail: >
+      CommandGroup(replacing: .textEditing) in VictorApp.swift installs the
+      Find commands but that placement is also where macOS puts Spelling and
+      Grammar, Substitutions, Transformations, and Speech - replacing it
+      removed all of them from the Edit menu. Compounding: EditorTextView
+      never sets isContinuousSpellCheckingEnabled, so a prose-writing CMS
+      ships with spell checking off and no menu to enable it. Fix: prototype
+      whether the default .textEditing group's Find items route to the
+      NSTextView find bar via responder chain (if yes, delete the replacement
+      and add only Find in Files via CommandGroup(after:)); if not, keep the
+      replacement and re-add the four system submenus via responder-chain
+      selectors (extend the FindPanelHelper pattern). Either way: new
+      AppSettings.checkSpellingWhileTyping (default true) driving
+      isContinuousSpellCheckingEnabled, surfaced as menu toggle + Preferences
+      checkbox. Smart quotes/dashes stay off (deliberate, markdown).
+
+  - id: victor-rnm
+    title: "G2: No rename UI - renameFile exists in SiteViewModel but nothing calls it"
+    status: open
+    priority: P2
+    type: feature
+    files:
+      - Victor/Views/MainWindow/FileListView.swift
       - Victor/ViewModels/SiteViewModel.swift
-    estimate: 1d
     detail: >
-      Replace HugoServerService's three UUID-keyed callback dictionaries and
-      legacy setOn* shims with AsyncStream properties consumed via for-await
-      (cancellation replaces manual deregistration); SiteViewModel's
-      setupHugoServerObservers becomes observation tasks it owns. Replace
-      LiveReloadClient's stored onNavigate/onReload closures with one
-      LiveReloadEvent stream. Replace Pipe.readabilityHandler with
-      fileHandleForReading.bytes.lines in a child task - structurally
-      removes the handler-cleanup bug class patched 2026-07-03 and deletes
-      ~15 of victor-sc6's warnings. Fold into the sc6 burn-down when these
-      files come up.
+      SiteViewModel.renameFile(node:to:) is fully plumbed through
+      FileOperationsService but has zero UI call sites - no context-menu
+      Rename, no Return-to-rename. Add "Rename..." to FileContextMenu with a
+      validation sheet (reuse the FolderRowWithSheets sheet pattern), plus
+      Return key on the focused sidebar row as the Finder-familiar
+      accelerator. Must verify post-rename state: editedContentByFile keys,
+      recentFiles paths, open editor content, frontmatter panel binding.
+      renameFile's current selectedNode nil-then-set force-update is a smell
+      to clean up while here.
 
-  - id: victor-tdt
-    title: "Task.detached audit: default to nonisolated async functions"
-    status: done
+  - id: victor-sel
+    title: "G3: Sidebar selection model - multi-select, Delete key, Cmd+C, drag out"
+    status: open
     priority: P3
-    type: task
-    files: [19 uses across 12 files - see grep Task.detached]
-    estimate: 0.5d
-    detail: >
-      Most Task.detached uses mean "get off the main actor for file I/O".
-      Replace with nonisolated async functions (keeps priority inheritance,
-      task-locals, cancellation propagation). Keep detached only where
-      detachment is the point; each survivor gets a justifying comment.
-
-  - id: victor-mod
-    title: "Small modernisation wins (grab-bag, individually droppable)"
-    status: done
-    priority: P4
-    type: task
+    type: feature
+    blocked_by: [victor-rnm]
     files:
-      - Victor/Services/Logger.swift
-      - Victor/Services/FileSystemService.swift
-      - Victor/Services/AutoSaveService.swift
-    estimate: 1d total
+      - Victor/Views/MainWindow/FileListView.swift
+      - Victor/Views/MainWindow/SidebarView.swift
+      - Victor/ViewModels/SiteViewModel.swift
+      - Victor/Views/AssetBrowser/AssetBrowserView.swift
     detail: >
-      Do opportunistically when touching the file: (1) Logger.swift engine
-      os_log -> os.Logger (categories, privacy annotations), keep facade;
-      (2) DateFormatter -> Date.FormatStyle (7 files, fixes
-      formatter-per-call in createMarkdownFile); (3) one async
-      NSFileCoordinator helper deduping the three didResume continuation
-      dances; (4) DispatchQueue.asyncAfter -> cancellable Task.sleep
-      (AssetDetailPanel, ContentPathAutocompleteField) - other
-      DispatchQueue.main.async uses are justified AppKit/WebKit deferrals,
-      leave them; (5) @Entry macro for FocusedValues once on Xcode 16 SDK
-      (folds into Mac-polish W2.3); (6) new tests may use Swift Testing,
-      no migration of the existing XCTest suite.
+      Sidebar List is single-select (selectedFileID: UUID?) with per-row
+      .contextMenu, so: no Shift/Cmd-click, right-click cannot act on a
+      selection set, Delete key does nothing, Cmd+C puts nothing on the
+      pasteboard (copy is context-menu "Copy Path" only), and rows are not
+      drag sources (drops in only - asset browser is the only drag-out).
+      Scope: (a) List selection becomes Set<UUID> with a derived single
+      "lead" selection driving the editor; (b) migrate to
+      .contextMenu(forSelectionType: UUID.self) so right-click acts on the
+      full selection; (c) onDeleteCommand -> moveToTrash over the selection;
+      (d) Cmd+C via onCopyCommand putting file URLs (multi-format: fileURL +
+      path string) on the pasteboard; (e) rows draggable out via the
+      NSItemProvider(contentsOf:) pattern extracted from
+      AssetBrowserView.assetDragItemProvider into a shared helper (DRY);
+      (f) drag-to-move between sidebar folders with a real FileSystemService
+      move. Excluded with rationale: type-to-select (SwiftUI List does not
+      support it; would require NSOutlineView - not worth the substrate swap).
+      Blocked by victor-rnm only to sequence FileListView churn, not a hard
+      dependency.
+
+  - id: victor-und
+    title: "G4: Undo for file operations (rename, duplicate, trash, move)"
+    status: open
+    priority: P3
+    type: feature
+    blocked_by: [victor-rnm, victor-sel]
+    files:
+      - Victor/ViewModels/SiteViewModel.swift
+      - Victor/Services/FileSystemService.swift
+      - Victor/Services/FileOperationsService.swift
+    detail: >
+      No UndoManager use outside NSTextView typing. Skill rule: named undo
+      actions ("Undo Rename", "Undo Move to Trash") preferred over
+      confirmation dialogs. Groundwork already exists:
+      FileSystemService.moveToTrash calls trashItem(resultingItemURL:) and
+      discards the trashed URL - return it up the chain so undo can move the
+      item back. Register inverse operations on the window's UndoManager
+      (@Environment(\.undoManager) threaded into the file-operation call
+      sites) with setActionName for each op: rename<->rename back,
+      duplicate<->trash the copy, trash<->put back from trashed URL,
+      move<->move back. Excluded with rationale: frontmatter form-level undo
+      (fields already get NSTextField-local text undo; whole-form undo is a
+      separate design problem).
 
   # ── Code Health (from 2026-07-03 critical analysis) ───────────
   # Significant findings from this pass were fixed directly (see
@@ -837,7 +614,6 @@ issues:
     priority: P3
     type: bug
     files: [Victor/Views/Editor/EditorTextView.swift]
-    estimate: 3h
     detail: >
       NSRange locations (UTF-16 offsets) are mixed with String.count (grapheme
       clusters) throughout the wrapper: performDragOperation clamps charIndex
@@ -856,7 +632,6 @@ issues:
     priority: P3
     type: task
     files: [Victor/ViewModels/SiteViewModel.swift, Victor/Services/FileCacheManager.swift]
-    estimate: 1h
     detail: >
       FileCacheManager supports eviction (evictIfNeeded, onEviction callback)
       but SiteViewModel never calls it, so the edited-content string cache
@@ -870,7 +645,6 @@ issues:
     priority: P4
     type: task
     files: [Victor/Services/LiveReloadClient.swift]
-    estimate: 1h
     detail: >
       scheduleReconnect retries every 2s forever after a WebSocket failure.
       If the Hugo server is gone for good this spins indefinitely (each retry
@@ -884,7 +658,6 @@ issues:
     priority: P4
     type: bug
     files: [Victor/Services/HugoServerService.swift]
-    estimate: 30m
     detail: >
       The availability probe binds a test socket without SO_REUSEADDR, so a
       port in TIME_WAIT (e.g. right after stopping the server) reads as taken
@@ -897,7 +670,6 @@ issues:
     priority: P3
     type: bug
     files: [Victor/Views/AssetBrowser/AssetBrowserView.swift]
-    estimate: 1-2h
     detail: >
       From Phase 3 review (2026-07-05): loadMetadataIfNeeded checks
       !asset.isMetadataLoaded before an await; SwiftUI re-invokes a grid
@@ -913,7 +685,6 @@ issues:
     priority: P4
     type: task
     files: [Victor/Views/MainWindow/FileListView.swift]
-    estimate: 1h
     detail: >
       From Phase 3 review (2026-07-05): the nonisolated(unsafe) let node
       suppression is judged safe today (Equatable only consulted by
@@ -928,7 +699,6 @@ issues:
     priority: P3
     type: bug
     files: [Victor/Victor.entitlements, project.yml]
-    estimate: 0.5-1d
     detail: >
       Found during WP2.1 (2026-07-04): Victor.entitlements is an empty
       dict, so App Sandbox is off despite the codebase being written for it
@@ -946,7 +716,6 @@ issues:
     priority: P4
     type: task
     files: [Victor/ViewModels/SiteViewModel.swift]
-    estimate: 1-2h
     detail: >
       Found during Phase 1 review fixes (2026-07-04): init() spawns a
       background Task restoring the bookmarked site from real UserDefaults.
@@ -969,7 +738,6 @@ issues:
       - Victor/Views/TranslationEditor/TranslationEditorView.swift
       - Victor/Views/TemplateEditor/TemplateEditorView.swift
       - Victor/Views/ArchetypeEditor/ArchetypeEditorView.swift
-    estimate: 2-3h
     detail: >
       Found during WP1.3 (2026-07-04): Config/Data/Translation/Template/
       Archetype editors bind Cmd+S locally via EditorToolbarButtons and
@@ -982,7 +750,6 @@ issues:
     priority: P4
     type: bug
     files: [Victor/Views/MainWindow/ContentView.swift]
-    estimate: 2-3h
     detail: >
       Found during WP1.1 (2026-07-04): NavigationSplitView exposes no
       SwiftUI hook for divider-position autosave (columnVisibility is plain
@@ -998,7 +765,6 @@ issues:
     priority: P4
     type: bug
     files: [Victor/ViewModels/SiteViewModel.swift]
-    estimate: 30m
     detail: >
       selectNode sets isLoadingFile=true per load but any finishing load sets
       it back to false, even if a newer load is still in flight - switching
