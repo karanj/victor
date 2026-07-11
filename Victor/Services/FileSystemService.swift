@@ -503,6 +503,53 @@ final class FileSystemService: @unchecked Sendable {
         }
     }
 
+    /// Move a file or folder to a different directory within the site
+    /// (drag-to-move, victor-sel B.4) - mirrors `renameFile`'s
+    /// coordination/validation pattern above: an explicit `isDirectory` stat
+    /// of the SOURCE (which still exists - the destination doesn't yet, so
+    /// without the hint a slash-less directory URL would result, same
+    /// victor-rnm concern `renameFile` documents), path-within-site
+    /// validation of the destination, and a collision check, all before
+    /// touching disk. Unlike `renameFile`, the filename itself doesn't
+    /// change - only the parent directory - so there's no `isSafeFilename`
+    /// check (the existing filename was already validated when the file was
+    /// created/renamed).
+    /// - Parameters:
+    ///   - url: the file/folder's current URL
+    ///   - targetDirectory: the destination folder's URL (must be inside the site)
+    ///   - siteRoot: the site root URL for path traversal validation
+    /// - Returns: the new URL after the move (same filename, new parent)
+    func moveFile(at url: URL, to targetDirectory: URL, siteRoot: URL) async throws -> URL {
+        var sourceIsDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: url.path, isDirectory: &sourceIsDirectory)
+        let newURL = targetDirectory.appendingPathComponent(
+            url.lastPathComponent, isDirectory: sourceIsDirectory.boolValue)
+
+        // Validate the new path stays within site boundaries
+        try validatePathWithinSite(newURL, siteRoot: siteRoot)
+
+        // Check if destination already exists
+        if FileManager.default.fileExists(atPath: newURL.path) {
+            throw FileError.fileAlreadyExists
+        }
+
+        return try await withFileCoordination { resume in
+            let coordinator = NSFileCoordinator()
+            var coordinatorError: NSError?
+
+            coordinator.coordinate(writingItemAt: url, options: .forMoving, writingItemAt: newURL, options: .forReplacing, error: &coordinatorError) { oldURL, targetURL in
+                do {
+                    try FileManager.default.moveItem(at: oldURL, to: targetURL)
+                    resume(.success(targetURL))
+                } catch {
+                    resume(.failure(error))
+                }
+            }
+
+            return coordinatorError
+        }
+    }
+
     /// Duplicate a file
     func duplicateFile(at url: URL) async throws -> URL {
         let fileManager = FileManager.default
@@ -630,16 +677,33 @@ final class FileSystemService: @unchecked Sendable {
         try FileManager.default.trashItem(at: url, resultingItemURL: &trashedURL)
     }
 
-    /// Reveal a file in Finder
-    func revealInFinder(url: URL) {
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+    /// Reveal one or more files/folders in Finder as a single selection
+    /// (victor-sel B.4 - the multi-select "Reveal in Finder" context menu
+    /// item routes through this). `NSWorkspace.activateFileViewerSelecting`
+    /// already accepts an array; the single-URL version below is a thin
+    /// wrapper so there's one implementation, not two.
+    func revealInFinder(urls: [URL]) {
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
-    /// Copy file path to clipboard
-    func copyPathToClipboard(url: URL) {
+    /// Reveal a single file in Finder
+    func revealInFinder(url: URL) {
+        revealInFinder(urls: [url])
+    }
+
+    /// Copy one or more file paths to the pasteboard, newline-joined
+    /// (victor-sel B.4 - the multi-select "Copy Path" context menu item and
+    /// Cmd+C route through this). The single-URL version below is a thin
+    /// wrapper so there's one pasteboard-writing implementation, not two.
+    func copyPathsToClipboard(urls: [URL]) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(url.path, forType: .string)
+        pasteboard.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
+    }
+
+    /// Copy a single file's path to the clipboard
+    func copyPathToClipboard(url: URL) {
+        copyPathsToClipboard(urls: [url])
     }
 
     /// Create a new folder inside the given directory

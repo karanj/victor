@@ -858,6 +858,276 @@ final class SiteViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - Move Node Tests (victor-sel B.4, drag-to-move within the tree)
+
+    func testMoveNodeUpdatesURLAndReparents() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderAURL = tempDir.appendingPathComponent("folderA")
+        let folderBURL = tempDir.appendingPathComponent("folderB")
+        try FileManager.default.createDirectory(at: folderAURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folderBURL, withIntermediateDirectories: true)
+        let fileURL = folderAURL.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let folderANode = FileNode(url: folderAURL, isDirectory: true)
+        let folderBNode = FileNode(url: folderBURL, isDirectory: true)
+        let fileNode = FileNode(url: fileURL, isDirectory: false)
+        folderANode.addChild(fileNode)
+        viewModel.fileNodes = [folderANode, folderBNode]
+
+        await viewModel.moveNode(from: fileNode, to: folderBNode)
+
+        let expectedURL = folderBURL.appendingPathComponent("post.md")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(fileNode.url, expectedURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: expectedURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertFalse(folderANode.children.contains { $0.id == fileNode.id }, "must be removed from the old parent")
+        XCTAssertTrue(folderBNode.children.contains { $0.id == fileNode.id }, "must be reparented into the new parent")
+        XCTAssertTrue(fileNode.parent === folderBNode)
+    }
+
+    func testMoveNodeUpdatesDescendantURLsWhenMovingFolder() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderURL = tempDir.appendingPathComponent("post-bundle")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let indexURL = folderURL.appendingPathComponent("index.md")
+        try "hello".write(to: indexURL, atomically: true, encoding: .utf8)
+        let imagesURL = folderURL.appendingPathComponent("images")
+        try FileManager.default.createDirectory(at: imagesURL, withIntermediateDirectories: true)
+        let coverURL = imagesURL.appendingPathComponent("cover.png")
+        try Data().write(to: coverURL)
+
+        let targetURL = tempDir.appendingPathComponent("archive")
+        try FileManager.default.createDirectory(at: targetURL, withIntermediateDirectories: true)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+
+        let folderNode = FileNode(url: folderURL, isDirectory: true, isPageBundle: true)
+        let indexNode = FileNode(url: indexURL, isDirectory: false)
+        let imagesNode = FileNode(url: imagesURL, isDirectory: true)
+        let coverNode = FileNode(url: coverURL, isDirectory: false)
+        folderNode.addChild(indexNode)
+        folderNode.addChild(imagesNode)
+        imagesNode.addChild(coverNode)
+        let targetNode = FileNode(url: targetURL, isDirectory: true)
+        viewModel.fileNodes = [folderNode, targetNode]
+
+        await viewModel.moveNode(from: folderNode, to: targetNode)
+
+        let expectedFolderURL = targetURL.appendingPathComponent("post-bundle")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(folderNode.url, expectedFolderURL)
+        XCTAssertEqual(indexNode.url, expectedFolderURL.appendingPathComponent("index.md"),
+                       "descendant FileNode URLs must be rebuilt by prefix replacement after a directory move")
+        XCTAssertEqual(imagesNode.url, expectedFolderURL.appendingPathComponent("images"))
+        XCTAssertEqual(coverNode.url, expectedFolderURL.appendingPathComponent("images/cover.png"),
+                       "grandchild URLs must update too, not just direct children")
+        XCTAssertTrue(targetNode.children.contains { $0.id == folderNode.id })
+        XCTAssertFalse(viewModel.fileNodes.contains { $0.id == folderNode.id }, "moved top-level node must be removed from fileNodes")
+    }
+
+    func testMoveNodeRefusesMovingFolderIntoOwnDescendant() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let parentURL = tempDir.appendingPathComponent("parent")
+        try FileManager.default.createDirectory(at: parentURL, withIntermediateDirectories: true)
+        let childURL = parentURL.appendingPathComponent("child")
+        try FileManager.default.createDirectory(at: childURL, withIntermediateDirectories: true)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let parentNode = FileNode(url: parentURL, isDirectory: true)
+        let childNode = FileNode(url: childURL, isDirectory: true)
+        parentNode.addChild(childNode)
+        viewModel.fileNodes = [parentNode]
+
+        await viewModel.moveNode(from: parentNode, to: childNode)
+
+        XCTAssertNotNil(viewModel.errorMessage, "moving a folder into its own descendant must be refused")
+        XCTAssertEqual(parentNode.url, parentURL, "the refused move must leave the node untouched")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: parentURL.path))
+        XCTAssertTrue(viewModel.fileNodes.contains { $0.id == parentNode.id }, "must not be reparented")
+    }
+
+    func testMoveNodeNoOpsWhenTargetIsCurrentParent() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderURL = tempDir.appendingPathComponent("folder")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let fileURL = folderURL.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let folderNode = FileNode(url: folderURL, isDirectory: true)
+        let fileNode = FileNode(url: fileURL, isDirectory: false)
+        folderNode.addChild(fileNode)
+        viewModel.fileNodes = [folderNode]
+
+        await viewModel.moveNode(from: fileNode, to: folderNode)
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(fileNode.url, fileURL, "no-op: url must be unchanged")
+        XCTAssertTrue(folderNode.children.contains { $0.id == fileNode.id })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path), "no-op must not touch disk")
+    }
+
+    func testMoveNodeCancelsPendingAutoSaveForOldPath() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderAURL = tempDir.appendingPathComponent("folderA")
+        let folderBURL = tempDir.appendingPathComponent("folderB")
+        try FileManager.default.createDirectory(at: folderAURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folderBURL, withIntermediateDirectories: true)
+        let fileURL = folderAURL.appendingPathComponent("post.md")
+        try "original".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        UserDefaults.standard.set(0.3, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        defer { UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) }
+
+        let autoSaveService = AutoSaveService()
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService(), autoSaveService: autoSaveService)
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let folderANode = FileNode(url: folderAURL, isDirectory: true)
+        let folderBNode = FileNode(url: folderBURL, isDirectory: true)
+        let fileNode = FileNode(url: fileURL, isDirectory: false)
+        fileNode.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "original")
+        folderANode.addChild(fileNode)
+        viewModel.fileNodes = [folderANode, folderBNode]
+
+        let saveLanded = expectation(description: "a pre-move debounce must not fire after the move")
+        saveLanded.isInverted = true
+
+        await autoSaveService.scheduleAutoSave(
+            fileURL: fileURL,
+            content: "content from a debounce scheduled before the move",
+            lastModified: Date.distantPast,
+            onConflict: { .keepLocal },
+            onSuccess: { _ in saveLanded.fulfill() },
+            onError: { _ in }
+        )
+
+        await viewModel.moveNode(from: fileNode, to: folderBNode)
+
+        await fulfillment(of: [saveLanded], timeout: 0.6)
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: fileURL.path),
+            "moveNode must cancel the pending debounced auto-save for the OLD path before moving, or the debounce recreates the file there once it fires"
+        )
+    }
+
+    func testMoveNodePreservesEditedContentKeyedByUUID() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderAURL = tempDir.appendingPathComponent("folderA")
+        let folderBURL = tempDir.appendingPathComponent("folderB")
+        try FileManager.default.createDirectory(at: folderAURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folderBURL, withIntermediateDirectories: true)
+        let fileURL = folderAURL.appendingPathComponent("post.md")
+        try "original".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let folderANode = FileNode(url: folderAURL, isDirectory: true)
+        let folderBNode = FileNode(url: folderBURL, isDirectory: true)
+        let fileNode = FileNode(url: fileURL, isDirectory: false)
+        fileNode.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "original")
+        folderANode.addChild(fileNode)
+        viewModel.fileNodes = [folderANode, folderBNode]
+
+        viewModel.setEditedContent("unsaved edits", for: fileNode.id)
+
+        await viewModel.moveNode(from: fileNode, to: folderBNode)
+
+        XCTAssertEqual(viewModel.getEditedContent(for: fileNode.id), "unsaved edits",
+                       "fileCacheManager is keyed by UUID, not path - cached edits must survive a move")
+    }
+
+    // MARK: - Handle Dropped File Dispatch Tests (victor-sel B.4)
+
+    func testHandleDroppedFileMovesWhenSourceIsInsideSite() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderAURL = tempDir.appendingPathComponent("folderA")
+        let folderBURL = tempDir.appendingPathComponent("folderB")
+        try FileManager.default.createDirectory(at: folderAURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folderBURL, withIntermediateDirectories: true)
+        let fileURL = folderAURL.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let folderANode = FileNode(url: folderAURL, isDirectory: true)
+        let folderBNode = FileNode(url: folderBURL, isDirectory: true)
+        let fileNode = FileNode(url: fileURL, isDirectory: false)
+        folderANode.addChild(fileNode)
+        viewModel.fileNodes = [folderANode, folderBNode]
+
+        await viewModel.handleDroppedFile(from: fileURL, into: folderBNode)
+
+        let expectedURL = folderBURL.appendingPathComponent("post.md")
+        XCTAssertEqual(fileNode.url, expectedURL, "a drop whose source is already inside the site must MOVE, not copy")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path), "the original must be gone - a move, not a copy")
+        XCTAssertTrue(folderBNode.children.contains { $0.id == fileNode.id })
+    }
+
+    func testHandleDroppedFileImportsWhenSourceIsOutsideSite() async throws {
+        let siteDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        let outsideDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-outside-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: siteDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: siteDir)
+            try? FileManager.default.removeItem(at: outsideDir)
+        }
+
+        let folderURL = siteDir.appendingPathComponent("folder")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let outsideFileURL = outsideDir.appendingPathComponent("external.md")
+        try "external".write(to: outsideFileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: siteDir)
+        let folderNode = FileNode(url: folderURL, isDirectory: true)
+        viewModel.fileNodes = [folderNode]
+
+        await viewModel.handleDroppedFile(from: outsideFileURL, into: folderNode)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outsideFileURL.path), "a drop from outside the site must COPY, not move - the original must remain")
+        XCTAssertEqual(folderNode.children.count, 1)
+        XCTAssertEqual(folderNode.children.first?.name, "external.md")
+    }
+
     // MARK: - Close Site Tests
 
     func testCloseSite() {

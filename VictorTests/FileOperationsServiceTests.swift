@@ -75,6 +75,71 @@ final class FileOperationsServiceTests: XCTestCase {
         XCTAssertEqual(readContent, content)
     }
 
+    // MARK: - Move File Tests (victor-sel B.4, drag-to-move)
+
+    func testMoveFileChangesParentDirectory() async throws {
+        let sourceURL = tempDirectory.appendingPathComponent("source.md")
+        try "# Test".write(to: sourceURL, atomically: true, encoding: .utf8)
+        let targetDir = tempDirectory.appendingPathComponent("target")
+        try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+
+        let newURL = try await service.moveFile(at: sourceURL, to: targetDir, siteRoot: tempDirectory)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: newURL.path))
+        XCTAssertEqual(newURL, targetDir.appendingPathComponent("source.md"))
+    }
+
+    func testMoveFilePreservesContent() async throws {
+        let content = "# Hello World"
+        let sourceURL = tempDirectory.appendingPathComponent("test.md")
+        try content.write(to: sourceURL, atomically: true, encoding: .utf8)
+        let targetDir = tempDirectory.appendingPathComponent("target")
+        try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+
+        let newURL = try await service.moveFile(at: sourceURL, to: targetDir, siteRoot: tempDirectory)
+
+        let readContent = try String(contentsOf: newURL, encoding: .utf8)
+        XCTAssertEqual(readContent, content)
+    }
+
+    func testMoveFileThrowsOnCollision() async throws {
+        let sourceURL = tempDirectory.appendingPathComponent("source.md")
+        try "# Source".write(to: sourceURL, atomically: true, encoding: .utf8)
+        let targetDir = tempDirectory.appendingPathComponent("target")
+        try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+        let collisionURL = targetDir.appendingPathComponent("source.md")
+        try "# Already here".write(to: collisionURL, atomically: true, encoding: .utf8)
+
+        do {
+            _ = try await service.moveFile(at: sourceURL, to: targetDir, siteRoot: tempDirectory)
+            XCTFail("Expected fileAlreadyExists error")
+        } catch let error as FileError {
+            XCTAssertEqual(error, .fileAlreadyExists)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceURL.path), "a collision must leave the source untouched")
+    }
+
+    func testMoveFileThrowsWhenTargetOutsideSiteRoot() async throws {
+        let sourceURL = tempDirectory.appendingPathComponent("source.md")
+        try "# Test".write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let outsideDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FileOperationsServiceTests-outside-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outsideDir) }
+
+        do {
+            _ = try await service.moveFile(at: sourceURL, to: outsideDir, siteRoot: tempDirectory)
+            XCTFail("Expected accessDenied error")
+        } catch let error as FileError {
+            XCTAssertEqual(error, .accessDenied)
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceURL.path), "a boundary violation must leave the source untouched")
+    }
+
     // MARK: - Duplicate File Tests
 
     func testDuplicateFileCreatesNewFile() async throws {
@@ -255,5 +320,31 @@ final class FileOperationsServiceTests: XCTestCase {
         let pastedString = pasteboard.string(forType: .string)
         XCTAssertEqual(pastedString, fileURL.path)
         #endif
+    }
+
+    /// victor-sel B.4: the multi-URL sibling, now the single real
+    /// pasteboard-writing implementation - `copyPathToClipboard(url:)` above
+    /// routes through it with a one-element array.
+    func testCopyPathsToClipboardJoinsWithNewline() {
+        let fileURLA = tempDirectory.appendingPathComponent("a.md")
+        let fileURLB = tempDirectory.appendingPathComponent("b.md")
+
+        service.copyPathsToClipboard(urls: [fileURLA, fileURLB])
+
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+        let pastedString = pasteboard.string(forType: .string)
+        XCTAssertEqual(pastedString, "\(fileURLA.path)\n\(fileURLB.path)")
+        #endif
+    }
+
+    // MARK: - Reveal in Finder (Multi-URL) Tests
+
+    func testRevealInFinderMultiURLDoesNotThrow() {
+        // Just verify it doesn't throw - actual Finder behavior can't be tested
+        let fileURLA = tempDirectory.appendingPathComponent("a.md")
+        let fileURLB = tempDirectory.appendingPathComponent("b.md")
+        service.revealInFinder(urls: [fileURLA, fileURLB])
+        // No assertion needed - just checking it doesn't crash
     }
 }

@@ -533,12 +533,42 @@ struct ContentStatusBadge: View {
     }
 }
 
+// MARK: - Drag Out
+
+/// Builds the drag-out payload for a sidebar row (victor-sel B.4). If `node`
+/// is part of the current multi-selection (2+ members), the grabbed row's
+/// own file is still the ONLY one draggable as a real file-copy - SwiftUI's
+/// `.onDrag` hands back exactly one `NSItemProvider` per drag gesture (same
+/// ceiling AssetBrowserView's single-asset drag source runs into), so a true
+/// multi-file Finder drop (N separate file-promise items from one gesture)
+/// isn't achievable with this API. The full selection's paths (tree order)
+/// are attached as a secondary plain-text representation instead, so a drop
+/// into a text-accepting destination (a text editor, Terminal) still
+/// surfaces every selected path - not silently dropped, just not expressed
+/// as N separate Finder-recognized files; a drop onto Finder itself will
+/// only copy the single grabbed file. Dragging a row that ISN'T part of the
+/// current selection drags just that row (standard macOS behavior).
+/// `@MainActor`: reads `selectedFileIDs`/`treeOrderIndex`/`findNode` on the
+/// main-actor-isolated SiteViewModel; `.onDrag` closures in the row views are
+/// main-actor-inferred (same pattern as AssetBrowserView's drag source).
+@MainActor
+private func dragItemProvider(for node: FileNode, siteViewModel: SiteViewModel) -> NSItemProvider {
+    let selection = siteViewModel.selectedFileIDs
+    if selection.count > 1, selection.contains(node.id) {
+        let allPaths = siteViewModel.treeOrderIndex(of: selection)
+            .compactMap { siteViewModel.findNode(id: $0)?.url.path }
+        return FileDragItemProvider.make(for: node.url, secondaryRepresentation: allPaths.joined(separator: "\n"))
+    }
+    return FileDragItemProvider.make(for: node.url, secondaryRepresentation: node.url.path)
+}
+
 // MARK: - Row Wrappers
 
 /// Wrapper view for a folder row - keeps only what's specific to folder rows
-/// (drop-target overlay/`.dropDestination`) plus `.equatable()` row rendering.
-/// No longer owns sheet state or a `.contextMenu` (victor-sel): both moved to
-/// the List level (`FileListView.body`'s `.contextMenu(forSelectionType:)` and
+/// (drop-target overlay/`.dropDestination`, drag-out source) plus
+/// `.equatable()` row rendering. No longer owns sheet state or a
+/// `.contextMenu` (victor-sel): both moved to the List level
+/// (`FileListView.body`'s `.contextMenu(forSelectionType:)` and
 /// `.sheet(item: $sheetTarget)`) since a per-row context menu can't represent
 /// a multi-row selection. See Docs/SELECTION-MODEL-MEMO.md section 4.
 struct FolderRowWithSheets: View {
@@ -556,16 +586,22 @@ struct FolderRowWithSheets: View {
                         .stroke(Color.accentColor, lineWidth: 2)
                 }
             }
-            // Accept file drops (images and any other file type) onto folder rows.
-            // `node` here can be an ephemeral filtered-search copy (see
-            // SiteViewModel.importDroppedFile's doc comment), so the actual import -
-            // resolving the canonical node, copying, inserting, registering,
-            // invalidating the filter cache - lives there instead of here.
+            // Drag-out source (victor-sel B.4) - see dragItemProvider's doc
+            // comment above for the multi-selection/single-provider caveat.
+            .onDrag {
+                dragItemProvider(for: node, siteViewModel: siteViewModel)
+            }
+            // Accept file drops onto folder rows - either a same-site MOVE or
+            // (for drops from outside the site, e.g. Finder) the existing
+            // copy/import path. `node` here can be an ephemeral
+            // filtered-search copy (see SiteViewModel.importDroppedFile's doc
+            // comment), so the move-vs-copy decision and canonical-node
+            // resolution both live in `handleDroppedFile` instead of here.
             .dropDestination(for: URL.self) { droppedURLs, _ in
                 guard node.isDirectory, !droppedURLs.isEmpty else { return false }
                 for sourceURL in droppedURLs {
                     Task {
-                        await siteViewModel.importDroppedFile(from: sourceURL, into: node)
+                        await siteViewModel.handleDroppedFile(from: sourceURL, into: node)
                     }
                 }
                 return true
@@ -575,9 +611,10 @@ struct FolderRowWithSheets: View {
     }
 }
 
-/// Wrapper view for a (non-directory) file row - `.equatable()` row rendering
-/// only. No longer owns sheet state or a `.contextMenu` (victor-sel) - see
-/// `FolderRowWithSheets`'s doc comment above.
+/// Wrapper view for a (non-directory) file row - `.equatable()` row
+/// rendering plus drag-out source (victor-sel B.4). No longer owns sheet
+/// state or a `.contextMenu` (victor-sel) - see `FolderRowWithSheets`'s doc
+/// comment above.
 struct FileRowWithSheets: View {
     let node: FileNode
     let siteViewModel: SiteViewModel
@@ -585,6 +622,9 @@ struct FileRowWithSheets: View {
     var body: some View {
         FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
             .equatable()
+            .onDrag {
+                dragItemProvider(for: node, siteViewModel: siteViewModel)
+            }
     }
 }
 

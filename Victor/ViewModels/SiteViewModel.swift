@@ -1454,6 +1454,40 @@ class SiteViewModel {
         }
     }
 
+    /// Entry point for a file dropped onto a sidebar folder row (victor-sel
+    /// B.4, extending W3.3/victor-dnd's `importDroppedFile` below) -
+    /// dispatches to either a same-site MOVE (`moveNode`) or the existing
+    /// copy/import path (`importDroppedFile`), based on whether `sourceURL`
+    /// is already inside the current site root. `folder` may be an ephemeral
+    /// filtered-search copy (see `importDroppedFile`'s doc comment) -
+    /// resolved to its canonical instance once here, shared by both paths.
+    func handleDroppedFile(from sourceURL: URL, into folder: FileNode) async {
+        guard let canonicalFolder = findNode(url: folder.url), canonicalFolder.isDirectory else { return }
+
+        if isURL(sourceURL, withinSite: site?.rootURL), let sourceNode = findNode(url: sourceURL) {
+            await moveNode(from: sourceNode, to: canonicalFolder)
+        } else {
+            await importDroppedFile(from: sourceURL, into: canonicalFolder)
+        }
+    }
+
+    /// True if `url` is inside `siteRoot` (or is `siteRoot` itself) - the
+    /// drag-to-move vs. copy-from-outside distinction for
+    /// `handleDroppedFile`. Directory-boundary aware, same comparison shape
+    /// as `FileSystemService.validatePathWithinSite`'s private `isPath(_:within:)`
+    /// helper, but as a plain boolean predicate rather than a throwing
+    /// validator - this is a "which branch do we take" question, not a
+    /// security gate (the move/import paths each do their own validation
+    /// once a branch is chosen).
+    private func isURL(_ url: URL, withinSite siteRoot: URL?) -> Bool {
+        guard let siteRoot else { return false }
+        let path = url.standardized.path
+        let rootPath = siteRoot.standardized.path
+        if path == rootPath { return true }
+        let rootWithSeparator = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        return path.hasPrefix(rootWithSeparator)
+    }
+
     /// Import a file dropped onto a sidebar folder row (W3.3/victor-dnd), copying it
     /// via `FileSystemService.importFile` and inserting a node directly - mirrors
     /// `createMarkdownFile`'s node-insertion approach instead of a full `reloadSite()`.
@@ -1466,6 +1500,11 @@ class SiteViewModel {
     /// fresh UUID) before attaching anything, so the import survives the next
     /// `filteredNodes` access - and reaches `registerNode`/`invalidateFilterCache`
     /// (both `private`, hence why this lives here rather than in FileListView).
+    ///
+    /// Called directly by tests, and by `handleDroppedFile` above for drops whose
+    /// source is outside the site - `folder` is already canonical by the time
+    /// `handleDroppedFile` calls this, but the re-resolution below is harmless
+    /// (idempotent) and keeps this method safe to call on its own too.
     func importDroppedFile(from sourceURL: URL, into folder: FileNode) async {
         guard let siteRoot = site?.rootURL else { return }
         guard let canonicalFolder = findNode(url: folder.url), canonicalFolder.isDirectory else { return }
@@ -1610,6 +1649,96 @@ class SiteViewModel {
         }
     }
 
+    /// Move a node (file or folder) to a different folder within the site
+    /// tree - the drag-to-move counterpart of `handleDroppedFile`'s
+    /// copy/import path (victor-sel B.4). Mirrors `renameFile`'s
+    /// coordination pattern: cancels pending auto-saves before touching
+    /// disk, moves via `FileOperationsService.moveFile`, updates the node's
+    /// (and every descendant's) URL/contentFile/textFile, reparents in the
+    /// in-memory tree, and invalidates the filter cache.
+    /// - Parameters:
+    ///   - node: the file or folder being moved - must already be the
+    ///     canonical tree instance (callers resolve via `findNode`, same
+    ///     requirement as `renameFile`/`moveToTrash`)
+    ///   - targetFolder: the destination folder node
+    func moveNode(from node: FileNode, to targetFolder: FileNode) async {
+        guard targetFolder.isDirectory else { return }
+        guard let siteRoot = site?.rootURL else { return }
+
+        // No-op when dropped back onto its own current parent, or onto
+        // itself - nothing to do, not an error.
+        if node.id == targetFolder.id || node.parent?.id == targetFolder.id {
+            return
+        }
+
+        // Refuse moving a folder into its own descendant - FileManager.moveItem
+        // would either fail outright or (worse) move the directory inside
+        // itself, corrupting the in-memory tree on top of it.
+        if node.isDirectory, isDescendant(targetFolder, of: node) {
+            errorMessage = "Can't move '\(node.name)' into its own subfolder."
+            return
+        }
+
+        // Cancel any pending debounced auto-save for this node - and, for a
+        // directory move, every descendant file - BEFORE touching disk. Same
+        // ordering rationale as renameFile (see its doc comment): a save
+        // already in flight could otherwise fire after the move and
+        // recreate the file at the OLD path.
+        for url in [node.url] + allDescendantURLs(of: node) {
+            await autoSaveService.cancelAutoSave(for: url)
+        }
+
+        do {
+            let newURL = try await fileOperationsService.moveFile(at: node.url, to: targetFolder.url, siteRoot: siteRoot)
+
+            // Update the node's URL and every model object that mirrors it -
+            // same pattern as renameFile.
+            node.url = newURL
+            node.contentFile?.url = newURL
+            node.textFile?.url = newURL
+
+            if node.isDirectory {
+                updateDescendantURLs(of: node, newParentURL: newURL)
+            }
+
+            // Reparent in the in-memory tree. Remove from the old parent
+            // FIRST - addChild only appends to the new parent, it doesn't
+            // remove from any prior parent's children array.
+            if let oldParent = node.parent {
+                oldParent.children.removeAll { $0.id == node.id }
+            } else {
+                fileNodes.removeAll { $0.id == node.id }
+            }
+            targetFolder.addChild(node)   // sets node.parent, appends, sortChildren()
+
+            invalidateFilterCache()
+
+            // No selection force-poke needed, same rationale as renameFile:
+            // `node` is the same object instance throughout (never swapped
+            // for a copy), so selectedNode/selectedFileID/selectedFileIDs
+            // (all keyed by the unchanged `id`) stay correct without
+            // touching them - Observation already propagates the `url`
+            // mutation above to any view reading selectedNode?.url/.name.
+            // fileCacheManager's cached edited content is keyed by node
+            // `id` (also unchanged by a move), so it survives automatically
+            // too - no re-keying needed.
+        } catch {
+            errorMessage = "Failed to move \(node.name): \(error.localizedDescription)"
+            Logger.shared.error("Error moving file", error: error)
+        }
+    }
+
+    /// True if `candidate` is `ancestor` itself or nested anywhere under it -
+    /// used by `moveNode` to refuse moving a folder into its own descendant.
+    private func isDescendant(_ candidate: FileNode, of ancestor: FileNode) -> Bool {
+        var current: FileNode? = candidate
+        while let node = current {
+            if node.id == ancestor.id { return true }
+            current = node.parent
+        }
+        return false
+    }
+
     /// Duplicate a file node
     func duplicateFile(node: FileNode) async {
         do {
@@ -1733,14 +1862,9 @@ class SiteViewModel {
     }
 
     /// Reveal multiple files/folders in Finder as a single selection
-    /// (victor-sel batch operation). `NSWorkspace.activateFileViewerSelecting`
-    /// already accepts an array (see the single-node `revealInFinder(node:)`
-    /// below), but neither FileOperationsService nor FileSystemService expose
-    /// a multi-URL entry point today and this package doesn't add one for a
-    /// single call site (SELECTION-MODEL-MEMO.md section 4) - this calls
-    /// NSWorkspace directly instead.
+    /// (victor-sel batch operation).
     func revealInFinder(nodes: [FileNode]) {
-        NSWorkspace.shared.activateFileViewerSelecting(nodes.map(\.url))
+        fileOperationsService.revealInFinder(urls: nodes.map(\.url))
     }
 
     /// Reveal a file in Finder
@@ -1749,22 +1873,18 @@ class SiteViewModel {
     }
 
     /// Copy one or more file paths to the pasteboard, newline-joined - the
-    /// multi-selection sibling of `copyPath(node:)`, which now routes through
-    /// this so there's one pasteboard-writing implementation, not two
-    /// (SELECTION-MODEL-MEMO.md section 6). Writes directly to NSPasteboard
-    /// rather than through FileOperationsService/FileSystemService's
-    /// single-URL `copyPathToClipboard` - both are out of this package's
-    /// touchable-file scope, so this mirrors that method's implementation at
-    /// the SiteViewModel layer instead of plumbing a new overload through it.
+    /// multi-selection sibling of `copyPath(node:)` (SELECTION-MODEL-MEMO.md
+    /// section 6, Cmd+C and the multi-select "Copy Path" context menu item).
+    /// victor-sel B.4: now that FileOperationsService/FileSystemService are
+    /// in scope, this routes through them (single real implementation at the
+    /// service layer) instead of writing to NSPasteboard directly here.
     func copyPathsToClipboard(urls: [URL]) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
+        fileOperationsService.copyPathsToClipboard(urls: urls)
     }
 
     /// Copy file path to clipboard
     func copyPath(node: FileNode) {
-        copyPathsToClipboard(urls: [node.url])
+        fileOperationsService.copyPathToClipboard(url: node.url)
     }
 
     /// Create a new folder inside the given directory

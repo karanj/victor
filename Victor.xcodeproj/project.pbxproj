@@ -15,6 +15,7 @@
 		1088CADE1E07095438ADF02C /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85515707B9420ED7D9F3724D /* PreferencesView.swift */; };
 		11594468086A0FB770000A8B /* VictorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */; };
 		11EB96936A0D5CDFB03BC138 /* SpecializedFileManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C25D27213B6F1D3F4A3650 /* SpecializedFileManagerTests.swift */; };
+		16F86265A4207330C4AFC3F3 /* FileDragItemProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA74DF6A0392EC06A7E762A /* FileDragItemProvider.swift */; };
 		16F9AF53EE7EA58919CD8D0E /* TextFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20942866D9502CCA93571D19 /* TextFile.swift */; };
 		171B9204FC833C10B7676300 /* SyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A37F1713A34DDE77DA310697 /* SyntaxHighlighter.swift */; };
 		17D178CDEC82395F7D3F980C /* HugoConfigParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */; };
@@ -211,6 +212,7 @@
 		333D3CD4F0CCA5F20CEF7E7A /* FocusModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusModeView.swift; sourceTree = "<group>"; };
 		38A675A95C53D709DA512994 /* BreadcrumbBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreadcrumbBar.swift; sourceTree = "<group>"; };
 		3A7FF4D2CC1D412E70D2FA21 /* DataFileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFileEditorView.swift; sourceTree = "<group>"; };
+		3AA74DF6A0392EC06A7E762A /* FileDragItemProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDragItemProvider.swift; sourceTree = "<group>"; };
 		3B1EEC2183F119D72ACAE837 /* AssetService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetService.swift; sourceTree = "<group>"; };
 		3C4FFCB0AD004095860AA29F /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
 		3CA78287241B161C53327133 /* DataFileParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFileParserTests.swift; sourceTree = "<group>"; };
@@ -676,6 +678,7 @@
 			isa = PBXGroup;
 			children = (
 				E24C208903682431E7A9CCCC /* FileCoordinationHelper.swift */,
+				3AA74DF6A0392EC06A7E762A /* FileDragItemProvider.swift */,
 				2D0DB7A682658E1D8A3E39F5 /* OffActorFileIO.swift */,
 				FB76908CA997A064CA8DCE5B /* SerializationHelper.swift */,
 				70DD437971B6A2557B522DFF /* TOMLHelper.swift */,
@@ -938,6 +941,7 @@
 				DE7FF0C3E88EE0A7DF0023CA /* EssentialFieldsTab.swift in Sources */,
 				19B8251EB9551EDFCB05EC15 /* FileCacheManager.swift in Sources */,
 				5939F57C772A3EE9D4361B39 /* FileCoordinationHelper.swift in Sources */,
+				16F86265A4207330C4AFC3F3 /* FileDragItemProvider.swift in Sources */,
 				BF92ACDC6215F924D9DAD767 /* FileListView.swift in Sources */,
 				960FD3ED98C7DE231D891AFC /* FileNode.swift in Sources */,
 				526EE5E8B31AD9A73A7E721A /* FileOperationsService.swift in Sources */,

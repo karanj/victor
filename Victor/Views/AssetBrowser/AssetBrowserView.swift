@@ -338,18 +338,17 @@ struct AssetBrowserView: View {
     // MARK: - Drag Out
 
     /// Build the drag payload for an asset: the file itself (so dropping on Finder or
-    /// another app performs a real file copy - `NSItemProvider(contentsOf:)` is what
-    /// registers the file-promise/`public.file-url` representation Finder accepts for
-    /// a copy) plus the existing markdown-syntax string representation, so dropping
-    /// back into Victor's own editor still inserts `![alt](path)` exactly as before
-    /// (EditorTextView's `performDragOperation` reads the `NSString` representation
-    /// first). `.draggable(asset.url)` was considered but its `Transferable`
-    /// conformance for `URL` also exports a plain `absoluteString` representation,
-    /// which would have replaced the markdown-insert behavior with a raw `file://` path.
+    /// another app performs a real file copy) plus the existing markdown-syntax string
+    /// representation, so dropping back into Victor's own editor still inserts
+    /// `![alt](path)` exactly as before (EditorTextView's `performDragOperation` reads
+    /// the `NSString` representation first). `.draggable(asset.url)` was considered but
+    /// its `Transferable` conformance for `URL` also exports a plain `absoluteString`
+    /// representation, which would have replaced the markdown-insert behavior with a
+    /// raw `file://` path. Routes through the shared `FileDragItemProvider` (victor-sel
+    /// B.4) rather than building the `NSItemProvider` inline - the sidebar's drag
+    /// source needs the identical `contentsOf:` + secondary-representation shape.
     private func assetDragItemProvider(for asset: Asset) -> NSItemProvider {
-        let provider = NSItemProvider(contentsOf: asset.url) ?? NSItemProvider()
-        provider.registerObject(asset.markdownSyntax as NSString, visibility: .all)
-        return provider
+        FileDragItemProvider.make(for: asset.url, secondaryRepresentation: asset.markdownSyntax)
     }
 }
 
