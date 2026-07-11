@@ -62,18 +62,239 @@ class SiteViewModel {
     /// Currently selected file node
     var selectedNode: FileNode?
 
-    /// Selected file ID for binding
+    /// Reentrancy suppressor held for the duration of `applySelectionChange`
+    /// (and the plain assignments `performLeadChange` makes inside it) so
+    /// those writes to `selectedNode`/`selectedFileID`/`selectedFileIDs`
+    /// don't re-trigger their own `didSet`s and recurse. Orchestrator
+    /// correction on top of Docs/SELECTION-MODEL-MEMO.md's original "plain
+    /// assignment, never through selectNode" construction - that construction
+    /// turned out to silently skip content loading (see `performLeadChange`'s
+    /// doc comment for the full story).
+    private var isApplyingSelection = false
+
+    /// Selected file ID for binding. Legacy external-write path (existing
+    /// tests, and any stragglers reading/writing this instead of
+    /// `selectedFileIDs`) - collapses into the canonical `selectedFileIDs`
+    /// write path rather than calling `selectNode` directly, so there is
+    /// exactly one place (`applySelectionChange`) that decides the lead and
+    /// runs its side effects.
     var selectedFileID: FileNode.ID? {
         didSet {
-            // Avoid redundant processing if selecting the same ID
-            guard selectedFileID != oldValue else { return }
+            guard !isApplyingSelection, selectedFileID != oldValue else { return }
+            selectedFileIDs = selectedFileID.map { [$0] } ?? []
+        }
+    }
 
-            // Find and select the node when selectedFileID changes
-            if let id = selectedFileID,
-               let node = findNode(id: id) {
-                selectNode(node)
+    /// Set of currently selected file node IDs - the source of truth for
+    /// FileListView's `List(selection:)` binding under multi-select
+    /// (victor-sel). Transition-only state, parallel to `modifiedFileIDs`
+    /// (CLAUDE.md's Per-Keystroke Invalidation Contract): mutates on
+    /// click/keyboard selection gestures, never inside a typing path.
+    /// `selectedNode`/`selectedFileID` remain the derived *lead* - the single
+    /// element used for content loading, window title, breadcrumb, etc. -
+    /// written only by `applySelectionChange` (called from this property's
+    /// `didSet`), which is the ONE canonical write path; `selectNode(_:)` is
+    /// now a thin pass-through into it. See Docs/SELECTION-MODEL-MEMO.md
+    /// sections 1-2 for the design (lead-derivation algorithm,
+    /// canonical-write-path contract).
+    var selectedFileIDs: Set<FileNode.ID> = [] {
+        didSet {
+            // No-op guard, mirrors markFileModified/clearFileModified - List
+            // can and does re-deliver an identical Set on some internal
+            // updates (e.g. drag-to-select-range intermediate events);
+            // without this, every re-delivery would recompute the lead and
+            // fire Observation redundantly (SELECTION-MODEL-MEMO.md section 3).
+            // `!isApplyingSelection` additionally suppresses the page-bundle
+            // redirect's own reassignment of this same property from
+            // re-entering while `applySelectionChange` is still running.
+            guard !isApplyingSelection, selectedFileIDs != oldValue else { return }
+            applySelectionChange(oldIDs: oldValue)
+        }
+    }
+
+    /// Derives the lead selection from a change to `selectedFileIDs` and
+    /// applies it via `performLeadChange`, the ONLY place that runs the
+    /// lead-change side effects (content loading, navigation history, recent
+    /// files, inspector auto-hide). See Docs/SELECTION-MODEL-MEMO.md section 1
+    /// for the derivation algorithm (rules 1/3/4 below; rule 2's "no-op"
+    /// is already enforced by `selectedFileIDs`'s own `didSet` guard before
+    /// this is ever called, so it isn't repeated here).
+    ///
+    /// Orchestrator correction, superseding the memo's original "plain
+    /// assignment, never through selectNode" construction in its Risks
+    /// section: that construction directly contradicted the memo's own §4
+    /// ("single-click-to-select already opens the file as a side effect of
+    /// selectNode's content loading") - `selectedFileID`'s own `didSet` still
+    /// fired and called `selectNode`, but immediately early-returned once
+    /// `selectedNode` already matched, silently skipping content loading,
+    /// navigation history, and recent-files tracking on every click through
+    /// the List's Set binding. This method (plus `isApplyingSelection` and
+    /// `performLeadChange`) is the fix: the canonical path now OWNS those
+    /// side effects instead of trying to avoid re-triggering a path that
+    /// used to own them.
+    private func applySelectionChange(oldIDs: Set<FileNode.ID>) {
+        isApplyingSelection = true
+        defer { isApplyingSelection = false }
+
+        let newIDs = selectedFileIDs
+        let lead: FileNode.ID?
+
+        if newIDs.isEmpty {
+            // Rule 1: nothing selected.
+            lead = nil
+        } else if let currentLead = selectedNode?.id, newIDs.contains(currentLead) {
+            // Rule 3: existing lead survives the change (pure removal of
+            // OTHER members, or a select-all/range-extend that keeps it).
+            lead = currentLead
+        } else {
+            // Rule 4: no surviving lead - deterministic fallback.
+            let added = newIDs.subtracting(oldIDs)
+            if added.count == 1 {
+                // Single new element added (click, cmd-click add, arrow-key move).
+                lead = added.first!
+            } else if added.count > 1 {
+                // Multi-add with no surviving old lead (e.g. a shift-click
+                // range that doesn't include the old lead, or select-all from
+                // nothing selected).
+                lead = firstInTreeOrder(of: added)
+            } else {
+                // added is empty and the old lead is gone - pure removal that
+                // dropped the lead (e.g. cmd-click deselecting the lead row,
+                // or a batch trash of the lead - see moveToTrash(nodes:)).
+                lead = firstInTreeOrder(of: newIDs)
             }
         }
+
+        var leadNode = lead.flatMap { findNode(id: $0) }
+
+        // Page-bundle redirect ONLY for a single-member selection - mirrors
+        // the redirect selectNode(_:) used to do inline. A bundle folder
+        // cmd-clicked into a 2+ selection stays itself; multi-selections
+        // never redirect. Reassigning selectedFileIDs here is safe under
+        // isApplyingSelection (suppressed re-entry into this same method).
+        if newIDs.count == 1, let bundle = leadNode, bundle.isPageBundle, let indexFile = bundle.indexFile {
+            selectedFileIDs = [indexFile.id]
+            leadNode = indexFile
+        }
+
+        if leadNode?.id != selectedNode?.id {
+            // Lead actually changed (including nil, per rule 1) - run the
+            // side effects.
+            performLeadChange(to: leadNode)
+        } else {
+            // Lead unchanged (rule 3's common case, or a mouse-drag's
+            // intermediate Set deliveries) - keep selectedFileID in sync
+            // without re-running side effects, so those stay cheap.
+            selectedFileID = leadNode?.id
+        }
+    }
+
+    /// Performs the lead-change side effects - content loading, navigation
+    /// history, recent files, inspector auto-hide - and the final
+    /// `selectedNode`/`selectedFileID` assignments. This is the former body
+    /// of `selectNode(_:)` (minus its page-bundle resolution and same-id
+    /// early return, both now handled by `applySelectionChange` before this
+    /// is called). Invoked ONLY from `applySelectionChange`, which holds
+    /// `isApplyingSelection = true` for the duration, so the plain
+    /// assignments below don't re-enter `selectedFileID`'s/`selectedFileIDs`'s
+    /// `didSet`s.
+    private func performLeadChange(to node: FileNode?) {
+        // OPTIMISTIC UPDATE: Update UI immediately, before any loading
+        selectedNode = node
+
+        // Record for Go > Back/Forward (no-ops while replaying history itself)
+        if let node {
+            pushNavigationHistory(node)
+        }
+
+        // Auto-hide inspector when switching to a non-markdown file
+        // (The inspector toolbar button is only shown for markdown files,
+        // so we need to auto-dismiss to prevent the user being stuck)
+        if AppSettings.shared.isInspectorVisible && (node == nil || !node!.isMarkdownFile) {
+            AppSettings.shared.isInspectorVisible = false
+        }
+
+        // Plain assignment - suppressed by isApplyingSelection, doesn't
+        // re-enter selectedFileID's didSet.
+        selectedFileID = node?.id
+
+        // Persist selected file path for restoration on next launch
+        if let path = node?.url.path {
+            UserDefaults.standard.set(path, forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath)
+        }
+
+        // Load content based on file type
+        // Only initialize content if there's no existing edited content for this file
+        // (preserves unsaved edits when switching between files)
+        if let node, node.isMarkdownFile {
+            if let contentFile = node.contentFile {
+                // Content already loaded - only set if no existing edits
+                if !fileCacheManager.hasContent(for: node.id) {
+                    fileCacheManager.setContent(contentFile.markdownContent, for: node.id)
+                }
+                addRecentFile(node)
+                updateContentCache(accessedNodeID: node.id)
+            } else {
+                // Content not loaded - load in background
+                isLoadingFile = true
+                Task { [weak self] in
+                    guard let self = self else { return }
+                    await self.loadFileContent(for: node)
+                    // Only update content if this node is still selected and has no edits
+                    if node.id == self.selectedNode?.id,
+                       !self.fileCacheManager.hasContent(for: node.id) {
+                        self.fileCacheManager.setContent(node.contentFile?.markdownContent ?? "", for: node.id)
+                    }
+                    if node.id == self.selectedNode?.id {
+                        self.addRecentFile(node)
+                        self.updateContentCache(accessedNodeID: node.id)
+                    }
+                    self.isLoadingFile = false
+                }
+            }
+        } else if let node, node.isEditable && node.fileType.isTextBased {
+            // Non-markdown editable text file
+            if node.textFile == nil {
+                isLoadingFile = true
+                Task { [weak self] in
+                    guard let self = self else { return }
+                    await self.loadTextFileContent(for: node)
+                    self.isLoadingFile = false
+                }
+            }
+        }
+        // For non-editable files and folders, no content loading needed
+    }
+
+    /// Flattens `filteredNodes` in display order (top-level array order, then
+    /// each directory's `children` in order - the same traversal FileListView
+    /// renders via its `DisclosureGroup`/`FileTreeRow` recursion) and returns
+    /// every member of `ids` in that order. Used both as the deterministic
+    /// lead-derivation fallback (`firstInTreeOrder`, below) and to order
+    /// Cmd+C's pasteboard providers (SELECTION-MODEL-MEMO.md sections 1, 6) so
+    /// a multi-selection result lands in a predictable, visually-adjacent
+    /// order instead of `Set`-iteration-random order.
+    func treeOrderIndex(of ids: Set<FileNode.ID>) -> [FileNode.ID] {
+        var result: [FileNode.ID] = []
+        func visit(_ nodes: [FileNode]) {
+            for node in nodes {
+                if ids.contains(node.id) {
+                    result.append(node.id)
+                }
+                if node.isDirectory {
+                    visit(node.children)
+                }
+            }
+        }
+        visit(filteredNodes)
+        return result
+    }
+
+    /// The tree-order-first member of `ids` - see `treeOrderIndex(of:)`.
+    private func firstInTreeOrder(of ids: Set<FileNode.ID>) -> FileNode.ID? {
+        treeOrderIndex(of: ids).first
     }
 
     /// Monotonic counter bumped on every edited-content write (keystroke-lag fix,
@@ -679,8 +900,13 @@ class SiteViewModel {
         fileNodes = []
         nodeByID.removeAll()
         invalidateFilterCache()
-        selectedNode = nil
-        selectedFileID = nil
+        // Single write through the canonical path (victor-sel orchestrator
+        // correction) - not a plain triple assignment. selectedFileIDs = []
+        // drives applySelectionChange -> performLeadChange(nil), which clears
+        // selectedNode/selectedFileID itself; fileNodes is already empty
+        // above so there's nothing for performLeadChange's content-load
+        // branches to do even if a node were somehow still resolvable.
+        selectedFileIDs = []
         fileCacheManager.clearAll()           // Clear all per-file markdown edits
         specializedFileManager.clearAll()     // Clear Hugo config, data files, templates, archetypes
         recentFiles = []
@@ -746,89 +972,19 @@ class SiteViewModel {
 
     // MARK: - File Selection
 
-    /// Select a file node
+    /// Select a file node. Thin pass-through into the canonical
+    /// `selectedFileIDs` write path (orchestrator correction, victor-sel):
+    /// collapses to a singleton (or clears), and `selectedFileIDs`'s `didSet`
+    /// -> `applySelectionChange` does everything else - lead derivation,
+    /// page-bundle redirect, same-node no-op (via Set-equality: reselecting
+    /// the current singleton is a no-op reassignment, caught by
+    /// `selectedFileIDs`'s own `didSet` guard), and the side effects via
+    /// `performLeadChange`. See Docs/SELECTION-MODEL-MEMO.md section 2 - every
+    /// existing single-target call site (FileContextMenu "Open", breadcrumb,
+    /// search, post-create sheet callbacks, navigation history replay, etc.)
+    /// keeps working unchanged since they all just call this.
     func selectNode(_ node: FileNode?) {
-        // Handle page bundle folders: select the index file instead
-        let actualNode: FileNode?
-        if let node = node, node.isPageBundle, let indexFile = node.indexFile {
-            actualNode = indexFile
-        } else {
-            actualNode = node
-        }
-
-        // If selecting the same node, do nothing
-        if actualNode?.id == selectedNode?.id {
-            return
-        }
-
-        // OPTIMISTIC UPDATE: Update UI immediately, before any loading
-        selectedNode = actualNode
-
-        // Record for Go > Back/Forward (no-ops while replaying history itself)
-        if let actualNode {
-            pushNavigationHistory(actualNode)
-        }
-
-        // Auto-hide inspector when switching to a non-markdown file
-        // (The inspector toolbar button is only shown for markdown files,
-        // so we need to auto-dismiss to prevent the user being stuck)
-        if AppSettings.shared.isInspectorVisible && (actualNode == nil || !actualNode!.isMarkdownFile) {
-            AppSettings.shared.isInspectorVisible = false
-        }
-
-        // Only set selectedFileID if it's different to avoid triggering didSet again
-        if selectedFileID != actualNode?.id {
-            selectedFileID = actualNode?.id
-        }
-
-        // Persist selected file path for restoration on next launch
-        if let path = actualNode?.url.path {
-            UserDefaults.standard.set(path, forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath)
-        } else {
-            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.lastSelectedFilePath)
-        }
-
-        // Load content based on file type
-        // Only initialize content if there's no existing edited content for this file
-        // (preserves unsaved edits when switching between files)
-        if let node = actualNode, node.isMarkdownFile {
-            if let contentFile = node.contentFile {
-                // Content already loaded - only set if no existing edits
-                if !fileCacheManager.hasContent(for: node.id) {
-                    fileCacheManager.setContent(contentFile.markdownContent, for: node.id)
-                }
-                addRecentFile(node)
-                updateContentCache(accessedNodeID: node.id)
-            } else {
-                // Content not loaded - load in background
-                isLoadingFile = true
-                Task { [weak self] in
-                    guard let self = self else { return }
-                    await self.loadFileContent(for: node)
-                    // Only update content if this node is still selected and has no edits
-                    if node.id == self.selectedNode?.id,
-                       !self.fileCacheManager.hasContent(for: node.id) {
-                        self.fileCacheManager.setContent(node.contentFile?.markdownContent ?? "", for: node.id)
-                    }
-                    if node.id == self.selectedNode?.id {
-                        self.addRecentFile(node)
-                        self.updateContentCache(accessedNodeID: node.id)
-                    }
-                    self.isLoadingFile = false
-                }
-            }
-        } else if let node = actualNode, node.isEditable && node.fileType.isTextBased {
-            // Non-markdown editable text file
-            if node.textFile == nil {
-                isLoadingFile = true
-                Task { [weak self] in
-                    guard let self = self else { return }
-                    await self.loadTextFileContent(for: node)
-                    self.isLoadingFile = false
-                }
-            }
-        }
-        // For non-editable files and folders, no content loading needed
+        selectedFileIDs = node.map { [$0.id] } ?? []
     }
 
     /// Expand all parent folders to make a node visible in the sidebar
@@ -1488,33 +1644,103 @@ class SiteViewModel {
         }
     }
 
-    /// Move a file node to trash
-    func moveToTrash(node: FileNode) async {
-        do {
-            try await fileOperationsService.moveToTrash(at: node.url)
-            unregisterNode(node)
+    /// Move multiple file/folder nodes to the trash in one user gesture
+    /// (Delete key, multi-selection "Move N Items to Trash" context menu item
+    /// - victor-sel). Ancestor-descendant pruning: if the selection contains a
+    /// folder AND one of its own descendants, only the ancestor is trashed -
+    /// trashing it already removes the descendant from disk, so a second
+    /// `moveToTrash` call for the descendant would either error on a
+    /// now-missing path or silently no-op racing the first call. Trashes
+    /// sequentially (not concurrently) since `unregisterNode`/`fileNodes`
+    /// mutation is shared `@Observable` state. One failure doesn't abort the
+    /// rest of the batch - matches Finder's move-to-trash-with-one-locked-file
+    /// behavior. See Docs/SELECTION-MODEL-MEMO.md section 5.
+    func moveToTrash(nodes: [FileNode]) async {
+        let pruned = pruneDescendants(of: nodes)
+        guard !pruned.isEmpty else { return }
 
-            // Remove from parent's children
-            if let parent = node.parent {
-                parent.children.removeAll { $0.id == node.id }
-            } else {
-                // Top-level file
-                fileNodes.removeAll { $0.id == node.id }
+        // Kept per-iteration (node, trashedURL) even though this phase doesn't
+        // consume it further - C.1 (victor-und)'s undo will need each trashed
+        // URL for its own inverse-registration; don't discard this shape.
+        var trashedNodes: [(node: FileNode, trashedURL: URL)] = []
+        var errors: [Error] = []
+
+        for node in pruned {
+            do {
+                try await fileOperationsService.moveToTrash(at: node.url)
+                trashedNodes.append((node: node, trashedURL: node.url))
+
+                unregisterNode(node)
+                if let parent = node.parent {
+                    parent.children.removeAll { $0.id == node.id }
+                } else {
+                    fileNodes.removeAll { $0.id == node.id }
+                }
+            } catch {
+                errors.append(error)
+                Logger.shared.error("Error moving to trash", error: error)
             }
-
-            // Invalidate filter cache since tree changed
-            invalidateFilterCache()
-
-            // Clear selection if this was selected
-            if selectedNode?.id == node.id {
-                fileCacheManager.clearContent(for: node.id)  // Clear edited content for this file
-                selectedNode = nil
-                selectedFileID = nil
-            }
-        } catch {
-            errorMessage = "Failed to move to trash: \(error.localizedDescription)"
-            Logger.shared.error("Error moving to trash", error: error)
         }
+
+        if !trashedNodes.isEmpty {
+            invalidateFilterCache()
+        }
+
+        // Selection/editor fixup, generalized from the single-node version -
+        // check against the ORIGINAL untrimmed `nodes` list (not just
+        // `pruned`), since a descendant pruned away is still gone from disk
+        // and must not remain "selected" even though moveToTrash was never
+        // called for it directly.
+        let trashedIDs = Set(nodes.map(\.id))
+        if let selectedID = selectedNode?.id, trashedIDs.contains(selectedID) {
+            for id in trashedIDs {
+                fileCacheManager.clearContent(for: id)  // Clear edited content for every trashed file
+            }
+            // Routes through the same assignment as any other Set mutation so
+            // the lead-fallback logic (applySelectionChange) runs uniformly -
+            // no hand-rolled special case for the batch-trash path.
+            selectedFileIDs = selectedFileIDs.subtracting(trashedIDs)
+        }
+
+        if let firstError = errors.first {
+            errorMessage = "Failed to move to trash: \(firstError.localizedDescription)"
+        }
+    }
+
+    /// Single-node convenience wrapper, kept so the 15+ existing single-target
+    /// call sites (SelectionContextMenu, etc.) don't need individual updates.
+    func moveToTrash(node: FileNode) async {
+        await moveToTrash(nodes: [node])
+    }
+
+    /// Drops any node in `nodes` that has an ancestor also present in `nodes` -
+    /// trashing the ancestor already removes the descendant from disk
+    /// (SELECTION-MODEL-MEMO.md section 5). Non-private: FileListView's
+    /// trash-confirmation copy needs the pruned count (not the raw selection
+    /// count) before the user confirms.
+    func pruneDescendants(of nodes: [FileNode]) -> [FileNode] {
+        let ids = Set(nodes.map(\.id))
+        return nodes.filter { node in
+            var current = node.parent
+            while let parent = current {
+                if ids.contains(parent.id) {
+                    return false
+                }
+                current = parent.parent
+            }
+            return true
+        }
+    }
+
+    /// Reveal multiple files/folders in Finder as a single selection
+    /// (victor-sel batch operation). `NSWorkspace.activateFileViewerSelecting`
+    /// already accepts an array (see the single-node `revealInFinder(node:)`
+    /// below), but neither FileOperationsService nor FileSystemService expose
+    /// a multi-URL entry point today and this package doesn't add one for a
+    /// single call site (SELECTION-MODEL-MEMO.md section 4) - this calls
+    /// NSWorkspace directly instead.
+    func revealInFinder(nodes: [FileNode]) {
+        NSWorkspace.shared.activateFileViewerSelecting(nodes.map(\.url))
     }
 
     /// Reveal a file in Finder
@@ -1522,9 +1748,23 @@ class SiteViewModel {
         fileOperationsService.revealInFinder(url: node.url)
     }
 
+    /// Copy one or more file paths to the pasteboard, newline-joined - the
+    /// multi-selection sibling of `copyPath(node:)`, which now routes through
+    /// this so there's one pasteboard-writing implementation, not two
+    /// (SELECTION-MODEL-MEMO.md section 6). Writes directly to NSPasteboard
+    /// rather than through FileOperationsService/FileSystemService's
+    /// single-URL `copyPathToClipboard` - both are out of this package's
+    /// touchable-file scope, so this mirrors that method's implementation at
+    /// the SiteViewModel layer instead of plumbing a new overload through it.
+    func copyPathsToClipboard(urls: [URL]) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(urls.map(\.path).joined(separator: "\n"), forType: .string)
+    }
+
     /// Copy file path to clipboard
     func copyPath(node: FileNode) {
-        fileOperationsService.copyPathToClipboard(url: node.url)
+        copyPathsToClipboard(urls: [node.url])
     }
 
     /// Create a new folder inside the given directory

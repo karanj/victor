@@ -20,6 +20,57 @@ final class SiteViewModelTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.hugoSiteBookmark)
     }
 
+    // MARK: - Selection Assertion Helpers (victor-sel)
+    //
+    // Two different helpers for two different jobs (SELECTION-MODEL-MEMO.md
+    // section 8): `assertSelection` checks the selection equals a SPECIFIC
+    // expected node (or the fully-cleared state), for retrofitting existing
+    // tests that already assert a particular `selectedNode?.id`.
+    // `assertSelectionInvariant` checks INTERNAL CONSISTENCY only - that
+    // `selectedNode`/`selectedFileID`/`selectedFileIDs` never drift from each
+    // other, regardless of what's selected - for the new lead-derivation and
+    // batch-trash tests, where the point is to catch a future change that
+    // mutates `selectedNode` without going through the canonical
+    // `applySelectionChange`/`selectNode` write path.
+
+    /// Asserts all three selection properties reflect `node` (or the
+    /// fully-cleared state if `node` is nil) - written once so the ~12
+    /// existing navigation/selection tests don't each hand-write three
+    /// assertions.
+    private func assertSelection(
+        _ viewModel: SiteViewModel,
+        is node: FileNode?,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(viewModel.selectedNode?.id, node?.id, file: file, line: line)
+        XCTAssertEqual(viewModel.selectedFileID, node?.id, file: file, line: line)
+        if let node {
+            XCTAssertEqual(viewModel.selectedFileIDs, [node.id], file: file, line: line)
+        } else {
+            XCTAssertTrue(viewModel.selectedFileIDs.isEmpty, file: file, line: line)
+        }
+    }
+
+    /// Asserts the canonical-write-path invariant holds, regardless of what's
+    /// selected: `selectedFileIDs.isEmpty` iff both `selectedNode`/
+    /// `selectedFileID` are nil; otherwise `selectedNode?.id == selectedFileID`
+    /// and `selectedFileIDs` contains it.
+    private func assertSelectionInvariant(
+        _ viewModel: SiteViewModel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        if viewModel.selectedFileIDs.isEmpty {
+            XCTAssertNil(viewModel.selectedNode, file: file, line: line)
+            XCTAssertNil(viewModel.selectedFileID, file: file, line: line)
+        } else {
+            XCTAssertNotNil(viewModel.selectedFileID, file: file, line: line)
+            XCTAssertEqual(viewModel.selectedNode?.id, viewModel.selectedFileID, file: file, line: line)
+            XCTAssertTrue(viewModel.selectedFileIDs.contains(viewModel.selectedFileID!), file: file, line: line)
+        }
+    }
+
     // MARK: - EditorLayoutMode Tests
 
     func testEditorLayoutModeDisplayNames() {
@@ -695,6 +746,10 @@ final class SiteViewModelTests: XCTestCase {
         node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "hello")
         viewModel.fileNodes = [node]
         viewModel.selectedNode = node
+        // Direct fixture poke (bypassing selectNode) doesn't route through the
+        // canonical write path, so selectedFileIDs needs its own setup line to
+        // match - see the assertion below (victor-sel).
+        viewModel.selectedFileIDs = [node.id]
 
         await viewModel.renameFile(node: node, to: "renamed.md")
 
@@ -703,6 +758,7 @@ final class SiteViewModelTests: XCTestCase {
         // the old selectedNode = nil; selectedNode = node poke.
         XCTAssertTrue(viewModel.selectedNode === node)
         XCTAssertEqual(viewModel.selectedNode?.url, tempDir.appendingPathComponent("renamed.md"))
+        XCTAssertTrue(viewModel.selectedFileIDs.contains(node.id), "rename doesn't touch selection identity - selectedFileIDs must still contain the (unchanged) id")
     }
 
     func testRenameReSortsTopLevelSiblingsWhenNameOrderChanges() async throws {
@@ -825,6 +881,7 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.fileNodes.isEmpty)
         XCTAssertNil(viewModel.selectedNode)
         XCTAssertNil(viewModel.selectedFileID)
+        XCTAssertTrue(viewModel.selectedFileIDs.isEmpty, "closeSite must clear selectedFileIDs too (victor-sel)")
         XCTAssertEqual(viewModel.currentEditingContent, "")
         XCTAssertTrue(viewModel.recentFiles.isEmpty)
         XCTAssertFalse(viewModel.hasUnsavedChanges)
@@ -963,7 +1020,7 @@ final class SiteViewModelTests: XCTestCase {
 
         viewModel.navigateBack()
 
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        assertSelection(viewModel, is: nodeA)
         XCTAssertFalse(viewModel.canNavigateBack)
         XCTAssertTrue(viewModel.canNavigateForward)
     }
@@ -977,11 +1034,11 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.selectNode(nodeA)
         viewModel.selectNode(nodeB)
         viewModel.navigateBack()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        assertSelection(viewModel, is: nodeA)
 
         viewModel.navigateForward()
 
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id)
+        assertSelection(viewModel, is: nodeB)
         XCTAssertTrue(viewModel.canNavigateBack)
         XCTAssertFalse(viewModel.canNavigateForward)
     }
@@ -998,17 +1055,17 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.selectNode(nodeC)
 
         viewModel.navigateBack()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id)
+        assertSelection(viewModel, is: nodeB)
 
         viewModel.navigateBack()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        assertSelection(viewModel, is: nodeA)
         XCTAssertFalse(viewModel.canNavigateBack)
 
         viewModel.navigateForward()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id)
+        assertSelection(viewModel, is: nodeB)
 
         viewModel.navigateForward()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeC.id)
+        assertSelection(viewModel, is: nodeC)
         XCTAssertFalse(viewModel.canNavigateForward)
     }
 
@@ -1031,7 +1088,7 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.canNavigateBack)
 
         viewModel.navigateBack()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        assertSelection(viewModel, is: nodeA)
     }
 
     func testNavigateBackNoOpWhenAtStartOfHistory() {
@@ -1042,7 +1099,7 @@ final class SiteViewModelTests: XCTestCase {
 
         viewModel.navigateBack()
 
-        XCTAssertEqual(viewModel.selectedNode?.id, node.id, "Should remain on the only history entry")
+        assertSelection(viewModel, is: node)
     }
 
     func testNavigateForwardNoOpWhenAtEndOfHistory() {
@@ -1055,7 +1112,7 @@ final class SiteViewModelTests: XCTestCase {
 
         viewModel.navigateForward()
 
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id, "Should remain on the most recent selection")
+        assertSelection(viewModel, is: nodeB)
     }
 
     func testReselectingSameNodeDoesNotGrowHistory() {
@@ -1071,7 +1128,7 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.selectNode(nodeB)
 
         viewModel.navigateBack()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        assertSelection(viewModel, is: nodeA)
         XCTAssertFalse(viewModel.canNavigateBack)
     }
 
@@ -1149,8 +1206,7 @@ final class SiteViewModelTests: XCTestCase {
 
         viewModel.navigateBack()
 
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id,
-                        "One Back press should skip the dead B entry entirely and land on A, not silently no-op")
+        assertSelection(viewModel, is: nodeA)
         XCTAssertFalse(viewModel.canNavigateBack, "B should have been pruned, leaving only A behind the cursor")
     }
 
@@ -1173,7 +1229,7 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.selectNode(nodeC)
         viewModel.navigateBack()
         viewModel.navigateBack()
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id)
+        assertSelection(viewModel, is: nodeA)
 
         // Delete nodeB (the entry between the cursor and nodeC) via the real
         // removal path - see comment above for why this (not a direct
@@ -1182,8 +1238,7 @@ final class SiteViewModelTests: XCTestCase {
 
         viewModel.navigateForward()
 
-        XCTAssertEqual(viewModel.selectedNode?.id, nodeC.id,
-                        "One Forward press should skip the dead B entry entirely and land on C, not silently no-op")
+        assertSelection(viewModel, is: nodeC)
         XCTAssertFalse(viewModel.canNavigateForward, "B should have been pruned, leaving only C ahead of the cursor")
     }
 
@@ -1425,11 +1480,16 @@ final class SiteViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.selectedNode?.id, node.id)
         XCTAssertEqual(viewModel.selectedFileID, node.id)
+        XCTAssertEqual(viewModel.selectedFileIDs, [node.id], "selectNode must also collapse selectedFileIDs to a singleton (victor-sel)")
     }
 
     func testSelectNilNode() {
         let viewModel = SiteViewModel()
         let node = FileNode(url: URL(fileURLWithPath: "/test/file.md"), isDirectory: false)
+        // Node must be in the tree: the canonical selection path resolves by
+        // ID via findNode (victor-sel), matching production where every
+        // selectNode caller passes a tree-resident node.
+        viewModel.fileNodes = [node]
 
         viewModel.selectNode(node)
         XCTAssertNotNil(viewModel.selectedNode)
@@ -1437,19 +1497,25 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.selectNode(nil)
         XCTAssertNil(viewModel.selectedNode)
         XCTAssertNil(viewModel.selectedFileID)
+        XCTAssertTrue(viewModel.selectedFileIDs.isEmpty, "selectNode(nil) must also clear selectedFileIDs (victor-sel)")
     }
 
     func testSelectSameNodeNoOp() {
         let viewModel = SiteViewModel()
         let node = FileNode(url: URL(fileURLWithPath: "/test/file.md"), isDirectory: false)
+        // In-tree for findNode resolution (victor-sel) - without this the
+        // selectedNode assertions compare nil to nil and prove nothing.
+        viewModel.fileNodes = [node]
 
         viewModel.selectNode(node)
         let firstSelectedID = viewModel.selectedNode?.id
+        XCTAssertNotNil(firstSelectedID, "fixture must actually select - guards against vacuous nil == nil passes")
 
         // Select same node again
         viewModel.selectNode(node)
 
         XCTAssertEqual(viewModel.selectedNode?.id, firstSelectedID, "Should still be the same node")
+        XCTAssertEqual(viewModel.selectedFileIDs, [node.id], "selectedFileIDs must still be the singleton after a no-op re-select (victor-sel)")
     }
 
     func testSelectPageBundleSelectsIndexFile() {
@@ -1467,6 +1533,7 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.selectNode(bundle)
 
         XCTAssertEqual(viewModel.selectedNode?.id, indexFile.id, "Should select the index file, not the bundle")
+        XCTAssertEqual(viewModel.selectedFileIDs, [indexFile.id], "selectedFileIDs must reflect the redirected index file, not the bundle (victor-sel)")
     }
 
     // MARK: - Expand to Node Tests
@@ -1526,6 +1593,7 @@ final class SiteViewModelTests: XCTestCase {
 
         // Should be selected
         XCTAssertEqual(viewModel.selectedNode?.id, article.id)
+        XCTAssertEqual(viewModel.selectedFileIDs, [article.id], "selectedFileIDs must reflect the revealed node (victor-sel)")
         // Parents should be expanded
         XCTAssertTrue(root.isExpanded)
         XCTAssertTrue(posts.isExpanded)
@@ -1607,5 +1675,425 @@ final class SiteViewModelTests: XCTestCase {
 
         // After closing, fileNodes is empty so filtered should be empty too
         XCTAssertTrue(viewModel.filteredNodes.isEmpty)
+        XCTAssertTrue(viewModel.selectedFileIDs.isEmpty)
+    }
+
+    // MARK: - Lead Derivation Tests (victor-sel, SELECTION-MODEL-MEMO.md section 1)
+    //
+    // Each test drives `selectedFileIDs = ...` directly, simulating what
+    // `List(selection:)` does on click/shift-click/cmd-click/Cmd+A, and
+    // asserts `selectedNode`/`selectedFileID` land on the exact id the
+    // algorithm in SELECTION-MODEL-MEMO.md section 1 predicts.
+
+    func testLeadDerivation_singleAdd_becomesLead() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        // Simulates a plain click on A from an empty selection.
+        viewModel.selectedFileIDs = [nodeA.id]
+
+        assertSelection(viewModel, is: nodeA)
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testLeadDerivation_removalKeepingLead_leadUnchanged() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB, nodeC]
+
+        viewModel.selectNode(nodeA) // lead = A
+        // Shift-click extends the selection to include B and C, lead stays A
+        // (rule 3: the existing lead survives the change). Not asserted via
+        // assertSelection here - the Set is a 3-member selection, not a
+        // singleton, so only the lead is checked at this intermediate step.
+        viewModel.selectedFileIDs = [nodeA.id, nodeB.id, nodeC.id]
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id, "existing lead survives a multi-add that still contains it")
+
+        // Cmd-click deselects C (some OTHER member, not the lead).
+        viewModel.selectedFileIDs = [nodeA.id, nodeB.id]
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id, "existing lead survives a removal of OTHER members")
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testLeadDerivation_removalOfLead_fallsBackToTreeOrderFirstSurvivor() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB, nodeC]
+
+        viewModel.selectNode(nodeB) // lead = B
+        // Not a singleton Set here either - only the lead is checked.
+        viewModel.selectedFileIDs = [nodeB.id, nodeC.id] // add C, lead stays B
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id, "existing lead survives adding C")
+
+        // Cmd-click deselects B - the lead itself - leaving only C.
+        viewModel.selectedFileIDs = [nodeC.id]
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeC.id, "lead falls back to the surviving member")
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testLeadDerivation_clearingSelection_leadBecomesNil() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA]
+
+        viewModel.selectNode(nodeA)
+        XCTAssertNotNil(viewModel.selectedNode)
+
+        viewModel.selectedFileIDs = []
+
+        assertSelection(viewModel, is: nil)
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testLeadDerivation_selectAllWithExistingLead_leadUnchanged() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB, nodeC]
+
+        viewModel.selectNode(nodeB) // lead = B
+        // Cmd+A while B is already the lead.
+        viewModel.selectedFileIDs = [nodeA.id, nodeB.id, nodeC.id]
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id, "select-all with an existing lead must not move it")
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testLeadDerivation_selectAllFromEmpty_leadBecomesTreeOrderFirst() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let folder = FileNode(url: URL(fileURLWithPath: "/test/folder"), isDirectory: true)
+        let nodeInFolder = FileNode(url: URL(fileURLWithPath: "/test/folder/inner.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        folder.children = [nodeInFolder]
+        nodeInFolder.parent = folder
+        // Mixed files/folders, known tree order: A, folder, folder's child, B.
+        viewModel.fileNodes = [nodeA, folder, nodeB]
+
+        // Cmd+A with nothing selected - includes a folder and its nested child.
+        viewModel.selectedFileIDs = [nodeB.id, nodeInFolder.id, folder.id, nodeA.id]
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeA.id, "no surviving lead - falls back to the top of the sidebar in tree order")
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testLeadDerivation_multiAddNoSurvivingLead_fallsBackToTreeOrderFirstOfAdded() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let folder = FileNode(url: URL(fileURLWithPath: "/test/folder"), isDirectory: true)
+        let nodeInFolder = FileNode(url: URL(fileURLWithPath: "/test/folder/inner.md"), isDirectory: false)
+        let nodeC = FileNode(url: URL(fileURLWithPath: "/test/c.md"), isDirectory: false)
+        folder.children = [nodeInFolder]
+        nodeInFolder.parent = folder
+        // Tree order: A, folder, folder's child, C.
+        viewModel.fileNodes = [nodeA, folder, nodeC]
+
+        viewModel.selectNode(nodeA) // lead = A
+        // Shift-click range (folder's child)...C that doesn't include A - a
+        // fresh multi-add with no surviving old lead.
+        viewModel.selectedFileIDs = [nodeC.id, nodeInFolder.id]
+
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeInFolder.id, "deterministic fallback: tree-order-first of the newly-added members")
+        assertSelectionInvariant(viewModel)
+    }
+
+    // MARK: - Canonical Path Side-Effect Tests (victor-sel, orchestrator correction)
+    //
+    // The memo's original "applySelectionChange sets selectedNode/selectedFileID
+    // as plain assignments, never through selectNode" construction (its Risks
+    // section) directly contradicted the memo's own section 4 claim that
+    // "single-click-to-select already opens the file as a side effect of
+    // selectNode's content loading": selectedFileID's own didSet still fired
+    // and called selectNode, but immediately early-returned once selectedNode
+    // already matched - silently skipping content loading, navigation
+    // history, and recent-files tracking for every selection made through the
+    // List's Set binding (i.e. every plain click). The orchestrator's fix
+    // (isApplyingSelection + performLeadChange, both in SiteViewModel.swift)
+    // makes applySelectionChange the canonical path that OWNS those side
+    // effects. These tests prove the fix - each drives selectedFileIDs (or
+    // the legacy selectedFileID) directly, the way SwiftUI's List binding or
+    // an external caller would, and never calls selectNode(_:) itself.
+
+    func testSelectedFileIDsDirectWrite_loadsContentLikeSelectNode() {
+        let viewModel = SiteViewModel()
+        let node = FileNode(url: URL(fileURLWithPath: "/test/file.md"), isDirectory: false)
+        node.contentFile = ContentFile(url: node.url, frontmatter: nil, markdownContent: "hello world")
+        viewModel.fileNodes = [node]
+
+        // Simulates the List's native click write - NOT calling selectNode.
+        viewModel.selectedFileIDs = [node.id]
+
+        XCTAssertEqual(viewModel.selectedNode?.id, node.id)
+        XCTAssertEqual(viewModel.selectedFileID, node.id)
+        XCTAssertEqual(viewModel.selectedFileIDs, [node.id])
+        XCTAssertEqual(viewModel.currentEditingContent, "hello world", "content must load through the Set path exactly like selectNode used to")
+        XCTAssertEqual(viewModel.recentFiles.map(\.id), [node.id], "addRecentFile must fire through the Set path too")
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testSelectedFileIDsDirectWrite_pageBundleRedirectsToIndexFile() {
+        let viewModel = SiteViewModel()
+        let bundle = FileNode(url: URL(fileURLWithPath: "/test/my-post"), isDirectory: true, isPageBundle: true)
+        let indexFile = FileNode(url: URL(fileURLWithPath: "/test/my-post/index.md"), isDirectory: false)
+        bundle.children = [indexFile]
+        indexFile.parent = bundle
+        viewModel.fileNodes = [bundle]
+
+        // Simulates clicking the bundle folder's own row directly (not the
+        // index file row) - a single-member Set write, not a selectNode call.
+        viewModel.selectedFileIDs = [bundle.id]
+
+        XCTAssertEqual(viewModel.selectedNode?.id, indexFile.id, "a single-member selection of a page-bundle folder must redirect to its index file")
+        XCTAssertEqual(viewModel.selectedFileIDs, [indexFile.id], "the Set itself must be rewritten to the index file's id, not just the derived lead")
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testSelectedFileIDsDirectWrite_pageBundleInMultiSelectionDoesNotRedirect() {
+        let viewModel = SiteViewModel()
+        let bundle = FileNode(url: URL(fileURLWithPath: "/test/my-post"), isDirectory: true, isPageBundle: true)
+        let indexFile = FileNode(url: URL(fileURLWithPath: "/test/my-post/index.md"), isDirectory: false)
+        bundle.children = [indexFile]
+        indexFile.parent = bundle
+        let other = FileNode(url: URL(fileURLWithPath: "/test/other.md"), isDirectory: false)
+        viewModel.fileNodes = [bundle, other]
+
+        viewModel.selectNode(other) // lead = other (a plain file, not the bundle)
+        // Cmd-click adds the bundle folder itself to the selection. Existing
+        // lead (other) survives per rule 3 - the narrow property under test
+        // is that the SET itself must not silently rewrite the bundle's own
+        // id to its index file's id just because it's present in a 2+ member
+        // selection.
+        viewModel.selectedFileIDs = [bundle.id, other.id]
+
+        XCTAssertEqual(viewModel.selectedFileIDs, [bundle.id, other.id], "a multi-selection must never redirect a bundle folder to its index file")
+        XCTAssertEqual(viewModel.selectedNode?.id, other.id, "existing lead (other) survives, unaffected by the bundle joining the selection")
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testSelectedFileIDsDirectWrite_recordsNavigationHistory() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        // Mirrors testNavigationBackReturnsToPreviouslySelectedNode, but
+        // drives selection via direct Set writes (simulating List clicks)
+        // instead of calling selectNode.
+        viewModel.selectedFileIDs = [nodeA.id]
+        viewModel.selectedFileIDs = [nodeB.id]
+        XCTAssertTrue(viewModel.canNavigateBack, "navigation history must record through the Set write path too")
+
+        viewModel.navigateBack()
+
+        assertSelection(viewModel, is: nodeA)
+        XCTAssertFalse(viewModel.canNavigateBack)
+        XCTAssertTrue(viewModel.canNavigateForward)
+    }
+
+    func testSelectedFileIDDirectWrite_collapsesToSetAndFiresSideEffectsExactlyOnce() {
+        let viewModel = SiteViewModel()
+        let nodeA = FileNode(url: URL(fileURLWithPath: "/test/a.md"), isDirectory: false)
+        let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        // Legacy external write path (bypasses selectNode AND selectedFileIDs
+        // directly) - must collapse into the canonical Set and run side
+        // effects exactly once per write: not zero (the pre-correction bug,
+        // where selectedFileID's didSet called selectNode but immediately
+        // early-returned) and not twice (a reentrancy bug re-entering
+        // applySelectionChange via isApplyingSelection failing to suppress it).
+        viewModel.selectedFileID = nodeA.id
+        XCTAssertEqual(viewModel.selectedFileIDs, [nodeA.id], "selectedFileID's didSet must collapse into the canonical Set")
+        XCTAssertFalse(viewModel.canNavigateBack, "first selection: nowhere to go back to yet - proves this pushed exactly one history entry, not zero")
+
+        viewModel.selectedFileID = nodeB.id
+        XCTAssertEqual(viewModel.selectedFileIDs, [nodeB.id])
+        XCTAssertTrue(viewModel.canNavigateBack, "second selection must have pushed exactly one more history entry")
+
+        viewModel.navigateBack()
+        assertSelection(viewModel, is: nodeA)
+        XCTAssertFalse(viewModel.canNavigateBack, "exactly two entries total - a reentrant double-fire on either write would leave extra history behind")
+
+        assertSelectionInvariant(viewModel)
+    }
+
+    // MARK: - Invalidation Contract Tests (victor-sel, SELECTION-MODEL-MEMO.md section 8)
+    //
+    // Mirrors testMarkFileModifiedFiresObservationOnActualTransition/
+    // testMarkFileModifiedIsNoOpWhenAlreadyModified (:104-144) for
+    // selectedFileIDs - the guarded no-op on identical-Set reassignment is
+    // the highest-risk item in the whole design (a naive unconditional
+    // didSet would turn every List-internal re-delivery of the same
+    // selection into an Observation event, the same class of bug as the two
+    // prior keystroke-lag incidents).
+
+    func testSelectedFileIDsFiresObservationOnActualTransition() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.selectedFileIDs
+        } onChange: {
+            observedChange = true
+        }
+
+        viewModel.selectedFileIDs = [nodeID] // empty -> non-empty: must fire
+
+        XCTAssertTrue(observedChange, "Sanity check: an actual transition must still fire Observation")
+    }
+
+    /// Re-verified after the orchestrator's isApplyingSelection correction:
+    /// at the moment of this test's second (redundant) assignment,
+    /// isApplyingSelection is already back to false (reset via `defer` at the
+    /// end of the first assignment's applySelectionChange call), so the
+    /// didSet guard reduces to the original `selectedFileIDs != oldValue`
+    /// check - unaffected by the reentrancy-suppression addition.
+    func testSelectedFileIDsIsNoOpWhenReassignedSameSet() {
+        let viewModel = SiteViewModel()
+        let nodeID = UUID()
+        viewModel.selectedFileIDs = [nodeID]
+
+        nonisolated(unsafe) var observedChange = false
+        withObservationTracking {
+            _ = viewModel.selectedFileIDs
+        } onChange: {
+            observedChange = true
+        }
+
+        viewModel.selectedFileIDs = [nodeID] // reassigning the identical Set
+
+        XCTAssertFalse(
+            observedChange,
+            "Repeated identical Set reassignment must not fire Observation (List can and does re-deliver " +
+            "the same selection on some internal updates)"
+        )
+    }
+
+    // MARK: - Batch Trash Tests (victor-sel, SELECTION-MODEL-MEMO.md section 5)
+    //
+    // No injectable spy is available for FileOperationsService/FileSystemService
+    // within this package's touchable-file scope, so these exercise real disk
+    // I/O via temp directories (mirroring the existing rename/moveToTrash tests
+    // above). "Trashed exactly once, not twice" for a pruned descendant is
+    // verified indirectly: if pruning failed and a second trashItem call ran
+    // against the descendant's now-vanished path (removed when its ancestor
+    // was trashed), FileManager.trashItem throws and populates errorMessage -
+    // that's the observable proxy for the call-count assertion the memo asks for.
+
+    func testMoveToTrashBatch_prunesDescendantsOfSelectedFolder() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderURL = tempDir.appendingPathComponent("folder")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let childURL = folderURL.appendingPathComponent("child.md")
+        try "child".write(to: childURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let folderNode = FileNode(url: folderURL, isDirectory: true)
+        let childNode = FileNode(url: childURL, isDirectory: false)
+        folderNode.addChild(childNode)
+        viewModel.fileNodes = [folderNode]
+
+        // Select the folder AND its own child - pruning should trash the
+        // folder only.
+        await viewModel.moveToTrash(nodes: [folderNode, childNode])
+
+        XCTAssertNil(viewModel.errorMessage, "pruning must drop the child before trashing, or the second trashItem call for its now-gone path fails")
+        XCTAssertTrue(viewModel.fileNodes.isEmpty, "the folder (and its child with it) should be gone from the tree")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderURL.path))
+    }
+
+    func testMoveToTrashBatch_unrelatedSiblingsAllTrashed() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let urlA = tempDir.appendingPathComponent("a.md")
+        let urlB = tempDir.appendingPathComponent("b.md")
+        try "a".write(to: urlA, atomically: true, encoding: .utf8)
+        try "b".write(to: urlB, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let nodeA = FileNode(url: urlA, isDirectory: false)
+        let nodeB = FileNode(url: urlB, isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        await viewModel.moveToTrash(nodes: [nodeA, nodeB])
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(viewModel.fileNodes.isEmpty, "no pruning should occur for unrelated siblings - both get trashed")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: urlA.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: urlB.path))
+    }
+
+    func testMoveToTrashBatch_clearsSelectionAndFallsBackWhenLeadIsTrashed() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let urlA = tempDir.appendingPathComponent("a.md")
+        let urlB = tempDir.appendingPathComponent("b.md")
+        try "a".write(to: urlA, atomically: true, encoding: .utf8)
+        try "b".write(to: urlB, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let nodeA = FileNode(url: urlA, isDirectory: false)
+        let nodeB = FileNode(url: urlB, isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        viewModel.selectNode(nodeA) // lead = A
+        viewModel.selectedFileIDs = [nodeA.id, nodeB.id] // A and B selected, A is lead
+
+        // Trash only the lead (A) - B remains untouched.
+        await viewModel.moveToTrash(nodes: [nodeA])
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.selectedNode?.id, nodeB.id, "lead falls back to the surviving selected member")
+        XCTAssertEqual(viewModel.selectedFileIDs, [nodeB.id])
+        assertSelectionInvariant(viewModel)
+    }
+
+    func testMoveToTrashBatch_clearsSelectionEntirelyWhenAllTrashed() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let urlA = tempDir.appendingPathComponent("a.md")
+        let urlB = tempDir.appendingPathComponent("b.md")
+        try "a".write(to: urlA, atomically: true, encoding: .utf8)
+        try "b".write(to: urlB, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let nodeA = FileNode(url: urlA, isDirectory: false)
+        let nodeB = FileNode(url: urlB, isDirectory: false)
+        viewModel.fileNodes = [nodeA, nodeB]
+
+        viewModel.selectedFileIDs = [nodeA.id, nodeB.id] // lead = A (tree-order-first, no prior selection)
+
+        await viewModel.moveToTrash(nodes: [nodeA, nodeB])
+
+        XCTAssertNil(viewModel.errorMessage)
+        assertSelection(viewModel, is: nil)
+        assertSelectionInvariant(viewModel)
     }
 }

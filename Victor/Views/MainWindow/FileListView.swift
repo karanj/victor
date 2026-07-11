@@ -7,12 +7,22 @@ struct FileListView: View {
     @Bindable var siteViewModel: SiteViewModel
 
     @State private var quickLookURL: URL?
-    /// Node targeted by the Return-key rename accelerator (context-menu rename
-    /// is handled per-row by FileRowWithSheets/FolderRowWithSheets instead).
-    @State private var renameTargetNode: FileNode?
+    /// Which sheet (if any) is presented, and for which node - consolidates
+    /// what used to be five separate `@State` booleans on `FolderRowWithSheets`
+    /// plus one on `FileRowWithSheets` plus the Return-key rename accelerator's
+    /// own `renameTargetNode`, now that context-menu presentation moved from
+    /// per-row to List-level `.contextMenu(forSelectionType:)` (victor-sel).
+    /// See Docs/SELECTION-MODEL-MEMO.md section 4.
+    @State private var sheetTarget: SheetTarget?
+    /// Nodes pending the batch-trash confirmation alert (Delete key or the
+    /// multi-selection "Move N Items to Trash" context menu item) - already
+    /// pruned of ancestor-covered descendants so the alert's count matches
+    /// the actual number of trash operations that will run. See
+    /// Docs/SELECTION-MODEL-MEMO.md section 5.
+    @State private var pendingTrashNodes: [FileNode]?
 
     var body: some View {
-        List(siteViewModel.filteredNodes, selection: $siteViewModel.selectedFileID) { node in
+        List(siteViewModel.filteredNodes, selection: $siteViewModel.selectedFileIDs) { node in
             if node.isDirectory {
                 // Use DisclosureGroup for folders with children
                 DisclosureGroup(isExpanded: Binding(
@@ -39,6 +49,31 @@ struct FileListView: View {
             }
         }
         .listStyle(.sidebar)
+        // Single List-level context menu (victor-sel), replacing the former
+        // per-row `.contextMenu` on FolderRowWithSheets/FileRowWithSheets.
+        // `ids` is whatever the system hands back for this invocation - not
+        // necessarily `selectedFileIDs` (right-clicking a row outside the
+        // current selection replaces the selection with just that row, standard
+        // macOS behavior `forSelectionType` gives for free). See
+        // Docs/SELECTION-MODEL-MEMO.md section 4.
+        .contextMenu(forSelectionType: FileNode.ID.self) { ids in
+            SelectionContextMenu(
+                ids: ids,
+                siteViewModel: siteViewModel,
+                sheetTarget: $sheetTarget,
+                pendingTrashNodes: $pendingTrashNodes
+            )
+        } primaryAction: { ids in
+            // List(selection:)'s own click handling already updates
+            // selectedFileIDs on a plain click - unrelated to primaryAction,
+            // which only fires on double-click. Today there's no explicit
+            // double-click-to-open, since single-click-to-select already
+            // opens the file as a side effect of selection; this is a
+            // no-op-preserving safety net for exactly-one-target double-clicks.
+            if ids.count == 1, let node = siteViewModel.findNode(id: ids.first!) {
+                siteViewModel.selectNode(node)
+            }
+        }
         // Space Quick Looks the selected file, but only when it's not an
         // editable text type (markdown, config, code, etc). Editable files
         // route Space through to the editor's NSTextView for typing, so we
@@ -61,12 +96,163 @@ struct FileListView: View {
         // separately-focused text field elsewhere in the view tree.
         .onKeyPress(.return) {
             guard let node = siteViewModel.selectedNode else { return .ignored }
-            renameTargetNode = node
+            sheetTarget = .rename(node)
             return .handled
         }
+        // Delete-key batch trash (victor-sel) - always routes through the
+        // confirmation alert below, even for a single selected node, since
+        // there was no Delete-key-to-trash accelerator before this change.
+        // See Docs/SELECTION-MODEL-MEMO.md section 5.
+        .onDeleteCommand {
+            let nodes = siteViewModel.selectedFileIDs.compactMap { siteViewModel.findNode(id: $0) }
+            guard !nodes.isEmpty else { return }
+            pendingTrashNodes = siteViewModel.pruneDescendants(of: nodes)
+        }
+        // Cmd+C: one NSItemProvider per selected file, registering both the
+        // file URL (a paste into Finder performs a real file copy) and the
+        // path string (a paste into a text context yields the absolute path,
+        // mirroring Copy Path). Ordered by tree display order, not
+        // Set-iteration-random order. See Docs/SELECTION-MODEL-MEMO.md section 6.
+        .onCopyCommand {
+            siteViewModel.treeOrderIndex(of: siteViewModel.selectedFileIDs)
+                .compactMap { siteViewModel.findNode(id: $0) }
+                .map { node in
+                    let provider = NSItemProvider(contentsOf: node.url) ?? NSItemProvider()
+                    provider.registerObject(node.url.path as NSString, visibility: .all)
+                    return provider
+                }
+        }
         .quickLookPreview($quickLookURL)
-        .sheet(item: $renameTargetNode) { node in
+        .sheet(item: $sheetTarget) { target in
+            sheetContent(for: target)
+        }
+        .alert(
+            trashConfirmationTitle,
+            isPresented: Binding(
+                get: { pendingTrashNodes != nil },
+                set: { if !$0 { pendingTrashNodes = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingTrashNodes = nil
+            }
+            Button("Move to Trash", role: .destructive) {
+                let nodes = pendingTrashNodes ?? []
+                pendingTrashNodes = nil
+                Task {
+                    await siteViewModel.moveToTrash(nodes: nodes)
+                }
+            }
+        }
+    }
+
+    /// "Move N Items to Trash?" (or the singular "Move "name" to Trash?" for
+    /// one item) - N is the already-pruned count in `pendingTrashNodes`, not
+    /// the raw selection count (a folder and its descendants collapse to one
+    /// pruned operation). See Docs/SELECTION-MODEL-MEMO.md section 5.
+    private var trashConfirmationTitle: String {
+        guard let nodes = pendingTrashNodes else { return "" }
+        if nodes.count == 1, let name = nodes.first?.name {
+            return "Move \u{201C}\(name)\u{201D} to Trash?"
+        }
+        return "Move \(nodes.count) Items to Trash?"
+    }
+
+    /// Dispatches a `SheetTarget` to its concrete sheet view - mirrors the
+    /// bodies formerly inlined in `FolderRowWithSheets`'s five `.sheet`
+    /// modifiers, now presented once at the List level instead of once per row.
+    @ViewBuilder
+    private func sheetContent(for target: SheetTarget) -> some View {
+        switch target {
+        case .rename(let node):
             RenameSheet(node: node, siteViewModel: siteViewModel)
+        case .newContent(let node):
+            if let siteURL = siteViewModel.site?.rootURL {
+                NewContentView(
+                    siteURL: siteURL,
+                    targetDirectory: node.url,
+                    onCreated: { fileURL in
+                        Task {
+                            await siteViewModel.reloadSite()
+                            if let newNode = findNodeByURL(fileURL) {
+                                siteViewModel.selectNode(newNode)
+                            }
+                        }
+                    }
+                )
+            }
+        case .newDataFile(let node):
+            NewDataFileView(
+                targetDirectory: node.url,
+                onCreated: { fileURL in
+                    Task {
+                        await siteViewModel.reloadSite()
+                        if let newNode = findNodeByURL(fileURL) {
+                            siteViewModel.selectNode(newNode)
+                        }
+                    }
+                }
+            )
+        case .newTranslation(let node):
+            NewTranslationFileView(
+                targetDirectory: node.url,
+                onCreated: { fileURL in
+                    Task {
+                        await siteViewModel.reloadSite()
+                        if let newNode = findNodeByURL(fileURL) {
+                            siteViewModel.selectNode(newNode)
+                        }
+                    }
+                }
+            )
+        case .newArchetype(let node):
+            NewArchetypeView(
+                targetDirectory: node.url,
+                onCreated: { fileURL in
+                    Task {
+                        await siteViewModel.reloadSite()
+                        if let newNode = findNodeByURL(fileURL) {
+                            siteViewModel.selectNode(newNode)
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    /// Resolves a freshly-created file's URL to its canonical `FileNode` after
+    /// `reloadSite()` rebuilds the tree - moved here from `FolderRowWithSheets`
+    /// now that sheet presentation lives at the List level.
+    private func findNodeByURL(_ url: URL) -> FileNode? {
+        for rootNode in siteViewModel.fileNodes {
+            if let found = rootNode.findNode(url: url) {
+                return found
+            }
+        }
+        return nil
+    }
+}
+
+// MARK: - Sheet Target
+
+/// Which sheet `FileListView` is presenting, and for which node - see the
+/// `sheetTarget` state property above and Docs/SELECTION-MODEL-MEMO.md section 4.
+/// Internal (not private) because `SelectionContextMenu`'s binding property
+/// exposes it at internal access.
+enum SheetTarget: Identifiable {
+    case rename(FileNode)
+    case newContent(FileNode)      // "New Content from Archetype..." target folder
+    case newDataFile(FileNode)
+    case newTranslation(FileNode)
+    case newArchetype(FileNode)
+
+    var id: String {
+        switch self {
+        case .rename(let n): return "rename-\(n.id)"
+        case .newContent(let n): return "newContent-\(n.id)"
+        case .newDataFile(let n): return "newDataFile-\(n.id)"
+        case .newTranslation(let n): return "newTranslation-\(n.id)"
+        case .newArchetype(let n): return "newArchetype-\(n.id)"
         }
     }
 }
@@ -347,55 +533,111 @@ struct ContentStatusBadge: View {
     }
 }
 
-// MARK: - Context Menus
+// MARK: - Row Wrappers
 
-/// Context menu for folder nodes - returns menu items only
-/// Sheets are handled by FolderRowWithSheets wrapper
-struct FolderContextMenu: View {
+/// Wrapper view for a folder row - keeps only what's specific to folder rows
+/// (drop-target overlay/`.dropDestination`) plus `.equatable()` row rendering.
+/// No longer owns sheet state or a `.contextMenu` (victor-sel): both moved to
+/// the List level (`FileListView.body`'s `.contextMenu(forSelectionType:)` and
+/// `.sheet(item: $sheetTarget)`) since a per-row context menu can't represent
+/// a multi-row selection. See Docs/SELECTION-MODEL-MEMO.md section 4.
+struct FolderRowWithSheets: View {
     let node: FileNode
     let siteViewModel: SiteViewModel
-    @Binding var showNewContentSheet: Bool
-    @Binding var showNewDataFileSheet: Bool
-    @Binding var showNewTranslationSheet: Bool
-    @Binding var showNewArchetypeSheet: Bool
-    @Binding var showRenameSheet: Bool
 
-    /// Check if this folder is within content/ directory
-    private var isInContentDirectory: Bool {
-        node.hugoRole == .content || isDescendantOf(role: .content)
-    }
+    @State private var isDropTargeted = false
 
-    /// Check if this folder is within data/ directory
-    private var isInDataDirectory: Bool {
-        node.hugoRole == .data || isDescendantOf(role: .data)
-    }
-
-    /// Check if this folder is within i18n/ directory
-    private var isInI18nDirectory: Bool {
-        node.hugoRole == .i18n || isDescendantOf(role: .i18n)
-    }
-
-    /// Check if this folder is within archetypes/ directory
-    private var isInArchetypesDirectory: Bool {
-        node.hugoRole == .archetypes || isDescendantOf(role: .archetypes)
-    }
-
-    private func isDescendantOf(role: HugoRole) -> Bool {
-        var current: FileNode? = node.parent
-        while let parent = current {
-            if parent.hugoRole == role {
-                return true
+    var body: some View {
+        FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
+            .equatable()
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.accentColor, lineWidth: 2)
+                }
             }
-            current = parent.parent
-        }
-        return false
+            // Accept file drops (images and any other file type) onto folder rows.
+            // `node` here can be an ephemeral filtered-search copy (see
+            // SiteViewModel.importDroppedFile's doc comment), so the actual import -
+            // resolving the canonical node, copying, inserting, registering,
+            // invalidating the filter cache - lives there instead of here.
+            .dropDestination(for: URL.self) { droppedURLs, _ in
+                guard node.isDirectory, !droppedURLs.isEmpty else { return false }
+                for sourceURL in droppedURLs {
+                    Task {
+                        await siteViewModel.importDroppedFile(from: sourceURL, into: node)
+                    }
+                }
+                return true
+            } isTargeted: { targeted in
+                isDropTargeted = targeted
+            }
+    }
+}
+
+/// Wrapper view for a (non-directory) file row - `.equatable()` row rendering
+/// only. No longer owns sheet state or a `.contextMenu` (victor-sel) - see
+/// `FolderRowWithSheets`'s doc comment above.
+struct FileRowWithSheets: View {
+    let node: FileNode
+    let siteViewModel: SiteViewModel
+
+    var body: some View {
+        FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
+            .equatable()
+    }
+}
+
+// MARK: - Selection Context Menu
+
+/// Single dispatcher for the sidebar's context menu, driven by
+/// `.contextMenu(forSelectionType:)` on `FileListView`'s List (victor-sel) -
+/// replaces the former per-row `FileContextMenu`/`FolderContextMenu` pair.
+/// `ids` is whatever the system hands back for this invocation - not
+/// necessarily `siteViewModel.selectedFileIDs`, since right-clicking a row
+/// outside the current selection replaces the selection with just that row
+/// (standard macOS behavior). See Docs/SELECTION-MODEL-MEMO.md section 4.
+struct SelectionContextMenu: View {
+    let ids: Set<FileNode.ID>
+    let siteViewModel: SiteViewModel
+    @Binding var sheetTarget: SheetTarget?
+    @Binding var pendingTrashNodes: [FileNode]?
+
+    private var nodes: [FileNode] {
+        siteViewModel.treeOrderIndex(of: ids).compactMap { siteViewModel.findNode(id: $0) }
     }
 
     var body: some View {
+        let resolved = nodes
+        if resolved.count == 1 {
+            singleTargetMenu(for: resolved[0])
+        } else if resolved.count > 1 {
+            multiTargetMenu(for: resolved)
+        }
+    }
+
+    // MARK: Single target (content unchanged from the former FileContextMenu/FolderContextMenu)
+
+    @ViewBuilder
+    private func singleTargetMenu(for node: FileNode) -> some View {
+        if node.isDirectory {
+            folderMenu(for: node)
+        } else {
+            fileMenu(for: node)
+        }
+    }
+
+    @ViewBuilder
+    private func folderMenu(for node: FileNode) -> some View {
+        let isInContentDirectory = isDescendantOfOrRole(node, .content)
+        let isInDataDirectory = isDescendantOfOrRole(node, .data)
+        let isInI18nDirectory = isDescendantOfOrRole(node, .i18n)
+        let isInArchetypesDirectory = isDescendantOfOrRole(node, .archetypes)
+
         // Content directory: New Content from Archetype
         if isInContentDirectory, siteViewModel.site?.rootURL != nil {
             Button {
-                showNewContentSheet = true
+                sheetTarget = .newContent(node)
             } label: {
                 Label("New Content from Archetype...", systemImage: "doc.badge.gearshape")
             }
@@ -412,7 +654,7 @@ struct FolderContextMenu: View {
         // Data directory: New Data File
         if isInDataDirectory {
             Button {
-                showNewDataFileSheet = true
+                sheetTarget = .newDataFile(node)
             } label: {
                 Label("New Data File...", systemImage: "doc.badge.gearshape")
             }
@@ -421,7 +663,7 @@ struct FolderContextMenu: View {
         // i18n directory: New Translation File
         if isInI18nDirectory {
             Button {
-                showNewTranslationSheet = true
+                sheetTarget = .newTranslation(node)
             } label: {
                 Label("New Translation File...", systemImage: "globe.badge.plus")
             }
@@ -430,7 +672,7 @@ struct FolderContextMenu: View {
         // Archetypes directory: New Archetype
         if isInArchetypesDirectory {
             Button {
-                showNewArchetypeSheet = true
+                sheetTarget = .newArchetype(node)
             } label: {
                 Label("New Archetype...", systemImage: "doc.text.fill.viewfinder")
             }
@@ -459,7 +701,7 @@ struct FolderContextMenu: View {
 
         // File operations
         Button {
-            showRenameSheet = true
+            sheetTarget = .rename(node)
         } label: {
             Label("Rename…", systemImage: "pencil")
         }
@@ -476,134 +718,9 @@ struct FolderContextMenu: View {
             Label("Copy Path", systemImage: "doc.on.clipboard")
         }
     }
-}
 
-/// Wrapper view that handles folder row with context menu and sheets
-struct FolderRowWithSheets: View {
-    let node: FileNode
-    let siteViewModel: SiteViewModel
-
-    @State private var showNewContentSheet = false
-    @State private var showNewDataFileSheet = false
-    @State private var showNewTranslationSheet = false
-    @State private var showNewArchetypeSheet = false
-    @State private var showRenameSheet = false
-    @State private var isDropTargeted = false
-
-    var body: some View {
-        FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
-            .equatable()
-            .overlay {
-                if isDropTargeted {
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.accentColor, lineWidth: 2)
-                }
-            }
-            // Accept file drops (images and any other file type) onto folder rows.
-            // `node` here can be an ephemeral filtered-search copy (see
-            // SiteViewModel.importDroppedFile's doc comment), so the actual import -
-            // resolving the canonical node, copying, inserting, registering,
-            // invalidating the filter cache - lives there instead of here.
-            .dropDestination(for: URL.self) { droppedURLs, _ in
-                guard node.isDirectory, !droppedURLs.isEmpty else { return false }
-                for sourceURL in droppedURLs {
-                    Task {
-                        await siteViewModel.importDroppedFile(from: sourceURL, into: node)
-                    }
-                }
-                return true
-            } isTargeted: { targeted in
-                isDropTargeted = targeted
-            }
-            .contextMenu {
-                FolderContextMenu(
-                    node: node,
-                    siteViewModel: siteViewModel,
-                    showNewContentSheet: $showNewContentSheet,
-                    showNewDataFileSheet: $showNewDataFileSheet,
-                    showNewTranslationSheet: $showNewTranslationSheet,
-                    showNewArchetypeSheet: $showNewArchetypeSheet,
-                    showRenameSheet: $showRenameSheet
-                )
-            }
-            .sheet(isPresented: $showRenameSheet) {
-                RenameSheet(node: node, siteViewModel: siteViewModel)
-            }
-            .sheet(isPresented: $showNewContentSheet) {
-                if let siteURL = siteViewModel.site?.rootURL {
-                    NewContentView(
-                        siteURL: siteURL,
-                        targetDirectory: node.url,
-                        onCreated: { fileURL in
-                            Task {
-                                await siteViewModel.reloadSite()
-                                if let newNode = findNodeByURL(fileURL) {
-                                    siteViewModel.selectNode(newNode)
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-            .sheet(isPresented: $showNewDataFileSheet) {
-                NewDataFileView(
-                    targetDirectory: node.url,
-                    onCreated: { fileURL in
-                        Task {
-                            await siteViewModel.reloadSite()
-                            if let newNode = findNodeByURL(fileURL) {
-                                siteViewModel.selectNode(newNode)
-                            }
-                        }
-                    }
-                )
-            }
-            .sheet(isPresented: $showNewTranslationSheet) {
-                NewTranslationFileView(
-                    targetDirectory: node.url,
-                    onCreated: { fileURL in
-                        Task {
-                            await siteViewModel.reloadSite()
-                            if let newNode = findNodeByURL(fileURL) {
-                                siteViewModel.selectNode(newNode)
-                            }
-                        }
-                    }
-                )
-            }
-            .sheet(isPresented: $showNewArchetypeSheet) {
-                NewArchetypeView(
-                    targetDirectory: node.url,
-                    onCreated: { fileURL in
-                        Task {
-                            await siteViewModel.reloadSite()
-                            if let newNode = findNodeByURL(fileURL) {
-                                siteViewModel.selectNode(newNode)
-                            }
-                        }
-                    }
-                )
-            }
-    }
-
-    private func findNodeByURL(_ url: URL) -> FileNode? {
-        for rootNode in siteViewModel.fileNodes {
-            if let found = rootNode.findNode(url: url) {
-                return found
-            }
-        }
-        return nil
-    }
-}
-
-/// Context menu for file nodes - returns menu items only, sheet is handled by
-/// the FileRowWithSheets wrapper (mirrors FolderContextMenu/FolderRowWithSheets)
-struct FileContextMenu: View {
-    let node: FileNode
-    let siteViewModel: SiteViewModel
-    @Binding var showRenameSheet: Bool
-
-    var body: some View {
+    @ViewBuilder
+    private func fileMenu(for node: FileNode) -> some View {
         // Open
         Button {
             siteViewModel.selectNode(node)
@@ -623,7 +740,7 @@ struct FileContextMenu: View {
         }
 
         Button {
-            showRenameSheet = true
+            sheetTarget = .rename(node)
         } label: {
             Label("Rename…", systemImage: "pencil")
         }
@@ -652,26 +769,45 @@ struct FileContextMenu: View {
             Label("Copy Path", systemImage: "doc.on.clipboard")
         }
     }
-}
 
-/// Wrapper view that handles a (non-directory) file row with its context menu
-/// and rename sheet - mirrors FolderRowWithSheets so files and folders share
-/// the same sheet-presentation pattern instead of inventing a second one.
-struct FileRowWithSheets: View {
-    let node: FileNode
-    let siteViewModel: SiteViewModel
-
-    @State private var showRenameSheet = false
-
-    var body: some View {
-        FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
-            .equatable()
-            .contextMenu {
-                FileContextMenu(node: node, siteViewModel: siteViewModel, showRenameSheet: $showRenameSheet)
+    private func isDescendantOfOrRole(_ node: FileNode, _ role: HugoRole) -> Bool {
+        if node.hugoRole == role { return true }
+        var current: FileNode? = node.parent
+        while let parent = current {
+            if parent.hugoRole == role {
+                return true
             }
-            .sheet(isPresented: $showRenameSheet) {
-                RenameSheet(node: node, siteViewModel: siteViewModel)
-            }
+            current = parent.parent
+        }
+        return false
+    }
+
+    // MARK: Multi target - disable/omit single-target-only items (Open,
+    // Duplicate, Rename, New-X folder creation); show set-scoped items instead.
+
+    @ViewBuilder
+    private func multiTargetMenu(for nodes: [FileNode]) -> some View {
+        Button(role: .destructive) {
+            pendingTrashNodes = siteViewModel.pruneDescendants(of: nodes)
+        } label: {
+            Label("Move \(nodes.count) Items to Trash", systemImage: "trash")
+        }
+
+        Divider()
+
+        // Mixed files+folders: Reveal in Finder and Copy Path both operate
+        // over the resolved node/URL set regardless of type, no special-casing.
+        Button {
+            siteViewModel.revealInFinder(nodes: nodes)
+        } label: {
+            Label("Reveal in Finder", systemImage: "folder")
+        }
+
+        Button {
+            siteViewModel.copyPathsToClipboard(urls: nodes.map(\.url))
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.clipboard")
+        }
     }
 }
 
