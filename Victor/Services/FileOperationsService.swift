@@ -70,7 +70,10 @@ final class FileOperationsService {
 
     /// Move a file to the trash
     /// - Parameter url: The file URL to trash
-    func moveToTrash(at url: URL) async throws {
+    /// - Returns: the URL the item landed at inside the Trash, when the system
+    ///   reports one (victor-und) - see `FileSystemService.moveToTrash`.
+    @discardableResult
+    func moveToTrash(at url: URL) async throws -> URL? {
         try await fileSystemService.moveToTrash(at: url)
     }
 

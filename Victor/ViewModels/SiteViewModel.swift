@@ -529,6 +529,17 @@ class SiteViewModel {
     /// hold their own injected instances directly.
     private let autoSaveService: AutoSaveService
 
+    /// Window-level undo manager (victor-und), assigned by `ContentView` from
+    /// `@Environment(\.undoManager)` once the view appears/changes - SwiftUI's
+    /// undo manager is a view-layer environment value, but `renameFile`/
+    /// `moveNode`/`duplicateFile`/`moveToTrash(nodes:)` need it at operation
+    /// time to register named inverses. `weak` since the window (and its
+    /// undo manager) outlives neither this view model nor vice versa in any
+    /// guaranteed order; every registration site guards on it being non-nil
+    /// so tests constructing `SiteViewModel` bare (no window) still work -
+    /// the four ops just skip undo registration.
+    weak var undoManager: UndoManager?
+
     /// Specialized file manager (for Hugo config, data files, templates, archetypes)
     let specializedFileManager = SpecializedFileManager()
 
@@ -1563,10 +1574,72 @@ class SiteViewModel {
 
     // MARK: - Context Menu File Operations
 
-    /// Rename a file node
-    func renameFile(node: FileNode, to newName: String) async {
+    /// Registers `handler` as the next undo action on `undoManager` (victor-und)
+    /// and names it for the Edit menu ("Undo Rename", "Undo Move to Trash",
+    /// etc). No-ops entirely when `undoManager` is nil (unwired in tests, or
+    /// no window yet) - callers don't need their own nil-check.
+    ///
+    /// CRITICAL timing rule, found the hard way (first cut of victor-und had
+    /// every op re-registering its own inverse from *inside* the `Task` that
+    /// performs the async work, at the end of the op's body - that's too
+    /// late): `UndoManager` decides which stack (`undo` vs `redo`) a
+    /// `registerUndo` call lands on by checking `isUndoing`/`isRedoing` AT
+    /// THE MOMENT `registerUndo` IS CALLED, synchronously, not whenever the
+    /// work it's registered for happens to finish. `registerUndo`'s handler
+    /// itself is synchronous, but the file operations here are `async` - so
+    /// every caller of this method must register the OPPOSITE action
+    /// synchronously, inside the handler, BEFORE spawning the `Task` that
+    /// does the actual (async) work. By the time that `Task` finishes,
+    /// `isUndoing`/`isRedoing` has already reverted to `false` and a
+    /// `registerUndo` call made then lands on the wrong stack (or rather,
+    /// always the undo stack, since outside of undo()/redo() a fresh
+    /// registration always goes there) - the redo stack never gets
+    /// populated. `handler` receives `self` (held weakly by `UndoManager`,
+    /// per Apple's docs it doesn't retain the target - safe to close over
+    /// the app-lifetime view model).
+    private func registerFileOpUndo(_ actionName: String, _ handler: @escaping (SiteViewModel) -> Void) {
+        guard let undoManager else { return }
+        undoManager.registerUndo(withTarget: self, handler: handler)
+        undoManager.setActionName(actionName)
+    }
+
+    /// Registers the "Rename" undo/redo action pair for the node identified
+    /// by `nodeID` (victor-und). `oldName`/`newName` are a fixed pair
+    /// determined once, at the very first rename - every subsequent
+    /// undo/redo just swaps between them (no re-derivation from the node's
+    /// live state needed, unlike the Move/Trash chains, since a rename's
+    /// two states don't change generation to generation).
+    ///
+    /// The registered action renames the node to `oldName` when it fires,
+    /// and - synchronously, BEFORE spawning the `Task` that does that rename
+    /// - re-registers the opposite pair (`from: newName, to: oldName`) so it
+    /// lands on the correct stack. See `registerFileOpUndo`'s doc comment
+    /// for why that ordering is mandatory.
+    private func registerRenameUndo(nodeID: UUID, from oldName: String, to newName: String) {
+        registerFileOpUndo("Rename") { target in
+            target.registerRenameUndo(nodeID: nodeID, from: newName, to: oldName)
+            Task { @MainActor in
+                guard let node = target.findNode(id: nodeID) else {
+                    target.errorMessage = "Can't undo rename: the file no longer exists."
+                    return
+                }
+                await target.renameFile(node: node, to: oldName, registerUndo: false)
+            }
+        }
+    }
+
+    /// Rename a file node. `registerUndo` is false when this call IS the
+    /// inverse of a previous rename (see `registerRenameUndo`) - the inverse
+    /// registration already happened synchronously before this async call
+    /// was even started, so registering again here would be a duplicate.
+    func renameFile(node: FileNode, to newName: String, registerUndo: Bool = true) async {
         do {
             guard let siteRoot = site?.rootURL else { return }
+
+            // Captured before any mutation below - the undo inverse renames
+            // back to this (victor-und). `node.name` is `url.lastPathComponent`,
+            // exactly the form `renameFile`'s `to:` parameter expects.
+            let oldName = node.name
 
             // Cancel any pending debounced auto-save for this node - and, for a
             // directory rename, every descendant file - BEFORE touching disk.
@@ -1620,6 +1693,10 @@ class SiteViewModel {
             // row) - `selectedNode` (when it's this node) is the same object
             // instance throughout, not swapped for a copy. The old
             // `selectedNode = nil; selectedNode = node` pair was redundant.
+
+            if registerUndo {
+                registerRenameUndo(nodeID: node.id, from: oldName, to: newName)
+            }
         } catch {
             errorMessage = "Failed to rename file: \(error.localizedDescription)"
             Logger.shared.error("Error renaming file", error: error)
@@ -1661,7 +1738,11 @@ class SiteViewModel {
     ///     canonical tree instance (callers resolve via `findNode`, same
     ///     requirement as `renameFile`/`moveToTrash`)
     ///   - targetFolder: the destination folder node
-    func moveNode(from node: FileNode, to targetFolder: FileNode) async {
+    ///   - registerUndo: false when this call IS the inverse of a previous
+    ///     move (see `registerMoveUndo`) - the inverse registration already
+    ///     happened synchronously before this async call started, so
+    ///     registering again here would be a duplicate.
+    func moveNode(from node: FileNode, to targetFolder: FileNode, registerUndo: Bool = true) async {
         guard targetFolder.isDirectory else { return }
         guard let siteRoot = site?.rootURL else { return }
 
@@ -1687,6 +1768,11 @@ class SiteViewModel {
         for url in [node.url] + allDescendantURLs(of: node) {
             await autoSaveService.cancelAutoSave(for: url)
         }
+
+        // Captured before reparenting below - the undo inverse moves back
+        // here (victor-und). `nil` means `node` was top-level (no parent
+        // FileNode to move back into - see the inverse closure below).
+        let oldParentID = node.parent?.id
 
         do {
             let newURL = try await fileOperationsService.moveFile(at: node.url, to: targetFolder.url, siteRoot: siteRoot)
@@ -1722,9 +1808,49 @@ class SiteViewModel {
             // fileCacheManager's cached edited content is keyed by node
             // `id` (also unchanged by a move), so it survives automatically
             // too - no re-keying needed.
+
+            // victor-und: `oldParentID` being nil means `node` was top-level
+            // (no FileNode represents "the site root" for `moveNode` to
+            // target later), so there's nothing to register - that specific
+            // move just isn't undoable, rather than registering something
+            // that would always fail at undo time.
+            if registerUndo, let oldParentID {
+                registerMoveUndo(nodeID: node.id, from: oldParentID, to: targetFolder.id)
+            }
         } catch {
             errorMessage = "Failed to move \(node.name): \(error.localizedDescription)"
             Logger.shared.error("Error moving file", error: error)
+        }
+    }
+
+    /// Registers the "Move" undo/redo action pair for the node identified by
+    /// `nodeID` (victor-und): `oldParentID`/`newParentID` are a fixed pair of
+    /// folder IDs determined once, at the very first move - every subsequent
+    /// undo/redo just swaps between them (both folders are stable FileNode
+    /// identities; only re-resolved by ID at fire time in case either has
+    /// meanwhile been renamed/moved/trashed - SELECTION-MODEL-MEMO.md's C.1
+    /// note - which degrades to `errorMessage` rather than operating on a
+    /// stale reference).
+    ///
+    /// The registered action moves the node into `oldParentID` when it
+    /// fires, and - synchronously, BEFORE spawning the `Task` that does that
+    /// move - re-registers the opposite pair so it lands on the correct
+    /// stack. See `registerFileOpUndo`'s doc comment for why that ordering
+    /// is mandatory.
+    private func registerMoveUndo(nodeID: UUID, from oldParentID: UUID, to newParentID: UUID) {
+        registerFileOpUndo("Move") { target in
+            target.registerMoveUndo(nodeID: nodeID, from: newParentID, to: oldParentID)
+            Task { @MainActor in
+                guard let node = target.findNode(id: nodeID) else {
+                    target.errorMessage = "Can't undo move: the file no longer exists."
+                    return
+                }
+                guard let targetFolder = target.findNode(id: oldParentID) else {
+                    target.errorMessage = "Can't undo move: the original folder no longer exists."
+                    return
+                }
+                await target.moveNode(from: node, to: targetFolder, registerUndo: false)
+            }
         }
     }
 
@@ -1739,8 +1865,13 @@ class SiteViewModel {
         return false
     }
 
-    /// Duplicate a file node
-    func duplicateFile(node: FileNode) async {
+    /// Duplicate a file node. `registerUndo` is false when this call IS the
+    /// inverse of a previous trash-of-a-duplicate (see
+    /// `registerTrashChainUndo` - it isn't, in practice, since undoing a
+    /// duplicate trashes the copy rather than re-duplicating, but the
+    /// parameter is kept for signature symmetry with the other three ops
+    /// and future-proofing).
+    func duplicateFile(node: FileNode, registerUndo: Bool = true) async {
         do {
             let newURL = try await fileOperationsService.duplicateFile(at: node.url)
 
@@ -1767,6 +1898,22 @@ class SiteViewModel {
 
             // Select the new file
             selectNode(newNode)
+
+            // victor-und: inverse is trashing the duplicate (recoverable via
+            // the Trash, not a hard delete) - shares the same trash<->restore
+            // chain machinery as the real "Move to Trash" feature
+            // (`registerTrashChainUndo`/`TrashRecordBox`/`performTrash`/
+            // `performRestore`), just with its own box (so it doesn't
+            // interleave with any unrelated trash chain) and its own action
+            // name ("Duplicate" throughout, not "Move to Trash" - see
+            // `registerTrashChainUndo`'s doc comment for why naming the pair
+            // once here, rather than letting `performTrash`/`performRestore`
+            // name themselves, is what keeps the redo action reading "Redo
+            // Duplicate" instead of leaking "Move to Trash").
+            if registerUndo {
+                let box = TrashRecordBox(state: .inTree([newNode]))
+                registerTrashChainUndo(box: box, actionName: "Duplicate")
+            }
         } catch {
             errorMessage = "Failed to duplicate file: \(error.localizedDescription)"
             Logger.shared.error("Error duplicating file", error: error)
@@ -1784,36 +1931,17 @@ class SiteViewModel {
     /// mutation is shared `@Observable` state. One failure doesn't abort the
     /// rest of the batch - matches Finder's move-to-trash-with-one-locked-file
     /// behavior. See Docs/SELECTION-MODEL-MEMO.md section 5.
-    func moveToTrash(nodes: [FileNode]) async {
+    ///
+    /// `registerUndo` is false when this call IS a re-trash step inside a
+    /// trash<->restore undo/redo chain (see `registerTrashChainUndo`) - that
+    /// chain registers its own next step synchronously before spawning this
+    /// call, so registering again here would be a duplicate (and would try
+    /// to build a second, redundant chain on top of the first).
+    func moveToTrash(nodes: [FileNode], registerUndo: Bool = true) async {
         let pruned = pruneDescendants(of: nodes)
         guard !pruned.isEmpty else { return }
 
-        // Kept per-iteration (node, trashedURL) even though this phase doesn't
-        // consume it further - C.1 (victor-und)'s undo will need each trashed
-        // URL for its own inverse-registration; don't discard this shape.
-        var trashedNodes: [(node: FileNode, trashedURL: URL)] = []
-        var errors: [Error] = []
-
-        for node in pruned {
-            do {
-                try await fileOperationsService.moveToTrash(at: node.url)
-                trashedNodes.append((node: node, trashedURL: node.url))
-
-                unregisterNode(node)
-                if let parent = node.parent {
-                    parent.children.removeAll { $0.id == node.id }
-                } else {
-                    fileNodes.removeAll { $0.id == node.id }
-                }
-            } catch {
-                errors.append(error)
-                Logger.shared.error("Error moving to trash", error: error)
-            }
-        }
-
-        if !trashedNodes.isEmpty {
-            invalidateFilterCache()
-        }
+        let result = await performTrash(nodes: pruned)
 
         // Selection/editor fixup, generalized from the single-node version -
         // check against the ORIGINAL untrimmed `nodes` list (not just
@@ -1831,15 +1959,235 @@ class SiteViewModel {
             selectedFileIDs = selectedFileIDs.subtracting(trashedIDs)
         }
 
-        if let firstError = errors.first {
+        // victor-und: single "Move to Trash" undo action for the whole batch
+        // (no "Move 3 Items to Trash" naming needed per the ticket).
+        // `result.records` is the undo-capable subset of `pruned` (a record
+        // needs a non-nil `trashedURL` - see `performTrash`'s doc comment).
+        if registerUndo, !result.records.isEmpty {
+            let box = TrashRecordBox(state: .trashed(result.records))
+            registerTrashChainUndo(box: box, actionName: "Move to Trash")
+        }
+
+        if let firstError = result.errors.first {
             errorMessage = "Failed to move to trash: \(firstError.localizedDescription)"
         }
     }
 
     /// Single-node convenience wrapper, kept so the 15+ existing single-target
     /// call sites (SelectionContextMenu, etc.) don't need individual updates.
-    func moveToTrash(node: FileNode) async {
-        await moveToTrash(nodes: [node])
+    func moveToTrash(node: FileNode, registerUndo: Bool = true) async {
+        await moveToTrash(nodes: [node], registerUndo: registerUndo)
+    }
+
+    /// Snapshot of a trashed node (victor-und), captured once a trash has
+    /// actually happened - `originalURL`/`originalParentID` are re-resolved
+    /// fresh by `performTrash` every time (from the node's live state right
+    /// before it's trashed), and `trashedURL` is only known after
+    /// `FileManager.trashItem` returns, so this type only exists once both
+    /// are available (see `TrashChainState.inTree` for the "not yet
+    /// trashed" state, which needs neither). `node` is retained directly:
+    /// nothing else mutates or replaces this FileNode instance between
+    /// trash and restore, so reinserting the exact same object (with its
+    /// children/contentFile/textFile intact) is safe and cheaper than
+    /// reconstructing one. `originalParentID` (not the possibly-stale
+    /// `node.parent` reference) is what `performRestore` re-resolves via
+    /// `findNode(id:)` - the parent may itself have been
+    /// renamed/moved/trashed since (SELECTION-MODEL-MEMO.md's C.1 note).
+    private struct TrashRecord {
+        let node: FileNode
+        let originalURL: URL
+        let originalParentID: UUID?
+        let trashedURL: URL
+    }
+
+    /// Which side of a trash<->restore undo/redo chain a `TrashRecordBox` is
+    /// currently holding (victor-und): `.inTree` when the nodes are back in
+    /// the sidebar (so the chain's next step must trash them - no
+    /// `TrashRecord` needed yet, `performTrash` reads what it needs live off
+    /// each `FileNode`); `.trashed` when they're in the Trash (so the next
+    /// step must restore them, using each record's captured `trashedURL`).
+    private enum TrashChainState {
+        case inTree([FileNode])
+        case trashed([TrashRecord])
+    }
+
+    /// Mutable holder threading state through one trash<->restore undo/redo
+    /// chain (victor-und, both the real "Move to Trash" feature and
+    /// `duplicateFile`'s "trash the copy" inverse use this). A `class`
+    /// (reference type) so every synchronously-registered handler in the
+    /// chain closes over the SAME box: each re-trash produces a NEW trashed
+    /// URL per node (macOS uniquifies Trash filenames on collision), so the
+    /// state the NEXT chain step needs is only known once the CURRENT
+    /// step's async `Task` finishes - but per `registerFileOpUndo`'s doc
+    /// comment, the next step has to be *registered* synchronously, before
+    /// that `Task` even starts. The box resolves the conflict: the
+    /// synchronous registration closes over the box reference (not a
+    /// snapshot of its contents), and reads `box.state` only when it
+    /// actually FIRES - by which point the previous step's `Task` has
+    /// necessarily already finished and written its result here (a user
+    /// can't trigger the next undo/redo step before the current one's
+    /// visible result has settled).
+    private final class TrashRecordBox {
+        var state: TrashChainState
+        init(state: TrashChainState) { self.state = state }
+    }
+
+    /// Trashes each of `nodes` (already pruned/deduplicated by the caller)
+    /// and returns the records for whichever ones both succeeded AND got
+    /// back a usable trashed URL from `FileManager` (undo-capable subset -
+    /// `trashedURL` can come back nil on volumes that don't support
+    /// `resultingItemURL`, and a record without one can't be restored later).
+    /// Pure tree/disk mutation - no undo registration, no selection fixup;
+    /// both the public `moveToTrash(nodes:)` and the re-trash step of
+    /// `registerTrashChainUndo`'s chain call this.
+    private func performTrash(nodes: [FileNode]) async -> (records: [TrashRecord], successCount: Int, errors: [Error]) {
+        var successCount = 0
+        var records: [TrashRecord] = []
+        var errors: [Error] = []
+
+        for node in nodes {
+            do {
+                let originalURL = node.url
+                let originalParentID = node.parent?.id
+                let trashedURL = try await fileOperationsService.moveToTrash(at: node.url)
+
+                unregisterNode(node)
+                if let parent = node.parent {
+                    parent.children.removeAll { $0.id == node.id }
+                } else {
+                    fileNodes.removeAll { $0.id == node.id }
+                }
+
+                successCount += 1
+                if let trashedURL {
+                    records.append(TrashRecord(
+                        node: node, originalURL: originalURL, originalParentID: originalParentID, trashedURL: trashedURL))
+                }
+            } catch {
+                errors.append(error)
+                Logger.shared.error("Error moving to trash", error: error)
+            }
+        }
+
+        if successCount > 0 {
+            invalidateFilterCache()
+        }
+
+        return (records, successCount, errors)
+    }
+
+    /// Re-registers `node` and every descendant in `nodeByID` - the inverse
+    /// of `unregisterNode`'s recursive removal. Needed by `performRestore`
+    /// when restoring a trashed folder: trashing it unregistered the whole
+    /// subtree (`unregisterNode` recurses into `children`), so restoring it
+    /// must re-register the whole subtree too, not just the top node.
+    private func registerNodeRecursively(_ node: FileNode) {
+        registerNode(node)
+        for child in node.children {
+            registerNodeRecursively(child)
+        }
+    }
+
+    /// Moves each record's item back from the Trash to its original path via
+    /// `FileManager`, then re-inserts its `FileNode` into its original
+    /// parent (`addChild` re-sorts) or back into top-level `fileNodes`.
+    /// Deliberately does NOT touch selection - if the item was selected
+    /// before being trashed, it stays unselected after being restored,
+    /// matching Finder (undoing a trash doesn't re-select the item in the
+    /// Finder window either). Pure tree/disk mutation - no undo
+    /// registration; the restore step of `registerTrashChainUndo`'s chain
+    /// calls this.
+    ///
+    /// The parent is re-resolved by ID (see `TrashRecord`'s doc comment): if
+    /// it's gone, that record's restore is skipped and reported via
+    /// `errorMessage`, but the rest of the batch still proceeds - same
+    /// one-failure-doesn't-abort-the-batch shape as `performTrash`.
+    private func performRestore(records: [TrashRecord]) async -> (restored: [FileNode], errors: [Error]) {
+        var restored: [FileNode] = []
+        var errors: [Error] = []
+
+        for record in records {
+            do {
+                try FileManager.default.moveItem(at: record.trashedURL, to: record.originalURL)
+
+                record.node.url = record.originalURL
+                record.node.contentFile?.url = record.originalURL
+                record.node.textFile?.url = record.originalURL
+                if record.node.isDirectory {
+                    updateDescendantURLs(of: record.node, newParentURL: record.originalURL)
+                }
+
+                if let parentID = record.originalParentID {
+                    guard let parent = findNode(id: parentID) else {
+                        errors.append(FileError.fileNotFound)
+                        continue
+                    }
+                    parent.addChild(record.node)   // sets node.parent, appends, sortChildren()
+                } else {
+                    fileNodes.append(record.node)
+                    fileNodes.sort { lhs, rhs in
+                        if lhs.isDirectory != rhs.isDirectory {
+                            return lhs.isDirectory
+                        }
+                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                    }
+                }
+                registerNodeRecursively(record.node)
+                restored.append(record.node)
+            } catch {
+                errors.append(error)
+                Logger.shared.error("Error restoring from trash", error: error)
+            }
+        }
+
+        if !restored.isEmpty {
+            invalidateFilterCache()
+        }
+
+        return (restored, errors)
+    }
+
+    /// Registers the undo/redo action pair for one trash<->restore chain
+    /// held in `box` (victor-und), named `actionName` on BOTH sides of the
+    /// chain for as long as it lives - this is what keeps a chain built for
+    /// the batch "Move to Trash" feature reading "Move to Trash" throughout,
+    /// and one built for `duplicateFile`'s inverse reading "Duplicate"
+    /// throughout, rather than the name flip-flopping to whatever the
+    /// underlying trash/restore operation would have called itself.
+    ///
+    /// Self-recursive rather than two separate "trash direction"/"restore
+    /// direction" functions: `box.state` IS the single source of truth for
+    /// which direction this firing should go, read fresh every time the
+    /// handler actually fires (not baked in at registration time - see
+    /// `TrashRecordBox`'s doc comment). Each firing, synchronously, BEFORE
+    /// spawning the `Task` that does the actual (async) trash-or-restore
+    /// work: re-registers this SAME function against the SAME box. That
+    /// re-registration is what lands on the correct undo/redo stack (see
+    /// `registerFileOpUndo`'s doc comment for why it must happen
+    /// synchronously) - and the next time IT fires, it'll read `box.state`
+    /// fresh again, by then updated by this firing's `Task`.
+    private func registerTrashChainUndo(box: TrashRecordBox, actionName: String) {
+        registerFileOpUndo(actionName) { target in
+            target.registerTrashChainUndo(box: box, actionName: actionName)
+            switch box.state {
+            case .inTree(let nodes):
+                Task { @MainActor in
+                    let result = await target.performTrash(nodes: nodes)
+                    box.state = .trashed(result.records)
+                    if let firstError = result.errors.first {
+                        target.errorMessage = "Failed to move to trash: \(firstError.localizedDescription)"
+                    }
+                }
+            case .trashed(let records):
+                Task { @MainActor in
+                    let result = await target.performRestore(records: records)
+                    box.state = .inTree(result.restored)
+                    if let firstError = result.errors.first {
+                        target.errorMessage = "Failed to restore from trash: \(firstError.localizedDescription)"
+                    }
+                }
+            }
+        }
     }
 
     /// Drops any node in `nodes` that has an ancestor also present in `nodes` -

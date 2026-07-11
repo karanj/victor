@@ -2366,4 +2366,284 @@ final class SiteViewModelTests: XCTestCase {
         assertSelection(viewModel, is: nil)
         assertSelectionInvariant(viewModel)
     }
+
+    // MARK: - Undo/Redo Tests (victor-und, Docs/MAC-ARSED-GAP-PLAN.md Phase C.1)
+    //
+    // `SiteViewModel.registerFileOpUndo` registers `UndoManager.registerUndo(withTarget:handler:)`,
+    // whose handler is synchronous - the handler spawns a `Task { @MainActor in ... }`
+    // to run the actual (async) inverse file operation. That means
+    // `undoManager.undo()`/`.redo()` return before the inverse has actually
+    // finished, so these tests poll via `waitUntilUndoSettled` rather than
+    // asserting immediately after the call - mirrors the `Task.sleep`-based
+    // polling already used elsewhere in this suite (AutoSaveServiceTests,
+    // EditorViewModelTests) instead of a single fixed sleep, so they aren't
+    // flaky under load.
+
+    /// Polls `condition` until it returns true or `timeout` elapses. See the
+    /// MARK comment above for why undo/redo tests need this instead of a
+    /// synchronous assertion right after `undo()`/`redo()`.
+    private func waitUntilUndoSettled(
+        timeout: TimeInterval = 2.0,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: () -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            if Date() >= deadline {
+                XCTFail("Undo/redo did not settle within \(timeout)s", file: file, line: line)
+                return
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    func testUndoRenameRestoresOldNameAndRedoReapplies() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let node = FileNode(url: fileURL, isDirectory: false)
+        viewModel.fileNodes = [node]
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+
+        let renamedURL = tempDir.appendingPathComponent("renamed.md")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(node.url, renamedURL)
+        XCTAssertEqual(undoManager.undoActionName, "Rename")
+
+        undoManager.undo()
+        try await waitUntilUndoSettled { node.url == fileURL }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path), "undo must restore the file at its original path")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: renamedURL.path))
+
+        undoManager.redo()
+        try await waitUntilUndoSettled { node.url == renamedURL }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: renamedURL.path), "redo must re-apply the rename")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    func testUndoMoveReturnsToOriginalFolderAndRedoReapplies() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderAURL = tempDir.appendingPathComponent("folderA")
+        let folderBURL = tempDir.appendingPathComponent("folderB")
+        try FileManager.default.createDirectory(at: folderAURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folderBURL, withIntermediateDirectories: true)
+        let fileURL = folderAURL.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let folderANode = FileNode(url: folderAURL, isDirectory: true)
+        let folderBNode = FileNode(url: folderBURL, isDirectory: true)
+        let fileNode = FileNode(url: fileURL, isDirectory: false)
+        folderANode.addChild(fileNode)
+        viewModel.fileNodes = [folderANode, folderBNode]
+
+        await viewModel.moveNode(from: fileNode, to: folderBNode)
+
+        let movedURL = folderBURL.appendingPathComponent("post.md")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(fileNode.url, movedURL)
+        XCTAssertEqual(undoManager.undoActionName, "Move")
+
+        undoManager.undo()
+        try await waitUntilUndoSettled { fileNode.parent?.id == folderANode.id }
+        XCTAssertEqual(fileNode.url, fileURL, "undo must return the file to its original folder/path")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: movedURL.path))
+        XCTAssertTrue(folderANode.children.contains { $0.id == fileNode.id })
+        XCTAssertFalse(folderBNode.children.contains { $0.id == fileNode.id })
+
+        undoManager.redo()
+        try await waitUntilUndoSettled { fileNode.parent?.id == folderBNode.id }
+        XCTAssertEqual(fileNode.url, movedURL, "redo must re-apply the move")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: movedURL.path))
+        XCTAssertFalse(folderANode.children.contains { $0.id == fileNode.id })
+    }
+
+    func testUndoDuplicateTrashesTheCopyAndRedoRestoresIt() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let node = FileNode(url: fileURL, isDirectory: false)
+        viewModel.fileNodes = [node]
+
+        await viewModel.duplicateFile(node: node)
+
+        let duplicateURL = tempDir.appendingPathComponent("post copy.md")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.fileNodes.count, 2)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: duplicateURL.path))
+        XCTAssertEqual(undoManager.undoActionName, "Duplicate")
+
+        undoManager.undo()
+        try await waitUntilUndoSettled { viewModel.fileNodes.count == 1 }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: duplicateURL.path), "undo must trash the duplicate, not the original")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path), "the original must be untouched")
+
+        undoManager.redo()
+        try await waitUntilUndoSettled { viewModel.fileNodes.count == 2 }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: duplicateURL.path), "redo must restore the duplicate from the Trash")
+    }
+
+    func testUndoTrashRestoresFileAtOriginalPathAndRedoReTrashes() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let urlA = tempDir.appendingPathComponent("a.md")
+        try "a".write(to: urlA, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let nodeA = FileNode(url: urlA, isDirectory: false)
+        viewModel.fileNodes = [nodeA]
+
+        await viewModel.moveToTrash(node: nodeA)
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(viewModel.fileNodes.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: urlA.path))
+        XCTAssertEqual(undoManager.undoActionName, "Move to Trash")
+
+        undoManager.undo()
+        try await waitUntilUndoSettled { !viewModel.fileNodes.isEmpty }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: urlA.path), "undo must restore the file at its original path")
+        XCTAssertTrue(viewModel.fileNodes.first === nodeA, "the restored node must be the same FileNode instance, not a rebuilt copy")
+
+        undoManager.redo()
+        try await waitUntilUndoSettled { viewModel.fileNodes.isEmpty }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: urlA.path), "redo must re-trash the file")
+    }
+
+    /// Batch of 2 (one file, one folder) - undo must restore both on disk at
+    /// their original paths, re-insert the folder's own child too (trashing
+    /// a folder unregisters/removes its whole subtree, so restoring it must
+    /// bring the subtree back), and re-insert both nodes in sorted position
+    /// (directories first, then alphabetical - `FileNode.sortChildren`'s
+    /// convention) among the untouched survivor.
+    func testUndoTrashBatchRestoresFilesAndFolderInSortedPositionAndRedoReTrashesAll() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let urlA = tempDir.appendingPathComponent("a.md")
+        try "a".write(to: urlA, atomically: true, encoding: .utf8)
+
+        let folderURL = tempDir.appendingPathComponent("folder")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let childURL = folderURL.appendingPathComponent("child.md")
+        try "child".write(to: childURL, atomically: true, encoding: .utf8)
+
+        let urlZ = tempDir.appendingPathComponent("z.md")
+        try "z".write(to: urlZ, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+
+        let nodeA = FileNode(url: urlA, isDirectory: false)          // survives untouched
+        let folderNode = FileNode(url: folderURL, isDirectory: true)
+        let childNode = FileNode(url: childURL, isDirectory: false)
+        folderNode.addChild(childNode)
+        let nodeZ = FileNode(url: urlZ, isDirectory: false)          // survives untouched
+        viewModel.fileNodes = [nodeA, folderNode, nodeZ]
+
+        await viewModel.moveToTrash(nodes: [folderNode, nodeZ])
+
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.fileNodes.map(\.id), [nodeA.id], "only the untouched survivor should remain")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: urlZ.path))
+        XCTAssertEqual(undoManager.undoActionName, "Move to Trash")
+
+        undoManager.undo()
+        try await waitUntilUndoSettled { viewModel.fileNodes.count == 3 }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folderURL.path), "the folder must be restored")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: childURL.path), "the folder's child must come back with it")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: urlZ.path), "the file must be restored")
+        XCTAssertEqual(
+            viewModel.fileNodes.map(\.id), [folderNode.id, nodeA.id, nodeZ.id],
+            "restored nodes must land in sorted position (directories first, then alphabetical), not just appended"
+        )
+        XCTAssertEqual(viewModel.findNode(id: childNode.id)?.id, childNode.id, "the folder's child must be re-registered, not just re-attached")
+
+        undoManager.redo()
+        try await waitUntilUndoSettled { viewModel.fileNodes.count == 1 }
+        XCTAssertEqual(viewModel.fileNodes.map(\.id), [nodeA.id])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderURL.path), "redo must re-trash the folder")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: urlZ.path), "redo must re-trash the file")
+    }
+
+    /// All four file operations must still work when no window (and therefore
+    /// no `UndoManager`) is attached - `SiteViewModel.undoManager` defaults to
+    /// nil, and every `registerFileOpUndo` call must no-op rather than crash.
+    func testFileOpsWorkWithoutUndoManagerAttached() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+        let folderURL = tempDir.appendingPathComponent("archive")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        XCTAssertNil(viewModel.undoManager, "sanity check - this test exercises the unwired-window path")
+
+        let node = FileNode(url: fileURL, isDirectory: false)
+        let folderNode = FileNode(url: folderURL, isDirectory: true)
+        viewModel.fileNodes = [node, folderNode]
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(node.url, tempDir.appendingPathComponent("renamed.md"))
+
+        await viewModel.moveNode(from: node, to: folderNode)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(folderNode.children.contains { $0.id == node.id })
+
+        await viewModel.duplicateFile(node: node)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(folderNode.children.count, 2)
+        guard let duplicateNode = folderNode.children.first(where: { $0.id != node.id }) else {
+            return XCTFail("duplicate node not found")
+        }
+
+        await viewModel.moveToTrash(node: duplicateNode)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(folderNode.children.map(\.id), [node.id])
+    }
 }

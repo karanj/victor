@@ -672,9 +672,16 @@ final class FileSystemService: @unchecked Sendable {
     }
 
     /// Move a file or folder to the trash
-    func moveToTrash(at url: URL) async throws {
+    /// - Returns: the URL the item landed at inside the Trash, when the system
+    ///   reports one (victor-und) - `SiteViewModel.moveToTrash(nodes:)` keeps
+    ///   this per-node so undo can move the item back via `FileManager.moveItem`.
+    ///   `nil` is possible (e.g. some removable/network volumes don't support
+    ///   `resultingItemURL`) - callers must degrade gracefully, not force-unwrap.
+    @discardableResult
+    func moveToTrash(at url: URL) async throws -> URL? {
         var trashedURL: NSURL?
         try FileManager.default.trashItem(at: url, resultingItemURL: &trashedURL)
+        return trashedURL as URL?
     }
 
     /// Reveal one or more files/folders in Finder as a single selection

@@ -33,6 +33,13 @@ struct ContentView: View {
     // Accessibility
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // victor-und: SwiftUI's undo manager is a view-layer environment value;
+    // SiteViewModel needs it at file-operation time (rename/move/duplicate/
+    // trash), so it's mirrored onto `siteViewModel.undoManager` below. Not
+    // per-keystroke state - the window's UndoManager instance only changes
+    // on window changes, not on typing.
+    @Environment(\.undoManager) private var undoManager
+
     // MARK: - Titlebar
 
     /// URL driving the titlebar proxy icon: the selected file, falling back to the
@@ -77,6 +84,10 @@ struct ContentView: View {
         }
         .onAppear {
             siteViewModel.setupHugoServerObservers()
+            siteViewModel.undoManager = undoManager
+        }
+        .onChange(of: undoManager) { _, newValue in
+            siteViewModel.undoManager = newValue
         }
         .background(
             WindowAccessor { newWindow in
