@@ -568,6 +568,240 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isFileModified(node.id))
     }
 
+    // MARK: - Rename Tests (victor-rnm)
+
+    func testRenameFileUpdatesNodeURLAndContentFileURL() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: fileURL, isDirectory: false)
+        node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "hello")
+        viewModel.fileNodes = [node]
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+
+        let expectedURL = tempDir.appendingPathComponent("renamed.md")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(node.url, expectedURL)
+        XCTAssertEqual(node.contentFile?.url, expectedURL,
+                       "contentFile.url must be updated too - saveAllModifiedFiles and EditorViewModel's auto-save debounce read it directly, not node.url")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: expectedURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    func testRenameDirectoryUpdatesDescendantURLs() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderURL = tempDir.appendingPathComponent("post-bundle")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let indexURL = folderURL.appendingPathComponent("index.md")
+        try "hello".write(to: indexURL, atomically: true, encoding: .utf8)
+        let imagesURL = folderURL.appendingPathComponent("images")
+        try FileManager.default.createDirectory(at: imagesURL, withIntermediateDirectories: true)
+        let coverURL = imagesURL.appendingPathComponent("cover.png")
+        try Data().write(to: coverURL)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+
+        let folderNode = FileNode(url: folderURL, isDirectory: true, isPageBundle: true)
+        let indexNode = FileNode(url: indexURL, isDirectory: false)
+        let imagesNode = FileNode(url: imagesURL, isDirectory: true)
+        let coverNode = FileNode(url: coverURL, isDirectory: false)
+        folderNode.addChild(indexNode)
+        folderNode.addChild(imagesNode)
+        imagesNode.addChild(coverNode)
+        viewModel.fileNodes = [folderNode]
+
+        await viewModel.renameFile(node: folderNode, to: "renamed-bundle")
+
+        let expectedFolderURL = tempDir.appendingPathComponent("renamed-bundle")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(folderNode.url, expectedFolderURL)
+        XCTAssertEqual(indexNode.url, expectedFolderURL.appendingPathComponent("index.md"),
+                       "descendant FileNode URLs must be rebuilt by prefix replacement after a directory rename")
+        XCTAssertEqual(imagesNode.url, expectedFolderURL.appendingPathComponent("images"))
+        XCTAssertEqual(coverNode.url, expectedFolderURL.appendingPathComponent("images/cover.png"),
+                       "grandchild URLs must update too, not just direct children")
+    }
+
+    func testRenamePreservesEditedContentKeyedByUUID() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "original".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: fileURL, isDirectory: false)
+        node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "original")
+        viewModel.fileNodes = [node]
+
+        viewModel.setEditedContent("unsaved edits", for: node.id)
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+
+        XCTAssertEqual(viewModel.getEditedContent(for: node.id), "unsaved edits",
+                       "editedContentByFile is keyed by UUID, not path - cached edits must survive a rename")
+    }
+
+    func testRenameSurvivesInRecentFiles() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: fileURL, isDirectory: false)
+        node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "hello")
+        viewModel.fileNodes = [node]
+        viewModel.addRecentFile(node)
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+
+        XCTAssertEqual(viewModel.recentFiles.first?.url, tempDir.appendingPathComponent("renamed.md"),
+                       "recentFiles stores the same FileNode instances, not path strings - a rename must be visible there too")
+    }
+
+    func testRenamePreservesSelectedNodeIdentityWithoutForcePoke() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: fileURL, isDirectory: false)
+        node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "hello")
+        viewModel.fileNodes = [node]
+        viewModel.selectedNode = node
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+
+        // Same object instance throughout - `url` was mutated in place, not
+        // swapped for a new node, so Observation propagates without needing
+        // the old selectedNode = nil; selectedNode = node poke.
+        XCTAssertTrue(viewModel.selectedNode === node)
+        XCTAssertEqual(viewModel.selectedNode?.url, tempDir.appendingPathComponent("renamed.md"))
+    }
+
+    func testRenameReSortsTopLevelSiblingsWhenNameOrderChanges() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let aURL = tempDir.appendingPathComponent("apple.md")
+        let zURL = tempDir.appendingPathComponent("zebra.md")
+        try "a".write(to: aURL, atomically: true, encoding: .utf8)
+        try "z".write(to: zURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let aNode = FileNode(url: aURL, isDirectory: false)
+        let zNode = FileNode(url: zURL, isDirectory: false)
+        viewModel.fileNodes = [aNode, zNode]
+
+        await viewModel.renameFile(node: aNode, to: "zzzz.md")
+
+        XCTAssertEqual(viewModel.fileNodes.map(\.name), ["zebra.md", "zzzz.md"],
+                       "top-level fileNodes must be re-sorted after a rename changes sort order")
+    }
+
+    func testRenameReSortsFolderChildrenWhenNameOrderChanges() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderURL = tempDir.appendingPathComponent("folder")
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let aURL = folderURL.appendingPathComponent("apple.md")
+        let zURL = folderURL.appendingPathComponent("zebra.md")
+        try "a".write(to: aURL, atomically: true, encoding: .utf8)
+        try "z".write(to: zURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let folderNode = FileNode(url: folderURL, isDirectory: true)
+        let aNode = FileNode(url: aURL, isDirectory: false)
+        let zNode = FileNode(url: zURL, isDirectory: false)
+        folderNode.addChild(aNode)
+        folderNode.addChild(zNode)
+        viewModel.fileNodes = [folderNode]
+
+        await viewModel.renameFile(node: aNode, to: "zzzz.md")
+
+        XCTAssertEqual(folderNode.children.map(\.name), ["zebra.md", "zzzz.md"],
+                       "a folder's children must be re-sorted after a rename changes sort order")
+    }
+
+    /// Highest-risk bug flagged in victor-rnm: a debounced auto-save scheduled
+    /// BEFORE the rename must not land at the OLD path once its debounce fires
+    /// AFTER the rename completes. Exercises the injected AutoSaveService seam
+    /// (victor-zw4) directly against AutoSaveService's own actor-tracked
+    /// debounce dictionary.
+    func testRenameCancelsPendingAutoSaveForOldPath() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "original".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        UserDefaults.standard.set(0.3, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        defer { UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) }
+
+        let autoSaveService = AutoSaveService()
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService(), autoSaveService: autoSaveService)
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: fileURL, isDirectory: false)
+        node.contentFile = ContentFile(url: fileURL, frontmatter: nil, markdownContent: "original")
+        viewModel.fileNodes = [node]
+
+        let saveLanded = expectation(description: "a pre-rename debounce must not fire after the rename")
+        saveLanded.isInverted = true
+
+        await autoSaveService.scheduleAutoSave(
+            fileURL: fileURL,
+            content: "content from a debounce scheduled before the rename",
+            lastModified: Date.distantPast,
+            onConflict: { .keepLocal },
+            onSuccess: { _ in saveLanded.fulfill() },
+            onError: { _ in }
+        )
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+
+        await fulfillment(of: [saveLanded], timeout: 0.6)
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: fileURL.path),
+            "renameFile must cancel the pending debounced auto-save for the OLD path before renaming, or the debounce recreates the file there once it fires"
+        )
+    }
+
     // MARK: - Close Site Tests
 
     func testCloseSite() {

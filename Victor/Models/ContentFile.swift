@@ -4,7 +4,11 @@ import Foundation
 @Observable
 class ContentFile: Identifiable, Hashable {
     let id: UUID
-    let url: URL
+    // `var`, not `let` (victor-rnm): SiteViewModel.renameFile updates this in
+    // place so every direct reader (saveAllModifiedFiles, EditorViewModel's
+    // auto-save debounce) sees the post-rename path instead of writing back
+    // to a path that no longer exists.
+    var url: URL
     var frontmatter: Frontmatter?
     var markdownContent: String
     var lastModified: Date

@@ -300,6 +300,14 @@ class SiteViewModel {
     /// `siteViewModel.hugoServerService` instead of `HugoServerService.shared`.
     let hugoServerService: HugoServerService
 
+    /// Auto-save service (victor-rnm): `renameFile` cancels any pending debounced
+    /// save for the node being renamed before touching disk, so a save already
+    /// in flight can't land after the move and recreate the file at the OLD
+    /// path. `private` - unlike `fileSystemService`/`hugoServerService`, nothing
+    /// outside this file needs to reach it; EditorViewModel/TextEditorViewModel
+    /// hold their own injected instances directly.
+    private let autoSaveService: AutoSaveService
+
     /// Specialized file manager (for Hugo config, data files, templates, archetypes)
     let specializedFileManager = SpecializedFileManager()
 
@@ -483,11 +491,13 @@ class SiteViewModel {
     /// constructor parameter - it's derived from `fileSystemService` so both stay in sync.
     init(
         fileSystemService: FileSystemService = .shared,
-        hugoServerService: HugoServerService = .shared
+        hugoServerService: HugoServerService = .shared,
+        autoSaveService: AutoSaveService = .shared
     ) {
         self.fileSystemService = fileSystemService
         self.fileOperationsService = FileOperationsService(fileSystemService: fileSystemService)
         self.hugoServerService = hugoServerService
+        self.autoSaveService = autoSaveService
 
         // Try to load previously opened site
         initialSiteRestoreTask = Task { [weak self] in
@@ -1362,20 +1372,85 @@ class SiteViewModel {
     func renameFile(node: FileNode, to newName: String) async {
         do {
             guard let siteRoot = site?.rootURL else { return }
+
+            // Cancel any pending debounced auto-save for this node - and, for a
+            // directory rename, every descendant file - BEFORE touching disk.
+            // Otherwise a save already in flight can fire after the move and
+            // recreate the file at the OLD path (the highest-risk bug in
+            // victor-rnm). This covers AutoSaveService's own actor-tracked
+            // debounce (`scheduleAutoSave`); EditorViewModel's per-keystroke
+            // debounce is a separate local Task not registered here, and is
+            // hardened independently by reading `contentFile.url` live at fire
+            // time rather than a schedule-time snapshot - see
+            // EditorViewModel.scheduleAutoSave.
+            for url in [node.url] + allDescendantURLs(of: node) {
+                await autoSaveService.cancelAutoSave(for: url)
+            }
+
             let newURL = try await fileOperationsService.renameFile(at: node.url, to: newName, siteRoot: siteRoot)
 
-            // Update the node's URL
+            // Update the node's URL and every model object that mirrors it.
             node.url = newURL
+            node.contentFile?.url = newURL
+            node.textFile?.url = newURL
 
-            // Clear selection if this was selected (will need to re-select)
-            if selectedNode?.id == node.id {
-                // Force UI update
-                selectedNode = nil
-                selectedNode = node
+            // `FileManager.moveItem` already relocated the whole subtree on disk
+            // for a directory rename, but each descendant FileNode's in-memory
+            // `url` still points at the OLD parent path - rebuild them all by
+            // prefix replacement.
+            if node.isDirectory {
+                updateDescendantURLs(of: node, newParentURL: newURL)
             }
+
+            // Keep sibling sort order correct - the name (and therefore sort
+            // position) may have changed.
+            if let parent = node.parent {
+                parent.sortChildren()
+            } else {
+                fileNodes.sort { lhs, rhs in
+                    if lhs.isDirectory != rhs.isDirectory {
+                        return lhs.isDirectory
+                    }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+            }
+            // Name changed, which affects search matching - invalidate regardless
+            // of where the node lived (matches duplicateFile/moveToTrash).
+            invalidateFilterCache()
+
+            // No selection force-poke needed: `node` is an `@Observable` class
+            // and `url` is a `var` mutated in place above, so Swift's
+            // Observation already invalidates every view that reads
+            // `selectedNode?.url`/`.name` (window title, breadcrumb, sidebar
+            // row) - `selectedNode` (when it's this node) is the same object
+            // instance throughout, not swapped for a copy. The old
+            // `selectedNode = nil; selectedNode = node` pair was redundant.
         } catch {
             errorMessage = "Failed to rename file: \(error.localizedDescription)"
             Logger.shared.error("Error renaming file", error: error)
+        }
+    }
+
+    /// Every descendant URL under `node`, for cancelling pending auto-saves
+    /// before a directory rename (see `renameFile`).
+    private func allDescendantURLs(of node: FileNode) -> [URL] {
+        node.children.flatMap { [$0.url] + allDescendantURLs(of: $0) }
+    }
+
+    /// Rebuild every descendant's `url` (and its `contentFile`/`textFile` mirror)
+    /// after a directory rename/move, by replacing the parent-path prefix.
+    private func updateDescendantURLs(of node: FileNode, newParentURL: URL) {
+        for child in node.children {
+            // Explicit isDirectory - avoids a per-child filesystem stat and
+            // keeps directory URLs slash-consistent (see FileSystemService.renameFile).
+            let childNewURL = newParentURL.appendingPathComponent(
+                child.url.lastPathComponent, isDirectory: child.isDirectory)
+            child.url = childNewURL
+            child.contentFile?.url = childNewURL
+            child.textFile?.url = childNewURL
+            if child.isDirectory {
+                updateDescendantURLs(of: child, newParentURL: childNewURL)
+            }
         }
     }
 

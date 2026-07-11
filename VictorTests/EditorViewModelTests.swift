@@ -915,4 +915,65 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertEqual(contentFile.markdownContent, modifiedContent,
                        "ContentFile model should be updated with saved content")
     }
+
+    /// victor-rnm regression: `scheduleAutoSave` used to snapshot `fileNode.url`
+    /// into a local at SCHEDULE time and never re-read it, so a rename that
+    /// completed while the debounce was still sleeping caused the eventual save
+    /// to recreate the file at the OLD (now-deleted) path instead of writing to
+    /// the renamed one - flagged as the highest-risk bug in the victor-rnm
+    /// ticket. Fixed by reading `contentFile.url` fresh at fire time, after the
+    /// sleep: SiteViewModel.renameFile mutates that in place (same object,
+    /// shared between the FileNode tree and this EditorViewModel).
+    func testAutoSaveWritesToRenamedPathWhenRenameLandsDuringDebounce() async throws {
+        UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+        UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        defer {
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EditorViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let originalURL = tempDir.appendingPathComponent("original.md")
+        try "original content".write(to: originalURL, atomically: true, encoding: .utf8)
+
+        let renameSiteViewModel = SiteViewModel(fileSystemService: FileSystemService())
+        renameSiteViewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: originalURL, isDirectory: false, isPageBundle: false)
+        let contentFile = ContentFile(url: originalURL, frontmatter: nil, markdownContent: "original content")
+        node.contentFile = contentFile
+        renameSiteViewModel.fileNodes = [node]
+        renameSiteViewModel.selectedNode = node
+
+        let editorVM = EditorViewModel(
+            fileNode: node,
+            contentFile: contentFile,
+            siteViewModel: renameSiteViewModel,
+            autoSaveService: AutoSaveService()
+        )
+        _ = editorVM // keep a strong reference to prevent deallocation
+
+        // Type a change - schedules the debounce while the file is still at its OLD path.
+        editorVM.editableContent = "edited content"
+        editorVM.handleContentChange()
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        // Rename lands WHILE the debounce is still sleeping (0.4s delay, we're 0.05s in).
+        await renameSiteViewModel.renameFile(node: node, to: "renamed.md")
+        let renamedURL = tempDir.appendingPathComponent("renamed.md")
+        XCTAssertEqual(node.url, renamedURL) // sanity check the rename itself worked
+
+        // Wait past the debounce for the save to fire.
+        try await Task.sleep(for: .seconds(1))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: originalURL.path),
+                       "the debounced auto-save must not recreate the file at the OLD path")
+        let renamedContent = try String(contentsOf: renamedURL, encoding: .utf8)
+        XCTAssertTrue(renamedContent.contains("edited content"),
+                      "the debounced auto-save must land at the NEW (renamed) path with the user's edit")
+    }
 }

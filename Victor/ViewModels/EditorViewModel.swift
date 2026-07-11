@@ -232,7 +232,6 @@ class EditorViewModel {
     /// no-op-after-dealloc contract `cleanup()` already documents.
     private func scheduleAutoSave() {
         let nodeID = fileNode.id
-        let nodeURL = fileNode.url
         let capturedContentFile = contentFile
         let capturedSiteViewModel = siteViewModel
         let service = autoSaveService
@@ -244,6 +243,14 @@ class EditorViewModel {
         autoSaveTask = Task {
             try? await Task.sleep(for: .seconds(AppSettings.currentAutoSaveDelay()))
             guard !Task.isCancelled else { return } // superseded by a newer keystroke
+
+            // Read the URL fresh, AFTER the sleep - NOT a value snapshotted at
+            // schedule time. SiteViewModel.renameFile mutates `contentFile.url`
+            // in place, so a rename that lands during this sleep is honored: the
+            // save targets the file's CURRENT path instead of recreating it at a
+            // path that no longer exists (victor-rnm hardening - flagged there as
+            // the highest-risk bug in that package).
+            let nodeURL = capturedContentFile.url
 
             // Build the full document ONCE, now, from LIVE state - not a snapshot
             // taken back when this debounce was scheduled.

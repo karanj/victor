@@ -7,6 +7,9 @@ struct FileListView: View {
     @Bindable var siteViewModel: SiteViewModel
 
     @State private var quickLookURL: URL?
+    /// Node targeted by the Return-key rename accelerator (context-menu rename
+    /// is handled per-row by FileRowWithSheets/FolderRowWithSheets instead).
+    @State private var renameTargetNode: FileNode?
 
     var body: some View {
         List(siteViewModel.filteredNodes, selection: $siteViewModel.selectedFileID) { node in
@@ -31,12 +34,8 @@ struct FileListView: View {
                 .tag(node.id)
             } else {
                 // Regular file row
-                FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
-                    .equatable()
+                FileRowWithSheets(node: node, siteViewModel: siteViewModel)
                     .tag(node.id)
-                    .contextMenu {
-                        FileContextMenu(node: node, siteViewModel: siteViewModel)
-                    }
             }
         }
         .listStyle(.sidebar)
@@ -54,7 +53,21 @@ struct FileListView: View {
             quickLookURL = node.url
             return .handled
         }
+        // Finder-familiar Return-to-rename accelerator. Only fires when the
+        // List itself holds key focus - the sidebar's search TextField
+        // (SearchBar, a sibling of FileListView in SidebarView, not a
+        // descendant of this List) keeps its own normal Return behavior
+        // because .onKeyPress here never sees key events delivered to a
+        // separately-focused text field elsewhere in the view tree.
+        .onKeyPress(.return) {
+            guard let node = siteViewModel.selectedNode else { return .ignored }
+            renameTargetNode = node
+            return .handled
+        }
         .quickLookPreview($quickLookURL)
+        .sheet(item: $renameTargetNode) { node in
+            RenameSheet(node: node, siteViewModel: siteViewModel)
+        }
     }
 }
 
@@ -84,12 +97,8 @@ struct FileTreeRow: View {
             }
             .tag(node.id)
         } else {
-            FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
-                .equatable()
+            FileRowWithSheets(node: node, siteViewModel: siteViewModel)
                 .tag(node.id)
-                .contextMenu {
-                    FileContextMenu(node: node, siteViewModel: siteViewModel)
-                }
         }
     }
 
@@ -349,6 +358,7 @@ struct FolderContextMenu: View {
     @Binding var showNewDataFileSheet: Bool
     @Binding var showNewTranslationSheet: Bool
     @Binding var showNewArchetypeSheet: Bool
+    @Binding var showRenameSheet: Bool
 
     /// Check if this folder is within content/ directory
     private var isInContentDirectory: Bool {
@@ -449,6 +459,12 @@ struct FolderContextMenu: View {
 
         // File operations
         Button {
+            showRenameSheet = true
+        } label: {
+            Label("Rename…", systemImage: "pencil")
+        }
+
+        Button {
             siteViewModel.revealInFinder(node: node)
         } label: {
             Label("Reveal in Finder", systemImage: "folder")
@@ -471,6 +487,7 @@ struct FolderRowWithSheets: View {
     @State private var showNewDataFileSheet = false
     @State private var showNewTranslationSheet = false
     @State private var showNewArchetypeSheet = false
+    @State private var showRenameSheet = false
     @State private var isDropTargeted = false
 
     var body: some View {
@@ -505,8 +522,12 @@ struct FolderRowWithSheets: View {
                     showNewContentSheet: $showNewContentSheet,
                     showNewDataFileSheet: $showNewDataFileSheet,
                     showNewTranslationSheet: $showNewTranslationSheet,
-                    showNewArchetypeSheet: $showNewArchetypeSheet
+                    showNewArchetypeSheet: $showNewArchetypeSheet,
+                    showRenameSheet: $showRenameSheet
                 )
+            }
+            .sheet(isPresented: $showRenameSheet) {
+                RenameSheet(node: node, siteViewModel: siteViewModel)
             }
             .sheet(isPresented: $showNewContentSheet) {
                 if let siteURL = siteViewModel.site?.rootURL {
@@ -575,10 +596,12 @@ struct FolderRowWithSheets: View {
     }
 }
 
-/// Context menu for file nodes
+/// Context menu for file nodes - returns menu items only, sheet is handled by
+/// the FileRowWithSheets wrapper (mirrors FolderContextMenu/FolderRowWithSheets)
 struct FileContextMenu: View {
     let node: FileNode
     let siteViewModel: SiteViewModel
+    @Binding var showRenameSheet: Bool
 
     var body: some View {
         // Open
@@ -597,6 +620,12 @@ struct FileContextMenu: View {
             }
         } label: {
             Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+
+        Button {
+            showRenameSheet = true
+        } label: {
+            Label("Rename…", systemImage: "pencil")
         }
 
         Divider()
@@ -622,6 +651,27 @@ struct FileContextMenu: View {
         } label: {
             Label("Copy Path", systemImage: "doc.on.clipboard")
         }
+    }
+}
+
+/// Wrapper view that handles a (non-directory) file row with its context menu
+/// and rename sheet - mirrors FolderRowWithSheets so files and folders share
+/// the same sheet-presentation pattern instead of inventing a second one.
+struct FileRowWithSheets: View {
+    let node: FileNode
+    let siteViewModel: SiteViewModel
+
+    @State private var showRenameSheet = false
+
+    var body: some View {
+        FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
+            .equatable()
+            .contextMenu {
+                FileContextMenu(node: node, siteViewModel: siteViewModel, showRenameSheet: $showRenameSheet)
+            }
+            .sheet(isPresented: $showRenameSheet) {
+                RenameSheet(node: node, siteViewModel: siteViewModel)
+            }
     }
 }
 

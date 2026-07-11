@@ -4,7 +4,10 @@ import Foundation
 @Observable
 class TextFile: Identifiable, Hashable {
     let id: UUID
-    let url: URL
+    // `var`, not `let` (victor-rnm): SiteViewModel.renameFile updates this in
+    // place so direct readers (saveAllModifiedFiles, TextEditorPanel,
+    // TextEditorViewModel.save) see the post-rename path.
+    var url: URL
     let fileType: FileType
     var content: String
     var originalContent: String  // For change detection

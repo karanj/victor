@@ -464,7 +464,16 @@ final class FileSystemService: @unchecked Sendable {
             throw FileError.accessDenied
         }
 
-        let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+        // Explicit isDirectory, determined by statting the SOURCE (which still
+        // exists) - the destination doesn't exist yet, so without the hint
+        // Foundation would stat it, miss, and produce a slash-less URL for a
+        // directory rename; and the source URL's own form can't be trusted
+        // either (callers may hold slash-less directory URLs). A slash-less
+        // result mismatches every URL built after the move (victor-rnm).
+        var sourceIsDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: url.path, isDirectory: &sourceIsDirectory)
+        let newURL = url.deletingLastPathComponent()
+            .appendingPathComponent(newName, isDirectory: sourceIsDirectory.boolValue)
 
         // Validate the new path stays within site boundaries
         try validatePathWithinSite(newURL, siteRoot: siteRoot)
