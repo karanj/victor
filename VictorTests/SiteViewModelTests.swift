@@ -2646,4 +2646,161 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertEqual(folderNode.children.map(\.id), [node.id])
     }
+
+    // MARK: - Undo/Redo Re-entrancy Tests (victor-und, program-review D.R finding)
+    //
+    // UndoManager treats an undo/redo action as "complete" the instant its
+    // synchronous handler returns - canUndo/canRedo and the Edit menu
+    // re-enable immediately, even though the actual file operation is still
+    // an in-flight async Task (see `SiteViewModel.lastFileOpUndoTask`'s doc
+    // comment). These tests fire undo()/redo() back-to-back with NO settle
+    // wait in between - exactly the rapid-mash window that would otherwise
+    // run two inverse operations concurrently - then settle ONCE at the end
+    // via `waitUntilUndoSettled` and assert the final state is coherent.
+
+    func testRapidUndoRedoRenameSettlesToRedoneState() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let node = FileNode(url: fileURL, isDirectory: false)
+        viewModel.fileNodes = [node]
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+        let renamedURL = tempDir.appendingPathComponent("renamed.md")
+        XCTAssertEqual(node.url, renamedURL)
+
+        // No settle wait between these two - the second call's handler fires
+        // while the first's inverse rename is still in flight (or hasn't
+        // even started). Without the FIFO queue, this races two concurrent
+        // `renameFile` calls against the same node/path.
+        undoManager.undo()
+        undoManager.redo()
+
+        try await waitUntilUndoSettled { node.url == renamedURL }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: renamedURL.path), "must settle to the redone (renamed) state")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path), "the original path must not still exist - no split-brain disk state")
+    }
+
+    func testRapidDoubleUndoRenameNoOpsSafelyOnEmptyStack() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fileURL = tempDir.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let node = FileNode(url: fileURL, isDirectory: false)
+        viewModel.fileNodes = [node]
+
+        await viewModel.renameFile(node: node, to: "renamed.md")
+        let renamedURL = tempDir.appendingPathComponent("renamed.md")
+        XCTAssertTrue(undoManager.canUndo)
+
+        // Double-tap undo with only one undo action ever registered - the
+        // second call finds an empty undo stack (UndoManager's own
+        // canUndo-gating no-ops it) and must not crash or corrupt state.
+        undoManager.undo()
+        undoManager.undo()
+
+        try await waitUntilUndoSettled { node.url == fileURL }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: renamedURL.path))
+        XCTAssertTrue(undoManager.canRedo, "the single undo must still have registered exactly one redo action, not zero or two")
+    }
+
+    func testRapidUndoRedoMoveSettlesToRedoneState() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let folderAURL = tempDir.appendingPathComponent("folderA")
+        let folderBURL = tempDir.appendingPathComponent("folderB")
+        try FileManager.default.createDirectory(at: folderAURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folderBURL, withIntermediateDirectories: true)
+        let fileURL = folderAURL.appendingPathComponent("post.md")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let folderANode = FileNode(url: folderAURL, isDirectory: true)
+        let folderBNode = FileNode(url: folderBURL, isDirectory: true)
+        let fileNode = FileNode(url: fileURL, isDirectory: false)
+        folderANode.addChild(fileNode)
+        viewModel.fileNodes = [folderANode, folderBNode]
+
+        await viewModel.moveNode(from: fileNode, to: folderBNode)
+        let movedURL = folderBURL.appendingPathComponent("post.md")
+        XCTAssertEqual(fileNode.url, movedURL)
+
+        // No settle wait between these two - same re-entrancy window as the
+        // rename test above, but exercising the tree-reparenting path
+        // (`parent.children` mutation) rather than just node.url/disk.
+        undoManager.undo()
+        undoManager.redo()
+
+        try await waitUntilUndoSettled { fileNode.parent?.id == folderBNode.id }
+        XCTAssertEqual(fileNode.url, movedURL, "must settle to the redone (moved) state")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: movedURL.path))
+        XCTAssertFalse(folderANode.children.contains { $0.id == fileNode.id }, "must not be reparented into both folders - no split-brain tree state")
+        XCTAssertTrue(folderBNode.children.contains { $0.id == fileNode.id })
+    }
+
+    /// Trash chain rapid undo→redo→undo (three ping-pong steps, no settle
+    /// wait between any of them) - this is the specific case program review
+    /// flagged: a synchronous `switch box.state` read at handler-fire time
+    /// would see a STALE generation here, since none of the three inverse
+    /// operations have had a chance to run (let alone finish and update the
+    /// box) by the time all three handlers have fired. Asserts the box
+    /// settles to a single coherent generation - exactly one node, not
+    /// duplicated or lost across the three steps.
+    func testRapidTrashChainUndoRedoUndoSettlesCoherently() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let urlA = tempDir.appendingPathComponent("a.md")
+        try "a".write(to: urlA, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        viewModel.site = await HugoSite.create(rootURL: tempDir)
+        let undoManager = UndoManager()
+        viewModel.undoManager = undoManager
+        let nodeA = FileNode(url: urlA, isDirectory: false)
+        viewModel.fileNodes = [nodeA]
+
+        await viewModel.moveToTrash(node: nodeA)
+        XCTAssertTrue(viewModel.fileNodes.isEmpty)
+
+        // undo (restore) -> redo (re-trash) -> undo (restore) again, all
+        // fired before any of the three inverse operations has settled.
+        undoManager.undo()
+        undoManager.redo()
+        undoManager.undo()
+
+        try await waitUntilUndoSettled { !viewModel.fileNodes.isEmpty }
+        XCTAssertEqual(viewModel.fileNodes.count, 1, "must not duplicate or lose the node across the three rapid ping-pong steps")
+        XCTAssertTrue(viewModel.fileNodes.first === nodeA, "must be the same FileNode instance throughout, not a stray rebuilt copy")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: urlA.path), "must be restored on disk at its original path")
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(undoManager.canRedo, "net three steps from one undo action land on redo (re-trash) being next")
+        XCTAssertFalse(undoManager.canUndo)
+    }
 }

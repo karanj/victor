@@ -1603,6 +1603,39 @@ class SiteViewModel {
         undoManager.setActionName(actionName)
     }
 
+    /// FIFO tail of every inverse-operation `Task` spawned by the four
+    /// undo/redo chains below (victor-und, program-review D.R finding).
+    ///
+    /// `UndoManager` considers an undo/redo action "complete" the instant its
+    /// (synchronous) `registerUndo` handler returns - `canUndo`/`canRedo`
+    /// and the Edit menu re-enable immediately, even though the actual file
+    /// operation is still an in-flight `async Task`. A rapid second
+    /// Cmd-Z/Cmd-Shift-Z before that `Task` finishes would, with a bare
+    /// `Task { }` per handler, spawn a SECOND concurrent `Task` mutating the
+    /// same `fileNodes`/`parent.children` - and, for the trash chain,
+    /// racing reads/writes of `TrashRecordBox.state` - the exact
+    /// unsynchronized-concurrent-mutation class `moveToTrash(nodes:)`'s own
+    /// doc comment says this codebase avoids elsewhere. Every enqueued
+    /// closure awaits `previous.value` before running its own work, so the
+    /// chain executes strictly in the order the user triggered it,
+    /// regardless of how fast they mash undo/redo. Shared across all four
+    /// op types (rename/move/duplicate/trash) rather than one queue per
+    /// chain - simpler, and correctness doesn't need per-chain parallelism.
+    private var lastFileOpUndoTask: Task<Void, Never>?
+
+    /// Enqueues `work` behind whatever's currently in flight on
+    /// `lastFileOpUndoTask` (see its doc comment). Every `Task` spawned by
+    /// the four undo/redo chains below must go through this, not a bare
+    /// `Task { }`, or rapid undo/redo re-entrancy can run two inverse
+    /// operations concurrently.
+    private func enqueueFileOpUndoWork(_ work: @escaping () async -> Void) {
+        let previous = lastFileOpUndoTask
+        lastFileOpUndoTask = Task { @MainActor in
+            await previous?.value
+            await work()
+        }
+    }
+
     /// Registers the "Rename" undo/redo action pair for the node identified
     /// by `nodeID` (victor-und). `oldName`/`newName` are a fixed pair
     /// determined once, at the very first rename - every subsequent
@@ -1618,7 +1651,11 @@ class SiteViewModel {
     private func registerRenameUndo(nodeID: UUID, from oldName: String, to newName: String) {
         registerFileOpUndo("Rename") { target in
             target.registerRenameUndo(nodeID: nodeID, from: newName, to: oldName)
-            Task { @MainActor in
+            // Enqueued (not a bare Task) - see `enqueueFileOpUndoWork`'s doc
+            // comment: rapid undo/redo must not run two renames concurrently.
+            // `findNode` is read inside the closure, so it resolves the
+            // node's state as of this step's actual turn in the FIFO queue.
+            target.enqueueFileOpUndoWork {
                 guard let node = target.findNode(id: nodeID) else {
                     target.errorMessage = "Can't undo rename: the file no longer exists."
                     return
@@ -1840,7 +1877,11 @@ class SiteViewModel {
     private func registerMoveUndo(nodeID: UUID, from oldParentID: UUID, to newParentID: UUID) {
         registerFileOpUndo("Move") { target in
             target.registerMoveUndo(nodeID: nodeID, from: newParentID, to: oldParentID)
-            Task { @MainActor in
+            // Enqueued (not a bare Task) - see `enqueueFileOpUndoWork`'s doc
+            // comment: rapid undo/redo must not run two moves concurrently.
+            // Both `findNode` calls are read inside the closure, so they
+            // resolve state as of this step's actual turn in the FIFO queue.
+            target.enqueueFileOpUndoWork {
                 guard let node = target.findNode(id: nodeID) else {
                     target.errorMessage = "Can't undo move: the file no longer exists."
                     return
@@ -2018,15 +2059,25 @@ class SiteViewModel {
     /// chain closes over the SAME box: each re-trash produces a NEW trashed
     /// URL per node (macOS uniquifies Trash filenames on collision), so the
     /// state the NEXT chain step needs is only known once the CURRENT
-    /// step's async `Task` finishes - but per `registerFileOpUndo`'s doc
+    /// step's async work finishes - but per `registerFileOpUndo`'s doc
     /// comment, the next step has to be *registered* synchronously, before
-    /// that `Task` even starts. The box resolves the conflict: the
-    /// synchronous registration closes over the box reference (not a
-    /// snapshot of its contents), and reads `box.state` only when it
-    /// actually FIRES - by which point the previous step's `Task` has
-    /// necessarily already finished and written its result here (a user
-    /// can't trigger the next undo/redo step before the current one's
-    /// visible result has settled).
+    /// that work even starts.
+    ///
+    /// Read-time invariant (victor-und, program-review D.R finding):
+    /// `box.state` must be read INSIDE the closure passed to
+    /// `enqueueFileOpUndoWork` in `registerTrashChainUndo` - i.e. when the
+    /// FIFO queue actually RUNS this step - never synchronously at
+    /// handler-fire time. A rapid Cmd-Z/Cmd-Shift-Z ping-pong fires the next
+    /// handler before the previous step's enqueued work has necessarily
+    /// finished (`UndoManager` re-enables canUndo/canRedo the instant the
+    /// synchronous handler returns, not when the async work completes), so
+    /// a handler-time read of `box.state` can observe a stale generation.
+    /// The FIFO ordering from `enqueueFileOpUndoWork` is what makes a
+    /// run-time read correct: this step's enqueued closure never starts
+    /// until every previously-queued closure - including the one that last
+    /// wrote `box.state` - has fully finished, so by the time this closure's
+    /// `switch box.state` actually runs, it's reading the true current
+    /// generation, however fast the user mashed undo/redo to get here.
     private final class TrashRecordBox {
         var state: TrashChainState
         init(state: TrashChainState) { self.state = state }
@@ -2157,29 +2208,41 @@ class SiteViewModel {
     ///
     /// Self-recursive rather than two separate "trash direction"/"restore
     /// direction" functions: `box.state` IS the single source of truth for
-    /// which direction this firing should go, read fresh every time the
-    /// handler actually fires (not baked in at registration time - see
-    /// `TrashRecordBox`'s doc comment). Each firing, synchronously, BEFORE
-    /// spawning the `Task` that does the actual (async) trash-or-restore
-    /// work: re-registers this SAME function against the SAME box. That
-    /// re-registration is what lands on the correct undo/redo stack (see
-    /// `registerFileOpUndo`'s doc comment for why it must happen
-    /// synchronously) - and the next time IT fires, it'll read `box.state`
-    /// fresh again, by then updated by this firing's `Task`.
+    /// which direction this firing should go. Registration (the
+    /// synchronous, stack-routing half) happens at handler-fire time, as it
+    /// must; but READING `box.state` to decide trash-vs-restore happens
+    /// inside the closure handed to `enqueueFileOpUndoWork`, i.e. only once
+    /// this step reaches the front of the FIFO queue - not synchronously in
+    /// the handler. See `TrashRecordBox`'s "Read-time invariant" doc comment
+    /// for why that distinction is load-bearing under rapid undo/redo
+    /// re-entrancy (program-review D.R finding), and
+    /// `enqueueFileOpUndoWork`'s doc comment for the queue itself.
+    ///
+    /// Each firing, synchronously, BEFORE enqueueing the work that does the
+    /// actual (async) trash-or-restore: re-registers this SAME function
+    /// against the SAME box. That re-registration is what lands on the
+    /// correct undo/redo stack (see `registerFileOpUndo`'s doc comment for
+    /// why it must happen synchronously) - and the next time IT fires, its
+    /// own enqueued closure will read `box.state` fresh again, by then
+    /// updated by this step's enqueued work (guaranteed complete first by
+    /// FIFO ordering, however fast the re-registration itself happened).
     private func registerTrashChainUndo(box: TrashRecordBox, actionName: String) {
         registerFileOpUndo(actionName) { target in
             target.registerTrashChainUndo(box: box, actionName: actionName)
-            switch box.state {
-            case .inTree(let nodes):
-                Task { @MainActor in
+            // Enqueued (not a bare Task, and the `switch` moved INSIDE the
+            // closure rather than evaluated synchronously here) - see
+            // `TrashRecordBox`'s "Read-time invariant" doc comment for why:
+            // a synchronous read here could observe a stale generation
+            // under rapid undo/redo.
+            target.enqueueFileOpUndoWork {
+                switch box.state {
+                case .inTree(let nodes):
                     let result = await target.performTrash(nodes: nodes)
                     box.state = .trashed(result.records)
                     if let firstError = result.errors.first {
                         target.errorMessage = "Failed to move to trash: \(firstError.localizedDescription)"
                     }
-                }
-            case .trashed(let records):
-                Task { @MainActor in
+                case .trashed(let records):
                     let result = await target.performRestore(records: records)
                     box.state = .inTree(result.restored)
                     if let firstError = result.errors.first {
