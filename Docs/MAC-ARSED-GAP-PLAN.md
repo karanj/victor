@@ -106,3 +106,46 @@ changes.
 A (1.5d) → B (2d) → C (1d) → D (1d) ≈ 5.5d serial; A.2∥A.3 and nothing else
 parallelizes (B and C intentionally serialize on the same files). C depends
 on A.3 + B.4's fixup helpers; D.1 depends on B's new surfaces existing.
+
+---
+
+## Execution log (program complete, 2026-07-12)
+
+| Commit | WP | Suite |
+|---|---|---|
+| c8c61ef | Kickoff: audit, tickets, tracker restructure | — |
+| 6951c58 | A.2 victor-spl: Edit-menu text services + spell-check settings | 521/521 |
+| e9eac1b | A.3 victor-rnm: rename UI + model hardening | 521/521 |
+| 4927a66 | B.3 victor-sel 1/2: Set selection, batch trash, Cmd+C | 539/539 |
+| 643c823 | B.4 victor-sel 2/2: drag out + drag-to-move | 553/553 |
+| 4f8eed1 | C.1 victor-und: undo/redo for file operations | 559/559 |
+| 0adc8e1 | D.1 victor-3l6: VoiceOver audit, ~140 fixes + audit doc | 559/559 |
+| 44eba4c | D.R fix 1/2: FIFO-serialized undo inverse Tasks | 563/563 |
+| 88854b1 | D.R fix 2/2: nodeID-keyed cancel-and-await auto-save | 570/570 |
+
+Review verdict: ship-with-fixes → both findings fixed and re-gated.
+Orchestrator interventions along the way: A.1 decided path B analytically;
+B.2's memo self-contradiction resolved by the canonical-path-owns-side-
+effects addendum; two trivial compile/access fixes; two vacuous test
+fixtures corrected.
+
+## Rubric re-score (post-program)
+
+| Category | Before | After | Why |
+|---|---|---|---|
+| Text handling | 2 | 3 | System Edit-menu services restored; spell-check settings |
+| Selection | 1 | 3 | Multi-select, Delete, right-click-on-set, lead model |
+| Copy/paste | 1 | 2 | Multi-format file copy; no rich-content representations yet |
+| Drag/drop | 2 | 3 | Drag out, drag-to-move; single-provider drag-out ceiling documented |
+| Accessibility | 1 | 2 | ~140 fixes; 2 pending human VoiceOver pass (checklist in audit doc) |
+| Undo (feeds craft/windows rows) | — | — | Named undo for all four file ops |
+
+Estimated total: **~25 → ~31/36** ("solid" ceiling; the "strong Mac app"
+band at 32+ is reachable via the human VoiceOver pass plus the editor
+track's state restoration (victor-trs/csr) and quick open (victor-qop)).
+
+Remaining human verification (cannot be exercised headless): the Phase B
+gate's gesture smoke list (forSelectionType on tree rows, drag out/move,
+Cmd+C into Finder), the 9-item VoiceOver checklist in
+ACCESSIBILITY-AUDIT-2026-07.md, and Edit-menu spelling toggles in a live
+session.

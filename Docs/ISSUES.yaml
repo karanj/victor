@@ -1,5 +1,5 @@
 # Victor Issue Tracker
-# Last updated: 2026-07-11
+# Last updated: 2026-07-12
 #
 # Schema: id, title, status (open|blocked|wont-do), priority (P0-P4),
 #         type (epic|task|feature|bug), blocked_by, blocks, files, detail
@@ -461,22 +461,6 @@ issues:
       Load Hugo theme CSS for accurate preview. Known blocker: most themes use
       SCSS requiring Hugo's Sass compiler. Only practical via Hugo Server pipe.
 
-  # ── Accessibility ─────────────────────────────────────────────
-
-  - id: victor-3l6
-    title: "VoiceOver audit and improvements"
-    status: open
-    priority: P3
-    type: task
-    files: [All view files]
-    detail: >
-      Labels/hints on remaining controls, navigation hints for complex views,
-      accessibility traits, keyboard nav, screen reader announcements.
-      Icon-only buttons already done (victor-0qe).
-      2026-07-11: bumped P4 -> P3 and pulled into the Mac-arsed gap-closure
-      plan (MAC-ARSED-GAP-PLAN.md Phase D) - the skill audit scores
-      accessibility as one of Victor's three weakest rubric categories, and
-      G3's new selection surfaces need VoiceOver treatment anyway.
 
   # ── Mac Polish (design: MAC-POLISH-DESIGN.md; plan: MAC-POLISH-IMPLEMENTATION-PLAN.md) ──
 
@@ -502,107 +486,38 @@ issues:
       rect, no hardware chrome). External design task; wire into asset
       catalog when delivered.
 
-  # ── Mac-arsed gap closure (2026-07-11 skill audit; plan: MAC-ARSED-GAP-PLAN.md) ──
+  # ── Mac-arsed follow-ups (program executed 2026-07-12; log in MAC-ARSED-GAP-PLAN.md) ──
 
-  - id: victor-spl
-    title: "G1: Edit menu lost system text services; no spell checking"
+  - id: victor-mvf
+    title: "Move to Folder... menu command (accessible path for drag-to-move)"
     status: open
-    priority: P2
-    type: bug
-    files:
-      - Victor/VictorApp.swift
-      - Victor/Views/Editor/EditorTextView.swift
-      - Victor/Models/AppSettings.swift
-      - Victor/Views/Preferences/PreferencesView.swift
-    detail: >
-      CommandGroup(replacing: .textEditing) in VictorApp.swift installs the
-      Find commands but that placement is also where macOS puts Spelling and
-      Grammar, Substitutions, Transformations, and Speech - replacing it
-      removed all of them from the Edit menu. Compounding: EditorTextView
-      never sets isContinuousSpellCheckingEnabled, so a prose-writing CMS
-      ships with spell checking off and no menu to enable it. Fix: prototype
-      whether the default .textEditing group's Find items route to the
-      NSTextView find bar via responder chain (if yes, delete the replacement
-      and add only Find in Files via CommandGroup(after:)); if not, keep the
-      replacement and re-add the four system submenus via responder-chain
-      selectors (extend the FindPanelHelper pattern). Either way: new
-      AppSettings.checkSpellingWhileTyping (default true) driving
-      isContinuousSpellCheckingEnabled, surfaced as menu toggle + Preferences
-      checkbox. Smart quotes/dashes stay off (deliberate, markdown).
-
-  - id: victor-rnm
-    title: "G2: No rename UI - renameFile exists in SiteViewModel but nothing calls it"
-    status: open
-    priority: P2
+    priority: P4
     type: feature
     files:
       - Victor/Views/MainWindow/FileListView.swift
       - Victor/ViewModels/SiteViewModel.swift
     detail: >
-      SiteViewModel.renameFile(node:to:) is fully plumbed through
-      FileOperationsService but has zero UI call sites - no context-menu
-      Rename, no Return-to-rename. Add "Rename..." to FileContextMenu with a
-      validation sheet (reuse the FolderRowWithSheets sheet pattern), plus
-      Return key on the focused sidebar row as the Finder-familiar
-      accelerator. Must verify post-rename state: editedContentByFile keys,
-      recentFiles paths, open editor content, frontmatter panel binding.
-      renameFile's current selectedNode nil-then-set force-update is a smell
-      to clean up while here.
+      From the 2026-07 accessibility audit: drag-to-move (victor-sel B.4) has
+      no menu equivalent, so keyboard/VoiceOver users cannot move files
+      between folders at all. Add "Move to Folder..." to SelectionContextMenu
+      (and optionally the File menu) presenting a folder picker, routed
+      through the existing SiteViewModel.moveNode (which already carries
+      undo). See Docs/ACCESSIBILITY-AUDIT-2026-07.md.
 
-  - id: victor-sel
-    title: "G3: Sidebar selection model - multi-select, Delete key, Cmd+C, drag out"
+  - id: victor-a2x
+    title: "Accessibility audit leftovers (5 recommended-not-fixed items)"
     status: open
-    priority: P3
-    type: feature
-    blocked_by: [victor-rnm]
-    files:
-      - Victor/Views/MainWindow/FileListView.swift
-      - Victor/Views/MainWindow/SidebarView.swift
-      - Victor/ViewModels/SiteViewModel.swift
-      - Victor/Views/AssetBrowser/AssetBrowserView.swift
+    priority: P4
+    type: task
+    files: [Docs/ACCESSIBILITY-AUDIT-2026-07.md]
     detail: >
-      Sidebar List is single-select (selectedFileID: UUID?) with per-row
-      .contextMenu, so: no Shift/Cmd-click, right-click cannot act on a
-      selection set, Delete key does nothing, Cmd+C puts nothing on the
-      pasteboard (copy is context-menu "Copy Path" only), and rows are not
-      drag sources (drops in only - asset browser is the only drag-out).
-      Scope: (a) List selection becomes Set<UUID> with a derived single
-      "lead" selection driving the editor; (b) migrate to
-      .contextMenu(forSelectionType: UUID.self) so right-click acts on the
-      full selection; (c) onDeleteCommand -> moveToTrash over the selection;
-      (d) Cmd+C via onCopyCommand putting file URLs (multi-format: fileURL +
-      path string) on the pasteboard; (e) rows draggable out via the
-      NSItemProvider(contentsOf:) pattern extracted from
-      AssetBrowserView.assetDragItemProvider into a shared helper (DRY);
-      (f) drag-to-move between sidebar folders with a real FileSystemService
-      move. Excluded with rationale: type-to-select (SwiftUI List does not
-      support it; would require NSOutlineView - not worth the substrate swap).
-      Blocked by victor-rnm only to sequence FileListView churn, not a hard
-      dependency.
-
-  - id: victor-und
-    title: "G4: Undo for file operations (rename, duplicate, trash, move)"
-    status: open
-    priority: P3
-    type: feature
-    blocked_by: [victor-rnm, victor-sel]
-    files:
-      - Victor/ViewModels/SiteViewModel.swift
-      - Victor/Services/FileSystemService.swift
-      - Victor/Services/FileOperationsService.swift
-    detail: >
-      No UndoManager use outside NSTextView typing. Skill rule: named undo
-      actions ("Undo Rename", "Undo Move to Trash") preferred over
-      confirmation dialogs. Groundwork already exists:
-      FileSystemService.moveToTrash calls trashItem(resultingItemURL:) and
-      discards the trashed URL - return it up the chain so undo can move the
-      item back. Register inverse operations on the window's UndoManager
-      (@Environment(\.undoManager) threaded into the file-operation call
-      sites) with setActionName for each op: rename<->rename back,
-      duplicate<->trash the copy, trash<->put back from trashed URL,
-      move<->move back. Excluded with rationale: frontmatter form-level undo
-      (fields already get NSTextField-local text undo; whole-form undo is a
-      separate design problem).
+      The 2026-07 VoiceOver audit fixed ~140 mechanical items; five need
+      structural changes or UX judgment: DataValueEditor's unlabeled boolean
+      toggle (needs an init param), TemplateBrowserView partial-count and
+      TranslationEditorView column headers (low-confidence, verify with VO),
+      build-error-pill live announcement (deliberate no-auto-interrupt
+      behavior - decide), and the human VoiceOver pass checklist (9 items)
+      in the audit doc.
 
   # ── Code Health (from 2026-07-03 critical analysis) ───────────
   # Significant findings from this pass were fixed directly (see

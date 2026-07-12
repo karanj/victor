@@ -188,11 +188,11 @@ Models use `@Observable class` pattern by design. Evaluation of struct alternati
 
 ## Outstanding Work
 
-Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, ~43 open/blocked tickets). Done tickets are removed on close (2026-07-11 policy); history lives in git log. Key areas:
-- **Active program**: Mac-arsed gap closure — audit findings and phased plan in `Docs/MAC-ARSED-GAP-PLAN.md` (Edit-menu text services victor-spl, rename UI victor-rnm, sidebar selection model victor-sel, file-op undo victor-und, VoiceOver victor-3l6). The predecessor Mac polish + modernisation program (`Docs/MAC-POLISH-DESIGN.md` + `MAC-POLISH-IMPLEMENTATION-PLAN.md`) shipped Phases 0–3 (2026-07-04/05: window chrome, menus, documents, drag&drop, Quick Look, notifications, appearance, keyboard, Swift 6); only victor-mbe/victor-icn remain from it
-- **P2**: editor track (cursor-jump bug victor-cjp, line numbers, tab bar → session restore, breadcrumbs, quick open), FSEvents file watching (9 tickets, dependency chain), Edit-menu regression victor-spl, rename victor-rnm
-- **P3**: sidebar selection victor-sel, undo victor-und, VoiceOver victor-3l6, Git integration (6 tickets), Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), App Sandbox (victor-sbx)
-- **P4**: code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), menu bar extra (victor-mbe)
+Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, ~40 open/blocked tickets). Done tickets are removed on close (2026-07-11 policy); history lives in git log. Key areas:
+- **Recently completed**: Mac-arsed gap closure program, executed 2026-07-11/12 (commits c8c61ef..88854b1) — Edit-menu text services, rename UI, multi-select sidebar with drag out/move, file-op undo/redo, VoiceOver sweep. Execution log + rubric re-score (~25 → ~31/36) in `Docs/MAC-ARSED-GAP-PLAN.md`; selection design in `Docs/SELECTION-MODEL-MEMO.md`; pending human verification lists in both plan doc and `Docs/ACCESSIBILITY-AUDIT-2026-07.md`. The predecessor Mac polish + modernisation program shipped Phases 0–3 earlier the same week; only victor-mbe/victor-icn remain from it
+- **P2**: editor track (cursor-jump bug victor-cjp, line numbers, tab bar → session restore, breadcrumbs, quick open), FSEvents file watching (9 tickets, dependency chain)
+- **P3**: Git integration (6 tickets), Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), App Sandbox (victor-sbx)
+- **P4**: Mac-arsed follow-ups (Move to Folder… command victor-mvf, accessibility leftovers victor-a2x), code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), menu bar extra (victor-mbe)
 
 To find work ready to start: look for `status: open` (no blockers). `status: blocked` tickets list their `blocked_by` dependencies.
 
@@ -203,7 +203,9 @@ To find work ready to start: look for `status: open` (no blockers). `status: blo
 - `Docs/CODE-ANALYSIS-2026-07-03.md` - Critical analysis session: 10 fixes (data loss, hang, dead prefs) + leftovers
 - `Docs/MAC-POLISH-DESIGN.md` - Mac polish design: window chrome, menus, system integration, modernisation track (approved 2026-07-04)
 - `Docs/MAC-POLISH-IMPLEMENTATION-PLAN.md` - Phased subagent orchestration plan for the above (Phases 0-3 shipped)
-- `Docs/MAC-ARSED-GAP-PLAN.md` - Mac-arsed skill audit (2026-07-11) + gap-closure plan: text services, rename, selection model, undo, VoiceOver
+- `Docs/MAC-ARSED-GAP-PLAN.md` - Mac-arsed skill audit + gap-closure plan, executed 2026-07-11/12 (execution log + rubric re-score appended)
+- `Docs/SELECTION-MODEL-MEMO.md` - Multi-select sidebar design (Set selection, lead derivation, canonical write path) + as-built addendum
+- `Docs/ACCESSIBILITY-AUDIT-2026-07.md` - VoiceOver audit: findings, fixes, human-pass checklist
 - `Docs/HUGO-SERVER-INTEGRATION.md` - Hugo server integration
 - `Docs/DATA-ARCHETYPES-GUIDE.md` - Data files and archetypes
 - `Docs/TODO.md` - Detailed ticket descriptions (reference/archive)
