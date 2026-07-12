@@ -197,7 +197,8 @@ Open issues are tracked in **GitHub Issues** (migrated from `Docs/ISSUES.yaml` 2
 Key areas:
 - **Recently completed**: Mac-arsed gap closure program, executed 2026-07-11/12 (commits c8c61ef..88854b1) — Edit-menu text services, rename UI, multi-select sidebar with drag out/move, file-op undo/redo, VoiceOver sweep. Execution log + rubric re-score (~25 → ~31/36) in `Docs/MAC-ARSED-GAP-PLAN.md`; selection design in `Docs/SELECTION-MODEL-MEMO.md`; pending human verification lists in both plan doc and `Docs/ACCESSIBILITY-AUDIT-2026-07.md`. The predecessor Mac polish + modernisation program shipped Phases 0–3 earlier the same week; only victor-mbe/victor-icn remain from it
 - **P2**: editor track (cursor-jump bug victor-cjp, line numbers, tab bar → session restore, breadcrumbs, quick open), FSEvents file watching (9 tickets, dependency chain)
-- **P3**: Git integration (6 tickets), Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), App Sandbox (victor-sbx)
+- **P2 (release)**: Developer ID signing + notarization for direct-download builds (#49, victor-dst) — replaced App Sandbox (#45, closed won't-fix: MAS-only, incompatible with spawning user-installed hugo/git)
+- **P3**: Git integration (6 tickets), Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru)
 - **P4**: Mac-arsed follow-ups (Move to Folder… command victor-mvf, accessibility leftovers victor-a2x), code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), menu bar extra (victor-mbe)
 
 
