@@ -243,6 +243,10 @@ struct ContentView: View {
                     .controlSize(.small)
                     .opacity(siteViewModel.isLoading || siteViewModel.isLoadingFile ? 1 : 0)
                     .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
+                    // Opacity alone doesn't remove it from the accessibility
+                    // tree - without this a screen reader would find an
+                    // invisible "loading" item even when nothing is loading.
+                    .accessibilityHidden(!(siteViewModel.isLoading || siteViewModel.isLoadingFile))
             }
 
             // Inspector toggle: enabled only for markdown content files
@@ -377,16 +381,18 @@ struct ContentView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            // Icon
+            // Icon - decorative, meaning is carried by the title text below.
             Image(systemName: "doc.text")
                 .font(.system(size: 64))
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
             // Title and description
             VStack(spacing: 8) {
                 Text("Select a File")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
 
                 Text("Choose a markdown file from the sidebar to start editing")
                     .font(.callout)
@@ -432,6 +438,7 @@ struct KeyboardHintRow: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 

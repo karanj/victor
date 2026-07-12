@@ -11,8 +11,10 @@ struct ArchetypeHelpPanel: View {
                 HStack {
                     Image(systemName: "questionmark.circle.fill")
                         .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
                     Text("Template Reference")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
                 }
                 .padding(.bottom, 4)
 
@@ -211,6 +213,7 @@ private struct HelpSection<Content: View>: View {
                     Image(systemName: systemImage)
                         .foregroundStyle(.orange)
                         .frame(width: 20)
+                        .accessibilityHidden(true)
 
                     Text(title)
                         .font(.subheadline)
@@ -221,10 +224,12 @@ private struct HelpSection<Content: View>: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
             if isExpanded {
                 content()
@@ -268,6 +273,7 @@ private struct HelpItem: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help("Copy to clipboard")
+                .accessibilityLabel("Copy to Clipboard")
             }
 
             Text(description)
@@ -314,6 +320,7 @@ private struct ExampleBlock: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .help("Copy example")
+                .accessibilityLabel("Copy Example")
             }
 
             Text(code)

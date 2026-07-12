@@ -19,6 +19,7 @@ struct AssetDetailPanel: View {
             HStack {
                 Text("Details")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -171,6 +172,15 @@ struct AssetDetailPanel: View {
                     .font(.caption)
                     .foregroundStyle(Color.Status.saved)
                     .transition(.opacity)
+                    .accessibilityLabel("Copied to clipboard")
+            }
+        }
+        // The feedback Text above is transient and easy to miss visually;
+        // announce it explicitly since there's no focus change to carry it
+        // to a screen reader otherwise.
+        .onChange(of: copyFeedback) { _, newValue in
+            if newValue != nil {
+                AccessibilityNotification.Announcement("Copied to clipboard").post()
             }
         }
     }

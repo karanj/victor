@@ -13,6 +13,7 @@ struct MenuEntryEditor: View {
                 Text(entry.menuName)
                     .font(.headline)
                     .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
 
                 Spacer()
 
@@ -22,6 +23,7 @@ struct MenuEntryEditor: View {
                 }
                 .buttonStyle(.plain)
                 .help("Remove from this menu")
+                .accessibilityLabel("Remove from Menu")
             }
 
             // Basic fields

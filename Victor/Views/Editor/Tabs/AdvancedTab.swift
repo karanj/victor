@@ -135,6 +135,7 @@ struct AdvancedTab: View {
                 ))
                 .toggleStyle(.checkbox)
                 .labelsHidden()
+                .accessibilityLabel("Override default outputs")
 
                 Text("Override default outputs")
                     .font(.caption)

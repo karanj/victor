@@ -80,14 +80,17 @@ struct ConfigEditorView: View {
             // Config file icon
             Image(systemName: "gearshape.fill")
                 .foregroundStyle(Color.FileIcon.config)
+                .accessibilityHidden(true)
 
             // File name
             if let url = config.sourceURL {
                 Text(url.lastPathComponent)
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
             } else {
                 Text("Hugo Configuration")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
             }
 
             // Format badge
@@ -182,6 +185,7 @@ struct ConfigRawEditorView: View {
             HStack {
                 Image(systemName: "info.circle")
                     .foregroundStyle(Color.Status.info)
+                    .accessibilityHidden(true)
                 Text("Changes made here will update the form view when you switch tabs")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -198,6 +202,7 @@ struct ConfigRawEditorView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Reload from disk")
+                .accessibilityLabel("Reload from Disk")
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -207,6 +212,7 @@ struct ConfigRawEditorView: View {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(Color.Status.warning)
+                        .accessibilityHidden(true)
                     Text(parseErrorMessage)
                         .font(.caption)
                     Spacer()

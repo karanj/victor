@@ -83,6 +83,7 @@ struct FocusModeTopBar: View {
             Text(fileName)
                 .font(.headline)
                 .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -135,6 +136,7 @@ struct FocusModeBottomBar: View {
 
             Text("•")
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
             Text("\(characterCount) characters")
                 .font(.caption)

@@ -32,6 +32,7 @@ struct ServerLogView: View {
         HStack {
             Text("Server Log")
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -107,6 +108,7 @@ struct ServerLogView: View {
             Image(systemName: "terminal")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             Text("No server output yet")
                 .font(.headline)

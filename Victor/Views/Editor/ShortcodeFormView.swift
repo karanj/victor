@@ -112,11 +112,13 @@ private struct ShortcodeFormHeader: View {
                 Image(systemName: shortcode.icon)
                     .font(.title)
                     .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(shortcode.name)
                         .font(.title2)
                         .fontWeight(.semibold)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text(shortcode.description)
                         .font(.subheadline)
@@ -136,6 +138,7 @@ private struct ShortcodeFormHeader: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(Color.Status.warning)
+                        .accessibilityHidden(true)
                     Text(note)
                         .font(.callout)
                 }
@@ -162,6 +165,7 @@ private struct ParameterSection: View {
             Text(title)
                 .font(.headline)
                 .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
 
             ForEach(parameters) { param in
                 ParameterField(parameter: param, value: binding(for: param.name), contentPaths: contentPaths)
@@ -194,6 +198,7 @@ private struct ParameterField: View {
                 if parameter.isRequired {
                     Text("*")
                         .foregroundStyle(Color.Shortcode.required)
+                        .accessibilityLabel("required")
                 }
             }
 
@@ -254,6 +259,7 @@ private struct InnerContentSection: View {
             Text("Content")
                 .font(.headline)
                 .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
 
             TextEditor(text: $content)
                 .font(.system(.body, design: .monospaced))
@@ -314,6 +320,7 @@ private struct PreviewSection: View {
             Text("Preview")
                 .font(.headline)
                 .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
 
             Text(preview)
                 .font(.system(.body, design: .monospaced))

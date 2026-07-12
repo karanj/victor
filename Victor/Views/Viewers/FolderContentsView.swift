@@ -39,10 +39,12 @@ struct FolderContentsView: View {
             Image(systemName: node.hugoRole?.systemImage ?? "folder.fill")
                 .foregroundStyle(node.hugoRole?.accentColor ?? .blue)
                 .font(.title2)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(node.name)
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
 
                 if let role = node.hugoRole {
                     Text(role.displayName)
@@ -63,7 +65,9 @@ struct FolderContentsView: View {
             // View mode toggle
             Picker("View", selection: $viewMode) {
                 ForEach(FolderViewMode.allCases) { mode in
-                    Image(systemName: mode.icon).tag(mode)
+                    Image(systemName: mode.icon)
+                        .accessibilityLabel(mode.rawValue)
+                        .tag(mode)
                 }
             }
             .pickerStyle(.segmented)
@@ -76,6 +80,7 @@ struct FolderContentsView: View {
                 Image(systemName: "folder")
             }
             .help("Reveal in Finder")
+            .accessibilityLabel("Reveal in Finder")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -88,8 +93,10 @@ struct FolderContentsView: View {
             Image(systemName: "folder")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text("Empty Folder")
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
             Text("This folder has no contents")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -192,6 +199,7 @@ struct FolderItemGridCell: View {
                 .font(.system(size: 32))
                 .foregroundStyle(iconColor)
                 .frame(width: 60, height: 50)
+                .accessibilityHidden(true)
 
             // Name
             Text(node.name)
@@ -257,6 +265,7 @@ struct FolderItemListRow: View {
                 .font(.title3)
                 .foregroundStyle(iconColor)
                 .frame(width: 24)
+                .accessibilityHidden(true)
 
             // Name and details
             VStack(alignment: .leading, spacing: 2) {

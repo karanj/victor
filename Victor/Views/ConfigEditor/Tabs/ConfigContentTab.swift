@@ -93,6 +93,7 @@ private struct PermalinksSectionView: View {
                     Image(systemName: "arrow.right")
                         .foregroundStyle(.secondary)
                         .font(.caption)
+                        .accessibilityHidden(true)
 
                     TextField("/:year/:month/:title/", text: $newPattern)
                         .font(.system(.body, design: .monospaced))
@@ -223,6 +224,7 @@ private struct PermalinkRowView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Remove permalink pattern for \(section)")
+                .accessibilityLabel("Remove Permalink Pattern for \(section)")
             }
 
             if let error = validationError {
@@ -282,6 +284,7 @@ private struct InsertTokenMenuButton: View {
         }
         .menuStyle(.borderlessButton)
         .frame(width: 24)
+        .accessibilityLabel("Insert Permalink Token")
         .help("Insert a permalink token")
     }
 

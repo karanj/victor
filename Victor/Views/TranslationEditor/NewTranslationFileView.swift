@@ -34,6 +34,7 @@ struct NewTranslationFileView: View {
             HStack {
                 Text("New Translation File")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button("Cancel") {
                     dismiss()
@@ -70,6 +71,9 @@ struct NewTranslationFileView: View {
                                 .cornerRadius(6)
                             }
                             .buttonStyle(.plain)
+                            // Selection is otherwise conveyed only by
+                            // background tint, invisible to VoiceOver.
+                            .accessibilityAddTraits(languageCode == code ? .isSelected : [])
                         }
                     }
                 }
@@ -103,6 +107,7 @@ struct NewTranslationFileView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(Color.Status.error)
+                            .accessibilityLabel("Error: \(error)")
                     }
                 }
             }

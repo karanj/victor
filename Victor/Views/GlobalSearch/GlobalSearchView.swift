@@ -72,6 +72,7 @@ struct GlobalSearchView: View {
         HStack {
             Text("Find in Files")
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -83,6 +84,7 @@ struct GlobalSearchView: View {
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
+            .accessibilityLabel("Close")
         }
         .padding()
     }
@@ -95,6 +97,7 @@ struct GlobalSearchView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
                 TextField("Search", text: $searchQuery)
                     .textFieldStyle(.plain)
@@ -121,6 +124,7 @@ struct GlobalSearchView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear Search")
                 }
 
                 Button {
@@ -131,6 +135,7 @@ struct GlobalSearchView: View {
                 }
                 .buttonStyle(.plain)
                 .help(showReplaceField ? "Hide replace" : "Show replace")
+                .accessibilityLabel(showReplaceField ? "Hide Replace" : "Show Replace")
             }
             .padding(8)
             .background(Color(nsColor: .controlBackgroundColor))
@@ -141,6 +146,7 @@ struct GlobalSearchView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.left.arrow.right")
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
 
                     TextField("Replace", text: $replaceQuery)
                         .textFieldStyle(.plain)
@@ -153,6 +159,7 @@ struct GlobalSearchView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Clear Replacement")
                     }
 
                     Button("Replace All") {
@@ -238,6 +245,7 @@ struct GlobalSearchView: View {
                 HStack {
                     Image(systemName: FileType(url: fileResult.fileURL).systemImage)
                         .foregroundStyle(FileType(url: fileResult.fileURL).defaultColor)
+                        .accessibilityHidden(true)
 
                     Text(fileResult.relativePath)
                         .lineLimit(1)
@@ -247,7 +255,9 @@ struct GlobalSearchView: View {
 
                     Text("\(fileResult.matchCount)")
                         .countBadgeStyle()
+                        .accessibilityLabel("\(fileResult.matchCount) match\(fileResult.matchCount == 1 ? "" : "es")")
                 }
+                .accessibilityElement(children: .combine)
             }
         }
         .listStyle(.sidebar)
@@ -395,6 +405,7 @@ struct SearchMatchRow: View {
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 40, alignment: .trailing)
+                .accessibilityLabel("Line \(match.lineNumber)")
 
             // Line content with highlighted match
             lineContentView
@@ -403,6 +414,7 @@ struct SearchMatchRow: View {
         }
         .padding(.vertical, 2)
         .padding(.leading, 8)
+        .accessibilityElement(children: .combine)
     }
 
     private var lineContentView: some View {

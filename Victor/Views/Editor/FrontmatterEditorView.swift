@@ -56,6 +56,7 @@ struct FrontmatterEditorView: View {
             HStack(spacing: 4) {
                 Image(systemName: tab.icon)
                     .font(.caption)
+                    .accessibilityHidden(true)
                 Text(tab.rawValue)
                     .font(.caption)
                     .fontWeight(selectedTab == tab ? .medium : .regular)
@@ -67,6 +68,8 @@ struct FrontmatterEditorView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(selectedTab == tab ? Color.primary : Color.primary.opacity(0.6))
+        // Selection is otherwise conveyed only by background tint.
+        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -139,6 +142,7 @@ struct TagInputView: View {
                             .foregroundStyle(Color.accentColor)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Add Tag")
                 }
             }
         }
@@ -174,6 +178,7 @@ struct TagChip: View {
                     .foregroundStyle(.primary.opacity(0.5))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(text)")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

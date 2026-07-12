@@ -22,6 +22,7 @@ struct LabeledTextField: View {
                 .foregroundStyle(.secondary)
             TextField(placeholder, text: $text)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityLabel(label)
         }
     }
 }
@@ -44,6 +45,7 @@ struct OptionalLabeledTextField: View {
                 set: { text = $0.isEmpty ? nil : $0 }
             ))
             .textFieldStyle(.roundedBorder)
+            .accessibilityLabel(label)
         }
     }
 }
@@ -68,9 +70,11 @@ struct LabeledTextFieldWithHelp: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .help(help)
+                    .accessibilityLabel(help)
             }
             TextField(placeholder, text: $text)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityLabel(label)
         }
     }
 }

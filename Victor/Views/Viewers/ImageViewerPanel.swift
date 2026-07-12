@@ -74,6 +74,7 @@ struct ImageViewerPanel: View {
                 Image(systemName: "minus.magnifyingglass")
             }
             .disabled(zoomLevel <= minZoom)
+            .accessibilityLabel("Zoom Out")
 
             Text("\(Int(zoomLevel * 100))%")
                 .frame(width: 50)
@@ -85,6 +86,7 @@ struct ImageViewerPanel: View {
                 Image(systemName: "plus.magnifyingglass")
             }
             .disabled(zoomLevel >= maxZoom)
+            .accessibilityLabel("Zoom In")
 
             Button {
                 zoomLevel = 1.0
@@ -103,6 +105,7 @@ struct ImageViewerPanel: View {
                 Image(systemName: "arrow.up.forward.square")
             }
             .help("Open in Preview")
+            .accessibilityLabel("Open in Preview")
 
             // Reveal in Finder
             Button {
@@ -111,6 +114,7 @@ struct ImageViewerPanel: View {
                 Image(systemName: "folder")
             }
             .help("Reveal in Finder")
+            .accessibilityLabel("Reveal in Finder")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

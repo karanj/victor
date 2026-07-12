@@ -26,6 +26,8 @@ struct EditorSaveButton: View {
         .disabled(!hasUnsavedChanges || isSaving)
         .keyboardShortcut("s", modifiers: .command)
         .help("Save (\u{2318}S)")
+        .accessibilityLabel("Save")
+        .accessibilityValue(isSaving ? "Saving" : "")
     }
 }
 
@@ -44,6 +46,7 @@ struct EditorReloadButton: View {
             Image(systemName: "arrow.clockwise")
         }
         .help("Reload from disk")
+        .accessibilityLabel("Reload from Disk")
     }
 }
 
@@ -60,6 +63,7 @@ struct EditorOpenExternalButton: View {
             Image(systemName: "arrow.up.forward.square")
         }
         .help("Open in default app")
+        .accessibilityLabel("Open in Default App")
     }
 }
 
@@ -76,6 +80,7 @@ struct EditorRevealInFinderButton: View {
             Image(systemName: "folder")
         }
         .help("Reveal in Finder")
+        .accessibilityLabel("Reveal in Finder")
     }
 }
 

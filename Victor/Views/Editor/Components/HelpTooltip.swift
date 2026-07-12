@@ -9,6 +9,7 @@ struct HelpTooltip: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .help(text)
+            .accessibilityLabel(text)
     }
 }
 
@@ -47,6 +48,7 @@ struct SectionHeader: View {
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
 
             if let help = help {
                 HelpTooltip(text: help)
@@ -75,6 +77,7 @@ struct OptionalDateField: View {
                 ))
                 .toggleStyle(.checkbox)
                 .labelsHidden()
+                .accessibilityLabel(label)
 
                 if date != nil {
                     DatePicker(
@@ -116,6 +119,7 @@ struct NumberField: View {
                 ))
                 .toggleStyle(.checkbox)
                 .labelsHidden()
+                .accessibilityLabel(label)
 
                 if value != nil {
                     TextField(placeholder, value: Binding(

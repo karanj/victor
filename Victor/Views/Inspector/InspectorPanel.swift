@@ -143,6 +143,7 @@ struct InspectorSection<Content: View>: View {
                     Image(systemName: systemImage)
                         .foregroundStyle(.secondary)
                         .frame(width: 16)
+                        .accessibilityHidden(true)
 
                     Text(title)
                         .font(.headline)
@@ -153,6 +154,7 @@ struct InspectorSection<Content: View>: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 .padding(.vertical, 4)
                 .padding(.horizontal, 6)
@@ -165,6 +167,7 @@ struct InspectorSection<Content: View>: View {
                 isHovered = hovering
             }
             .help("Click to \(isExpanded ? "collapse" : "expand")")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
             // Section content
             if isExpanded {

@@ -59,6 +59,7 @@ struct CustomFieldEditor: View {
             Image(systemName: "rectangle.grid.1x2")
                 .font(.largeTitle)
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
             Text("No custom fields")
                 .font(.caption)
@@ -103,6 +104,7 @@ struct CustomFieldEditor: View {
                     .foregroundStyle(.red)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Delete \(key)")
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)

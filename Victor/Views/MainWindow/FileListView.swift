@@ -449,6 +449,12 @@ struct FileRowView: View, Equatable {
             FileStatusIndicator(status: viewModel.fileStatus)
         }
         .contentShape(Rectangle())
+        // Combines the icon's type label, name, badges, and status indicator
+        // into one VoiceOver stop per row instead of five-plus separate ones -
+        // standard list-row grouping, and the combined announcement already
+        // carries selection-relevant context (name) and file status (badges +
+        // FileStatusIndicator's "Unsaved changes"/"Recently saved" label).
+        .accessibilityElement(children: .combine)
     }
 }
 

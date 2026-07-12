@@ -35,9 +35,11 @@ struct FormSectionView<Content: View>: View {
                 if let icon {
                     Image(systemName: icon)
                         .font(.caption)
+                        .accessibilityHidden(true)
                 }
                 Text(title)
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
             }
             .foregroundStyle(.secondary)
 

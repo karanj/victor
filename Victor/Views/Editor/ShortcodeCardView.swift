@@ -13,6 +13,7 @@ struct ShortcodeCardView: View {
                 .font(.title2)
                 .foregroundStyle(shortcode.isDeprecated ? .secondary : .primary)
                 .frame(width: 32)
+                .accessibilityHidden(true)
 
             // Content
             VStack(alignment: .leading, spacing: 2) {
@@ -49,6 +50,10 @@ struct ShortcodeCardView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        // One VoiceOver stop per row (name, deprecated/block badges,
+        // description, required-param count) instead of five-plus separate
+        // ones - same List-row grouping as FileListView's FileRowView.
+        .accessibilityElement(children: .combine)
     }
 }
 

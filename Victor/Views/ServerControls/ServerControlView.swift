@@ -68,15 +68,20 @@ struct ServerControlView: View {
 
     private var statusIndicator: some View {
         HStack(spacing: 6) {
-            // Colored status dot
+            // Colored status dot - decorative, redundant with the text next
+            // to it; the combined element below carries the actual value.
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
 
             Text(serverStatus.displayText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Server status")
+        .accessibilityValue(serverStatus.displayText)
     }
 
     private var statusColor: Color {
@@ -163,6 +168,7 @@ struct ServerControlView: View {
                 Image(systemName: hasActualErrors ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.white)
+                    .accessibilityHidden(true)
 
                 Text("\(buildErrors.count)")
                     .font(.caption2.bold())
@@ -177,6 +183,7 @@ struct ServerControlView: View {
         }
         .buttonStyle(.plain)
         .help("Click to view \(buildErrors.count) build \(hasActualErrors ? "error" : "warning")\(buildErrors.count == 1 ? "" : "s")")
+        .accessibilityLabel("\(buildErrors.count) build \(hasActualErrors ? "error" : "warning")\(buildErrors.count == 1 ? "" : "s")")
         .popover(isPresented: $isErrorsPopoverPresented) {
             BuildIssuesPopover(
                 errors: buildErrors,

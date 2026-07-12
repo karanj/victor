@@ -44,9 +44,11 @@ struct ArchetypeEditorView: View {
             // Archetype icon and name
             Image(systemName: "doc.text.fill.viewfinder")
                 .foregroundStyle(Color.FileIcon.config)
+                .accessibilityHidden(true)
 
             Text(archetype.fileName)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             // Archetype type badge
             Text("Archetype")
@@ -90,6 +92,7 @@ struct ArchetypeEditorView: View {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(Color.Status.error)
+                    .accessibilityLabel("Error: \(error)")
             }
 
             EditorToolbarDivider()
@@ -103,6 +106,8 @@ struct ArchetypeEditorView: View {
                 Image(systemName: showHelpPanel ? "questionmark.circle.fill" : "questionmark.circle")
             }
             .help("Toggle template help panel")
+            .accessibilityLabel("Template Help")
+            .accessibilityValue(showHelpPanel ? "Shown" : "Hidden")
 
             EditorToolbarDivider()
 

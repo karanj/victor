@@ -34,9 +34,11 @@ struct TemplateEditorView: View {
             // Template type icon and name
             Image(systemName: template.templateType.systemImage)
                 .foregroundStyle(.blue)
+                .accessibilityHidden(true)
 
             Text(template.fileName)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             // Template type badge
             Text(template.templateType.displayName)

@@ -106,8 +106,9 @@ struct RenameSheet: View {
             HStack {
                 Text("Rename")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
-                Button("Cancel") {
+                Button("Cancel", role: .cancel) {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
@@ -121,6 +122,11 @@ struct RenameSheet: View {
                     TextField("Name", text: $newName)
                         .textFieldStyle(.roundedBorder)
                         .focused($isNameFieldFocused)
+                        // Validation message isn't visible-adjacent-only:
+                        // VoiceOver users focused on the field hear the
+                        // constraint without having to separately discover
+                        // the inline error Text below.
+                        .accessibilityHint(validationError?.message ?? "")
                         .onSubmit {
                             confirm()
                         }
@@ -135,6 +141,14 @@ struct RenameSheet: View {
                 }
             }
             .formStyle(.grouped)
+            // Announces validation state changes as the user types, since the
+            // inline error Text above has no focus of its own to carry the
+            // message to a screen reader otherwise.
+            .onChange(of: validationError) { _, newValue in
+                if let newValue {
+                    AccessibilityNotification.Announcement(newValue.message).post()
+                }
+            }
 
             Divider()
 

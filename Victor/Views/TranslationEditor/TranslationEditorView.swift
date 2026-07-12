@@ -71,9 +71,11 @@ struct TranslationEditorView: View {
         HStack {
             Image(systemName: "globe")
                 .foregroundStyle(.blue)
+                .accessibilityHidden(true)
 
             Text(dataFile.fileName)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             // Language badge
             Text(languageCode.uppercased())
@@ -103,6 +105,7 @@ struct TranslationEditorView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 TextField("Search translations", text: $searchQuery)
                     .textFieldStyle(.plain)
                     .frame(width: 150)
@@ -114,6 +117,7 @@ struct TranslationEditorView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear Search")
                 }
             }
             .padding(6)
@@ -349,6 +353,8 @@ struct TranslationKeyRow: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Show plural forms")
+                    .accessibilityLabel("Plural Forms")
+                    .accessibilityValue(showPluralForms ? "Expanded" : "Collapsed")
                 }
 
                 // Delete button
@@ -358,6 +364,7 @@ struct TranslationKeyRow: View {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Delete Translation for \(entry.key)")
             }
 
             // Plural forms expansion
@@ -404,6 +411,7 @@ struct TranslationRawEditorView: View {
             HStack {
                 Image(systemName: "info.circle")
                     .foregroundStyle(Color.Status.info)
+                    .accessibilityHidden(true)
                 Text("Changes made here will update the form view when you switch tabs")
                     .font(.caption)
                     .foregroundStyle(.secondary)

@@ -23,6 +23,7 @@ struct NewContentView: View {
             HStack {
                 Text("New Content")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button("Cancel") {
                     dismiss()
@@ -96,6 +97,7 @@ struct NewContentView: View {
                         Section {
                             Text(error)
                                 .foregroundStyle(Color.Status.error)
+                                .accessibilityLabel("Error: \(error)")
                         }
                     }
                 }

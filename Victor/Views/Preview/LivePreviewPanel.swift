@@ -121,6 +121,7 @@ struct LivePreviewPanel: View {
                 Image(systemName: "globe")
                     .foregroundStyle(.secondary)
                     .font(.caption)
+                    .accessibilityHidden(true)
 
                 Text(currentURL.isEmpty ? serverURL?.absoluteString ?? "" : currentURL)
                     .font(.caption2)
@@ -132,6 +133,7 @@ struct LivePreviewPanel: View {
             .padding(.vertical, 4)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -140,6 +142,7 @@ struct LivePreviewPanel: View {
                 Circle()
                     .fill(serverStatusColor)
                     .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
 
                 Text(status.displayText)
                     .font(.caption2)
@@ -149,6 +152,9 @@ struct LivePreviewPanel: View {
             .padding(.vertical, 4)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Server status")
+            .accessibilityValue(status.displayText)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

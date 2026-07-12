@@ -27,6 +27,7 @@ struct MetadataSection: View {
                     ))
                     .toggleStyle(.checkbox)
                     .labelsHidden()
+                    .accessibilityLabel("Include Date")
 
                     if frontmatter.date != nil {
                         DatePicker(
@@ -95,6 +96,7 @@ struct MetadataSection: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
+                    .accessibilityAddTraits(.isHeader)
 
                 ForEach(Array(frontmatter.customFields.keys.sorted()), id: \.self) { key in
                     HStack {
@@ -107,6 +109,7 @@ struct MetadataSection: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -173,6 +176,7 @@ struct InspectorTagInput: View {
                             .font(.caption)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Add Tag")
                 }
             }
         }
@@ -204,6 +208,7 @@ struct InspectorTagChip: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(text)")
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)

@@ -14,10 +14,13 @@ struct BreadcrumbBar: View {
         HStack(spacing: 4) {
             ForEach(Array(pathComponents.enumerated()), id: \.element.id) { index, component in
                 if index > 0 {
-                    // Separator chevron
+                    // Separator chevron - purely decorative, not part of any
+                    // segment's button; each segment already carries its own
+                    // "Folder: X"/"File: X" accessibility label.
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
 
                 BreadcrumbSegment(

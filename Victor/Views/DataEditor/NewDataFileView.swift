@@ -18,6 +18,7 @@ struct NewDataFileView: View {
             HStack {
                 Text("New Data File")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button("Cancel") {
                     dismiss()
@@ -61,6 +62,7 @@ struct NewDataFileView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(Color.Status.error)
+                            .accessibilityLabel("Error: \(error)")
                     }
                 }
             }

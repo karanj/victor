@@ -65,6 +65,7 @@ struct TabBarView: View {
             HStack(spacing: 6) {
                 Image(systemName: hasActualErrors ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
                     .font(.caption)
+                    .accessibilityHidden(true)
                 Text("\(viewModel.hugoBuildErrors.count)")
                     .font(.caption.bold())
                 if let latest = viewModel.hugoBuildErrors.last {
@@ -89,7 +90,7 @@ struct TabBarView: View {
         }
         .buttonStyle(.plain)
         .help("Hugo reported \(viewModel.hugoBuildErrors.count) build issue\(viewModel.hugoBuildErrors.count == 1 ? "" : "s") - click for details")
-        .accessibilityLabel("\(viewModel.hugoBuildErrors.count) build issues")
+        .accessibilityLabel("\(viewModel.hugoBuildErrors.count) build \(hasActualErrors ? "error" : "warning")\(viewModel.hugoBuildErrors.count == 1 ? "" : "s")")
         .popover(isPresented: $isBuildIssuesPopoverPresented) {
             BuildIssuesPopover(
                 errors: viewModel.hugoBuildErrors,

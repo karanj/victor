@@ -47,6 +47,7 @@ struct MenusTab: View {
             Image(systemName: "list.bullet.rectangle")
                 .font(.largeTitle)
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
             Text("Not in any menus")
                 .font(.caption)
@@ -69,6 +70,7 @@ struct MenusTab: View {
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
+                .accessibilityAddTraits(.isHeader)
 
             // Common menus
             HStack(spacing: 8) {

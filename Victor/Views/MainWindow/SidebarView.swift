@@ -41,16 +41,18 @@ struct EmptySiteView: View {
         VStack(spacing: 20) {
             Spacer()
 
-            // Icon
+            // Icon - decorative, meaning is carried by the title text below.
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 56))
                 .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
             // Title and description
             VStack(spacing: 6) {
                 Text("Open a Hugo Site")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
 
                 Text("Select a folder containing your Hugo site")
                     .font(.callout)
@@ -103,6 +105,7 @@ struct RecentSitesSection: View {
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
+                .accessibilityAddTraits(.isHeader)
 
             VStack(spacing: 4) {
                 ForEach(siteViewModel.recentSitePaths, id: \.self) { path in
@@ -148,6 +151,7 @@ struct RecentSiteRow: View {
                 Image(systemName: "folder.fill")
                     .foregroundStyle(Color.FileIcon.folder)
                     .frame(width: 16)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(siteName)
@@ -163,9 +167,13 @@ struct RecentSiteRow: View {
                 Spacer()
 
                 if isHovering {
+                    // Hover-only affordance, not itself informative - the
+                    // button's own combined label (name + path) already says
+                    // what activating it does.
                     Image(systemName: "arrow.right.circle")
                         .foregroundStyle(.secondary)
                         .font(.caption)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.vertical, 6)
@@ -208,6 +216,7 @@ struct SiteHeader: View {
                 Text(siteViewModel.site?.displayName ?? "")
                     .font(.headline)
                     .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
 
                 Text("\(siteViewModel.totalFileCount) files")
                     .font(.caption)
@@ -240,6 +249,7 @@ struct SiteHeader: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .accessibilityLabel("Site options")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -257,6 +267,7 @@ struct SearchBar: View {
         HStack {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             TextField("Search files", text: $searchText)
                 .textFieldStyle(.plain)
@@ -274,6 +285,7 @@ struct SearchBar: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(8)
@@ -299,6 +311,7 @@ struct LoadingView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 

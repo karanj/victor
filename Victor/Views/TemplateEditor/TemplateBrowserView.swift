@@ -53,9 +53,11 @@ struct TemplateBrowserView: View {
         HStack {
             Image(systemName: "doc.text.magnifyingglass")
                 .foregroundStyle(.blue)
+                .accessibilityHidden(true)
 
             Text("Template Browser")
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             // Template count
             Text("\(filteredTemplates.count) templates")
@@ -67,6 +69,7 @@ struct TemplateBrowserView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 TextField("Search templates...", text: $searchText)
                     .textFieldStyle(.plain)
                     .frame(width: 150)
@@ -79,6 +82,7 @@ struct TemplateBrowserView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear Search")
                 }
             }
             .padding(.horizontal, 8)
@@ -116,6 +120,7 @@ struct TemplateBrowserView: View {
                 Image(systemName: "arrow.clockwise")
             }
             .help("Refresh templates")
+            .accessibilityLabel("Refresh Templates")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -152,12 +157,17 @@ struct TemplateBrowserView: View {
                     HStack {
                         Image(systemName: type.systemImage)
                             .foregroundStyle(typeColor(for: type))
+                            .accessibilityHidden(true)
                         Text(type.displayName)
                         Spacer()
                         Text("\(typeTemplates.count)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    // Custom header views (unlike `Section("string")`) don't
+                    // pick up header semantics automatically.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
                 }
             }
         }
@@ -180,12 +190,15 @@ struct TemplateBrowserView: View {
                 HStack {
                     Image(systemName: "folder")
                         .foregroundStyle(Color.FileIcon.folder)
+                        .accessibilityHidden(true)
                     Text(dir.isEmpty ? "Root" : dir)
                     Spacer()
                     Text("\(dirTemplates.count)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
             }
         }
     }
@@ -269,6 +282,7 @@ struct TemplateBrowserView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Summary", systemImage: "chart.bar")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
 
                     VStack(alignment: .leading, spacing: 4) {
                         TemplateStatRow(label: "Total templates", value: "\(templates.count)")
@@ -284,6 +298,7 @@ struct TemplateBrowserView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("By Type", systemImage: "square.stack.3d.up")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
 
                     let grouped = templates.groupedByType
                     ForEach(TemplateType.allCases, id: \.self) { type in
@@ -308,6 +323,7 @@ struct TemplateBrowserView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Popular Partials", systemImage: "puzzlepiece")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
 
                     let partialCounts = TemplateParser.shared.getAllPartialReferences(templates: templates)
                     let sorted = partialCounts.sorted { $0.value > $1.value }
@@ -353,8 +369,10 @@ struct TemplateBrowserView: View {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text("No Templates Found")
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
             Text("This Hugo site doesn't have any template files in layouts/ or themes/.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -470,6 +488,7 @@ private struct TemplateRow: View {
                     .font(.caption2)
                     .foregroundStyle(.purple)
                     .help("Defines blocks")
+                    .accessibilityLabel("Defines blocks")
             }
 
             if !template.metadata.partials.isEmpty {
@@ -515,5 +534,6 @@ private struct TemplateStatRow: View {
             Spacer()
             Text(value)
         }
+        .accessibilityElement(children: .combine)
     }
 }

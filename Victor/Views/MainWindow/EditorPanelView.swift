@@ -400,6 +400,7 @@ struct SaveButton: View {
         } else if viewModel.isSaving {
             ProgressView()
                 .controlSize(.small)
+                .accessibilityLabel("Saving")
         } else {
             saveButton
         }

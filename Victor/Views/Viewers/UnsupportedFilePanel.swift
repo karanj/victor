@@ -17,11 +17,13 @@ struct UnsupportedFilePanel: View {
             Image(systemName: fileType.systemImage)
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             // File name
             Text(url.lastPathComponent)
                 .font(.title2)
                 .fontWeight(.medium)
+                .accessibilityAddTraits(.isHeader)
 
             // File info
             VStack(spacing: 8) {
@@ -30,16 +32,19 @@ struct UnsupportedFilePanel: View {
                         .foregroundStyle(.secondary)
                     Text(fileType.displayName)
                 }
+                .accessibilityElement(children: .combine)
                 HStack {
                     Text("Size:")
                         .foregroundStyle(.secondary)
                     Text(fileSize)
                 }
+                .accessibilityElement(children: .combine)
                 HStack {
                     Text("Modified:")
                         .foregroundStyle(.secondary)
                     Text(modificationDate)
                 }
+                .accessibilityElement(children: .combine)
             }
             .font(.callout)
 

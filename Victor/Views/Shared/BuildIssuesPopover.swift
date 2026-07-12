@@ -69,8 +69,10 @@ struct BuildIssuesPopover: View {
         HStack {
             Image(systemName: headerIcon)
                 .foregroundStyle(headerColor)
+                .accessibilityHidden(true)
             Text(headerTitle)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
 
             if let onDismiss = onDismiss {
@@ -82,6 +84,7 @@ struct BuildIssuesPopover: View {
                 }
                 .buttonStyle(.plain)
                 .help("Dismiss")
+                .accessibilityLabel("Dismiss")
             }
         }
         .padding()
@@ -127,13 +130,26 @@ private struct IssueRow: View {
         }
     }
 
+    private var levelLabel: String {
+        switch error.level {
+        case .error:
+            return "Error"
+        case .warning:
+            return "Warning"
+        case .info:
+            return "Info"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                // Level icon
+                // Level icon - the only place severity is conveyed; no
+                // adjacent text states "error"/"warning"/"info".
                 Image(systemName: iconName)
                     .foregroundStyle(iconColor)
                     .font(.system(size: 12))
+                    .accessibilityLabel(levelLabel)
 
                 // File path if available - clickable
                 if let filePath = error.clickableFilePath {
@@ -149,6 +165,7 @@ private struct IssueRow: View {
                                 Image(systemName: "arrow.up.right")
                                     .font(.system(size: 9))
                                     .foregroundStyle(Color.Status.info.opacity(0.7))
+                                    .accessibilityHidden(true)
                             }
                         }
                         .buttonStyle(.plain)

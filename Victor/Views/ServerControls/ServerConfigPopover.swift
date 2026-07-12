@@ -25,6 +25,7 @@ struct ServerConfigPopover: View {
             // Header
             Text("Server Configuration")
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             Form {
                 // Port number
@@ -51,6 +52,7 @@ struct ServerConfigPopover: View {
                     Text("Build Options")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.isHeader)
 
                     Toggle("Build drafts", isOn: $config.buildDrafts)
                         .onChange(of: config.buildDrafts) { _, _ in
@@ -75,6 +77,7 @@ struct ServerConfigPopover: View {
                     Text("Live Reload")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.isHeader)
 
                     Toggle("Navigate to changed file", isOn: $config.navigateToChanged)
                         .onChange(of: config.navigateToChanged) { _, _ in

@@ -52,9 +52,11 @@ struct DataFileEditorView: View {
         HStack {
             Image(systemName: "doc.badge.gearshape")
                 .foregroundStyle(.purple)
+                .accessibilityHidden(true)
 
             Text(dataFile.fileName)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             Text(dataFile.format.displayName)
                 .badgeStyle(color: .secondary, font: Font.caption, backgroundOpacity: 0.2)
@@ -282,6 +284,7 @@ struct DataArrayItemRow: View {
                         Image(systemName: "chevron.up")
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel("Move Up")
                 }
 
                 if let onMoveDown = onMoveDown {
@@ -291,6 +294,7 @@ struct DataArrayItemRow: View {
                         Image(systemName: "chevron.down")
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel("Move Down")
                 }
 
                 Button(role: .destructive) {
@@ -299,6 +303,7 @@ struct DataArrayItemRow: View {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Delete Item \(index + 1)")
             }
         }
         .padding()
@@ -329,6 +334,7 @@ struct DataFieldRow: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Delete \(key)")
         }
     }
 }
@@ -422,6 +428,7 @@ struct DataRawEditorView: View {
             HStack {
                 Image(systemName: "info.circle")
                     .foregroundStyle(Color.Status.info)
+                    .accessibilityHidden(true)
                 Text("Changes made here will update the form view when you switch tabs")
                     .font(.caption)
                     .foregroundStyle(.secondary)

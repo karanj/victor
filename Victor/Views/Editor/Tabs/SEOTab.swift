@@ -77,6 +77,7 @@ struct SEOTab: View {
                     ))
                     .toggleStyle(.checkbox)
                     .labelsHidden()
+                    .accessibilityLabel("Set sitemap priority")
 
                     if frontmatter.sitemap?.priority != nil {
                         Slider(value: Binding(

@@ -77,9 +77,11 @@ private struct TextEditorToolbar: View {
             // File type icon and name
             Image(systemName: textFile.fileType.systemImage)
                 .foregroundStyle(textFile.fileType.defaultColor)
+                .accessibilityHidden(true)
 
             Text(textFile.url.lastPathComponent)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             // File type badge
             Text(textFile.fileType.displayName)
@@ -129,6 +131,7 @@ private struct TextEditorToolbar: View {
             // routed through the focusedValue(\.editorActions) published above.
             .disabled(!viewModel.hasUnsavedChanges || viewModel.isSaving)
             .help("Save (⌘S)")
+            .accessibilityLabel("Save")
 
             // Reload button
             Button {
@@ -139,6 +142,7 @@ private struct TextEditorToolbar: View {
                 Image(systemName: "arrow.clockwise")
             }
             .help("Reload from disk")
+            .accessibilityLabel("Reload from Disk")
 
             Divider()
                 .frame(height: 20)
@@ -150,6 +154,7 @@ private struct TextEditorToolbar: View {
                 Image(systemName: "arrow.up.forward.square")
             }
             .help("Open in default app")
+            .accessibilityLabel("Open in Default App")
 
             // Reveal in Finder
             Button {
@@ -158,6 +163,7 @@ private struct TextEditorToolbar: View {
                 Image(systemName: "folder")
             }
             .help("Reveal in Finder")
+            .accessibilityLabel("Reveal in Finder")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

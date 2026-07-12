@@ -47,10 +47,12 @@ struct TextViewerPanel: View {
             // File type icon
             Image(systemName: fileType.systemImage)
                 .foregroundStyle(fileType.defaultColor)
+                .accessibilityHidden(true)
 
             // File name
             Text(url.lastPathComponent)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             // File type badge
             Text(fileType.displayName)
@@ -81,6 +83,7 @@ struct TextViewerPanel: View {
                 Image(systemName: "arrow.up.forward.square")
             }
             .help("Open in default app")
+            .accessibilityLabel("Open in Default App")
 
             // Reveal in Finder
             Button {
@@ -89,6 +92,7 @@ struct TextViewerPanel: View {
                 Image(systemName: "folder")
             }
             .help("Reveal in Finder")
+            .accessibilityLabel("Reveal in Finder")
 
             // Copy path
             Button {
@@ -99,6 +103,7 @@ struct TextViewerPanel: View {
                 Image(systemName: "doc.on.clipboard")
             }
             .help("Copy file path")
+            .accessibilityLabel("Copy File Path")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

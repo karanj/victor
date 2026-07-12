@@ -70,6 +70,7 @@ struct LoadingStateView: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -87,8 +88,10 @@ struct ErrorStateView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)
                 .foregroundStyle(Color.Status.warning)
+                .accessibilityHidden(true)
             Text(title)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
             Text(message)
                 .font(.caption)
                 .foregroundStyle(.secondary)

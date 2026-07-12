@@ -32,6 +32,7 @@ struct ShortcodePickerView: View {
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     TextField("Search shortcodes...", text: $searchText)
                         .textFieldStyle(.plain)
                     if !searchText.isEmpty {
@@ -40,6 +41,7 @@ struct ShortcodePickerView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Clear Search")
                     }
                 }
                 .padding(8)

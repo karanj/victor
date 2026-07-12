@@ -38,6 +38,7 @@ struct FrontmatterBottomPanel: View {
                     Image(systemName: "doc.text.fill")
                         .foregroundStyle(.primary.opacity(0.7))
                         .font(.caption)
+                        .accessibilityHidden(true)
 
                     Text("Frontmatter")
                         .font(.subheadline)
@@ -70,6 +71,7 @@ struct FrontmatterBottomPanel: View {
                         .font(.caption)
                         .foregroundStyle(.primary.opacity(0.6))
                         .padding(.leading, 8)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -78,6 +80,7 @@ struct FrontmatterBottomPanel: View {
             .buttonStyle(.plain)
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
             .help(isExpanded ? "Collapse frontmatter" : "Expand frontmatter")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
             // Frontmatter content (when expanded)
             if isExpanded {
@@ -95,6 +98,7 @@ struct FrontmatterBottomPanel: View {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundStyle(Color.Status.warning)
+                                    .accessibilityHidden(true)
                                 Text(parseError)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -115,6 +119,7 @@ struct FrontmatterBottomPanel: View {
                             .font(.system(size: 12, design: .monospaced))
                             .padding(8)
                             .background(Color(nsColor: .textBackgroundColor))
+                            .accessibilityLabel(parseError.map { "Raw frontmatter, error: \($0)" } ?? "Raw frontmatter")
                     }
                     .frame(height: settings.frontmatterPanelHeight)
                 }

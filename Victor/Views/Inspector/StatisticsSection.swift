@@ -107,6 +107,10 @@ struct StatRow: View {
                 .font(.caption)
                 .foregroundStyle(.primary)
         }
+        // Without this, VoiceOver stops on "Words" and "42" as two separate
+        // elements when swiping through the inspector; combined it reads as
+        // one "Words, 42" stop, matching how a sighted user scans the row.
+        .accessibilityElement(children: .combine)
     }
 }
 

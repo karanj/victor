@@ -118,10 +118,12 @@ struct ContentPathAutocompleteField: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(Color.Status.saved)
                     .help("Path exists in content/")
+                    .accessibilityLabel("Path exists in content directory")
             } else {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(Color.Status.warning)
                     .help("Path not found in content/ directory")
+                    .accessibilityLabel("Path not found in content directory")
             }
         }
     }
@@ -188,6 +190,7 @@ private struct SuggestionRow: View {
                 Image(systemName: "doc.text")
                     .foregroundStyle(.secondary)
                     .frame(width: 16)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(suggestion.displayName)

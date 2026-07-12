@@ -95,10 +95,12 @@ struct AssetBrowserView: View {
             HStack {
                 Image(systemName: "photo.on.rectangle.angled")
                     .foregroundStyle(Color.FileIcon.image)
-                
+                    .accessibilityHidden(true)
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isAssetsDir ? "assets/" : "static/")
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text("Site Assets")
                         .font(.caption)
@@ -129,6 +131,7 @@ struct AssetBrowserView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("Refresh assets")
+                .accessibilityLabel("Refresh Assets")
                 
                 Divider().frame(height: 20)
                 // Sort
@@ -391,6 +394,7 @@ struct AssetGridItem: View {
                         .cornerRadius(4)
                         .offset(x: 4, y: -4)
                         .transition(.opacity.combined(with: .scale))
+                        .accessibilityHidden(true)
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: isHovered)
@@ -473,6 +477,7 @@ struct AssetListRow: View {
                         .cornerRadius(3)
                         .offset(x: 2, y: 2)
                         .transition(.opacity.combined(with: .scale))
+                        .accessibilityHidden(true)
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: isHovered)

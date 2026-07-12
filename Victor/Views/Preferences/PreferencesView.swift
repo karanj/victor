@@ -213,15 +213,18 @@ struct PreferencesView: View {
                     if isHugoInstalled {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(Color.Status.saved)
+                            .accessibilityHidden(true)
                         Text("Installed")
                             .foregroundStyle(.secondary)
                     } else {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(Color.Status.error)
+                            .accessibilityHidden(true)
                         Text("Not found")
                             .foregroundStyle(.secondary)
                     }
                 }
+                .accessibilityElement(children: .combine)
 
                 if isHugoInstalled {
                     HStack {
@@ -233,6 +236,7 @@ struct PreferencesView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
+                    .accessibilityElement(children: .combine)
                 } else {
                     Link("Install Hugo", destination: URL(string: "https://gohugo.io/installation/")!)
                         .font(.callout)
@@ -251,6 +255,7 @@ struct PreferencesView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 200)
                         .multilineTextAlignment(.trailing)
+                        .accessibilityLabel("Default Port")
                 }
 
                 Toggle("Build drafts", isOn: $settings.hugoServerBuildDrafts)

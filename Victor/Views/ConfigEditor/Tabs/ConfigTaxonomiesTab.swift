@@ -18,6 +18,7 @@ struct ConfigTaxonomiesTab: View {
                         Image(systemName: "arrow.right")
                             .foregroundStyle(.secondary)
                             .font(.caption)
+                            .accessibilityHidden(true)
                         Text(config.taxonomies[singular] ?? "")
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -28,6 +29,7 @@ struct ConfigTaxonomiesTab: View {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityLabel("Remove Taxonomy \(singular)")
                     }
                 }
 
@@ -39,6 +41,7 @@ struct ConfigTaxonomiesTab: View {
                     Image(systemName: "arrow.right")
                         .foregroundStyle(.secondary)
                         .font(.caption)
+                        .accessibilityHidden(true)
                     TextField("plural", text: $newPlural)
                         .frame(width: 120)
                         .padding(6)

@@ -19,6 +19,7 @@ struct NewArchetypeView: View {
             HStack {
                 Text("New Archetype")
                     .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button("Cancel") {
                     dismiss()
@@ -72,6 +73,7 @@ struct NewArchetypeView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(Color.Status.error)
+                            .accessibilityLabel("Error: \(error)")
                     }
                 }
             }
