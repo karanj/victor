@@ -188,17 +188,22 @@ Models use `@Observable class` pattern by design. Evaluation of struct alternati
 
 ## Outstanding Work
 
-Open issues are tracked in `Docs/ISSUES.yaml` (structured YAML, ~40 open/blocked tickets). Done tickets are removed on close (2026-07-11 policy); history lives in git log. Key areas:
+Open issues are tracked in **GitHub Issues** (migrated from `Docs/ISSUES.yaml` 2026-07-12; the YAML is now a stub holding the legacy victor-xxx → issue-number map). Workflow:
+- Ready work: `gh issue list -R karanj/victor --label P2 --state open` (skip anything labeled `blocked` — its blockers are the "Blocked by: #N" line in the body)
+- Labels: `P2`/`P3`/`P4` priority · `bug`/`enhancement`/`task`/`epic` type · `area:editor|file-watching|git|preview|mac-polish|code-health`
+- Legacy IDs: issue titles carry them — `gh issue list --search victor-xxx`
+- Close on completion; reference issues in commit messages (`victor-cjp / #9`).
+
+Key areas:
 - **Recently completed**: Mac-arsed gap closure program, executed 2026-07-11/12 (commits c8c61ef..88854b1) — Edit-menu text services, rename UI, multi-select sidebar with drag out/move, file-op undo/redo, VoiceOver sweep. Execution log + rubric re-score (~25 → ~31/36) in `Docs/MAC-ARSED-GAP-PLAN.md`; selection design in `Docs/SELECTION-MODEL-MEMO.md`; pending human verification lists in both plan doc and `Docs/ACCESSIBILITY-AUDIT-2026-07.md`. The predecessor Mac polish + modernisation program shipped Phases 0–3 earlier the same week; only victor-mbe/victor-icn remain from it
 - **P2**: editor track (cursor-jump bug victor-cjp, line numbers, tab bar → session restore, breadcrumbs, quick open), FSEvents file watching (9 tickets, dependency chain)
 - **P3**: Git integration (6 tickets), Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), App Sandbox (victor-sbx)
 - **P4**: Mac-arsed follow-ups (Move to Folder… command victor-mvf, accessibility leftovers victor-a2x), code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), menu bar extra (victor-mbe)
 
-To find work ready to start: look for `status: open` (no blockers). `status: blocked` tickets list their `blocked_by` dependencies.
 
 ## Project Docs
 
-- `Docs/ISSUES.yaml` - Issue tracker (open work items)
+- `Docs/ISSUES.yaml` - STUB: tracker migrated to GitHub Issues 2026-07-12; holds the legacy-ID map
 - `Docs/CODE-REVIEW-PLAN.md` - Code review findings and status
 - `Docs/CODE-ANALYSIS-2026-07-03.md` - Critical analysis session: 10 fixes (data loss, hang, dead prefs) + leftovers
 - `Docs/MAC-POLISH-DESIGN.md` - Mac polish design: window chrome, menus, system integration, modernisation track (approved 2026-07-04)
