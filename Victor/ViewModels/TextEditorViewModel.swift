@@ -48,10 +48,17 @@ class TextEditorViewModel {
     /// isolation (victor-zw4).
     private let fileSystemService: FileSystemService
 
+    /// Used only for `registerDebounce`/`deregisterDebounce` (victor-rnm TOCTOU
+    /// hardening) - this ViewModel writes directly via `fileSystemService`, not
+    /// through AutoSaveService's own save path, so `scheduleAutoSave`/
+    /// `scheduleImmediateSave` are irrelevant here.
+    private let autoSaveService: AutoSaveService
+
     // MARK: - Initialization
 
-    init(fileSystemService: FileSystemService = .shared) {
+    init(fileSystemService: FileSystemService = .shared, autoSaveService: AutoSaveService = .shared) {
         self.fileSystemService = fileSystemService
+        self.autoSaveService = autoSaveService
     }
 
     /// Whether auto-save is enabled
@@ -157,21 +164,43 @@ class TextEditorViewModel {
         }
     }
 
+    /// Registers itself with `AutoSaveService`'s node-ID-keyed debounce registry,
+    /// keyed by `nodeID` (FileNode.id, set alongside `textFile` in `loadFile`) -
+    /// same rationale and self-referencing-Task pattern as
+    /// `EditorViewModel.scheduleAutoSave` (victor-rnm TOCTOU hardening, post-launch
+    /// review): `self.save()` below calls `fileSystemService.writeFile`, which is
+    /// `@concurrent` (runs off this ViewModel's MainActor, on FileSystemService's
+    /// own executor) and doesn't observe `Task.isCancelled` - so a plain `.cancel()`
+    /// on this Task can't stop a write already in flight, only registering it with
+    /// AutoSaveService lets `SiteViewModel.renameFile`/`moveNode` cancel-AND-AWAIT it
+    /// before touching disk. `nodeID` is guarded non-nil since it's only meaningful
+    /// (and only set) once a file is loaded via `loadFile`.
     private func scheduleAutoSave() {
         autoSaveTask?.cancel()
 
-        autoSaveTask = Task { [weak self] in
-            guard let self = self else { return }
+        guard let nodeID else { return }
+        let service = autoSaveService
+        let debounceToken = UUID()
+        let delay = autoSaveDelay
+
+        var newTask: Task<Void, Never>!
+        newTask = Task { [weak self] in
+            await service.registerDebounce(nodeID: nodeID, token: debounceToken, task: newTask)
 
             // Wait for the debounce interval
-            try? await Task.sleep(for: .seconds(self.autoSaveDelay))
+            try? await Task.sleep(for: .seconds(delay))
 
             // Check if task was cancelled
-            guard !Task.isCancelled else { return }
+            if !Task.isCancelled {
+                await self?.save()
+            }
 
-            // Perform save
-            await self.save()
+            // Always deregister - single exit point, mirrors EditorViewModel's
+            // scheduleAutoSave (see AutoSaveService.cancelDebounce's doc comment
+            // for why this must be the Task's last action).
+            await service.deregisterDebounce(nodeID: nodeID, token: debounceToken)
         }
+        autoSaveTask = newTask
     }
 
     private func showSavedIndicatorBriefly() {

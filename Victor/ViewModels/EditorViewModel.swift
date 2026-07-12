@@ -230,99 +230,124 @@ class EditorViewModel {
     /// (onConflict/onSuccess/onError), which update UI-indicator/model state that's
     /// meaningless once this ViewModel might be stale, use `[weak self]` - same
     /// no-op-after-dealloc contract `cleanup()` already documents.
+    ///
+    /// Registers itself with `AutoSaveService`'s node-ID-keyed debounce registry
+    /// (victor-rnm TOCTOU hardening, post-launch review): `SiteViewModel.renameFile`/
+    /// `moveNode` call `cancelDebounce(nodeID:)` before touching disk, which cancels
+    /// AND awaits this Task, so they can't proceed while a write for this node is
+    /// still in flight. `newTask` is a self-referencing `var` (not `let`) so the Task
+    /// body can register its OWN handle as its first action - safe because
+    /// `newTask = Task { ... }` is a plain synchronous assignment with no suspension
+    /// point, so the closure cannot start running (and therefore cannot read
+    /// `newTask`) until that MainActor-serialized statement has already completed.
+    /// The registry entry is removed unconditionally as the Task's LAST action
+    /// (whether cancelled early or after a completed write) so it never grows
+    /// unbounded - see `deregisterDebounce`'s doc comment.
     private func scheduleAutoSave() {
         let nodeID = fileNode.id
         let capturedContentFile = contentFile
         let capturedSiteViewModel = siteViewModel
         let service = autoSaveService
+        let debounceToken = UUID()
 
         // Cancel any pending debounce before scheduling a new one - this alone (no
         // content capture, no serialization) is now the entire per-keystroke cost.
         autoSaveTask?.cancel()
 
-        autoSaveTask = Task {
+        var newTask: Task<Void, Never>!
+        newTask = Task {
+            await service.registerDebounce(nodeID: nodeID, token: debounceToken, task: newTask)
+
             try? await Task.sleep(for: .seconds(AppSettings.currentAutoSaveDelay()))
-            guard !Task.isCancelled else { return } // superseded by a newer keystroke
+            if !Task.isCancelled {
+                // Read the URL fresh, AFTER the sleep - NOT a value snapshotted at
+                // schedule time. SiteViewModel.renameFile mutates `contentFile.url`
+                // in place, so a rename that lands during this sleep is honored: the
+                // save targets the file's CURRENT path instead of recreating it at a
+                // path that no longer exists (victor-rnm hardening - flagged there as
+                // the highest-risk bug in that package).
+                let nodeURL = capturedContentFile.url
 
-            // Read the URL fresh, AFTER the sleep - NOT a value snapshotted at
-            // schedule time. SiteViewModel.renameFile mutates `contentFile.url`
-            // in place, so a rename that lands during this sleep is honored: the
-            // save targets the file's CURRENT path instead of recreating it at a
-            // path that no longer exists (victor-rnm hardening - flagged there as
-            // the highest-risk bug in that package).
-            let nodeURL = capturedContentFile.url
+                // Build the full document ONCE, now, from LIVE state - not a snapshot
+                // taken back when this debounce was scheduled.
+                let markdownToSave = capturedSiteViewModel.getEditedContent(for: nodeID)
+                    ?? capturedContentFile.markdownContent
+                let fullContent: String
+                if let frontmatter = capturedContentFile.frontmatter {
+                    fullContent = FrontmatterParser.shared.serializeFrontmatter(frontmatter) + "\n" + markdownToSave
+                } else {
+                    fullContent = markdownToSave
+                }
 
-            // Build the full document ONCE, now, from LIVE state - not a snapshot
-            // taken back when this debounce was scheduled.
-            let markdownToSave = capturedSiteViewModel.getEditedContent(for: nodeID)
-                ?? capturedContentFile.markdownContent
-            let fullContent: String
-            if let frontmatter = capturedContentFile.frontmatter {
-                fullContent = FrontmatterParser.shared.serializeFrontmatter(frontmatter) + "\n" + markdownToSave
-            } else {
-                fullContent = markdownToSave
+                await service.scheduleImmediateSave(
+                    fileURL: nodeURL,
+                    content: fullContent,
+                    lastModified: capturedContentFile.lastModified,
+                    onConflict: { @MainActor [weak self] in
+                        guard let self = self else { return .cancel }
+                        // Only show conflict alert if this is still the selected file
+                        guard nodeID == self.siteViewModel.selectedNode?.id else {
+                            return .cancel  // Silently cancel if file switched
+                        }
+                        // Cancel auto-save and show alert
+                        self.showConflictAlert = true
+                        return .cancel
+                    },
+                    onSuccess: { @MainActor [weak self] newModificationDate in
+                        guard let self = self else { return }
+
+                        // CRITICAL: Only update state if this is still the current file
+                        // If user switched files, this EditorViewModel is stale and shouldn't modify anything
+                        guard nodeID == self.siteViewModel.selectedNode?.id else {
+                            // File was switched - don't update UI or modify state
+                            // The save to disk was successful, but UI updates are for the old file
+                            Logger.shared.info("[AutoSave] Successfully saved \(nodeURL.lastPathComponent) after file switch")
+                            return
+                        }
+
+                        Logger.shared.info("[AutoSave] Successfully saved \(nodeURL.lastPathComponent)")
+
+                        // Update modification date
+                        self.contentFile.lastModified = newModificationDate
+                        // Use the same markdown content that was actually written
+                        self.contentFile.markdownContent = markdownToSave
+
+                        // Record frontmatter version after successful auto-save
+                        self.lastSavedFrontmatterVersion = self.contentFile.frontmatter?.version ?? 0
+
+                        // Update file status in sidebar
+                        self.siteViewModel.markFileSaved(nodeID)
+
+                        // Show saved indicator briefly
+                        self.showSavedIndicator = true
+                        Task { [weak self] in
+                            try? await Task.sleep(for: .seconds(AppConstants.Timing.autoSaveIndicatorDuration))
+                            self?.showSavedIndicator = false
+                        }
+                    },
+                    onError: { @MainActor [weak self] error in
+                        guard let self = self else { return }
+                        // Only show error if this is still the selected file
+                        guard nodeID == self.siteViewModel.selectedNode?.id else {
+                            // Log the error even though we're not showing it to the user
+                            Logger.shared.warning("[AutoSave] Error saving \(nodeURL.lastPathComponent) after file switch: \(error.localizedDescription)")
+                            return
+                        }
+                        // Show error in site view model (unless it's a user cancellation)
+                        if !(error is AutoSaveError) {
+                            self.siteViewModel.errorMessage = error.localizedDescription
+                        }
+                    }
+                )
             }
 
-            await service.scheduleImmediateSave(
-                fileURL: nodeURL,
-                content: fullContent,
-                lastModified: capturedContentFile.lastModified,
-                onConflict: { @MainActor [weak self] in
-                    guard let self = self else { return .cancel }
-                    // Only show conflict alert if this is still the selected file
-                    guard nodeID == self.siteViewModel.selectedNode?.id else {
-                        return .cancel  // Silently cancel if file switched
-                    }
-                    // Cancel auto-save and show alert
-                    self.showConflictAlert = true
-                    return .cancel
-                },
-                onSuccess: { @MainActor [weak self] newModificationDate in
-                    guard let self = self else { return }
-
-                    // CRITICAL: Only update state if this is still the current file
-                    // If user switched files, this EditorViewModel is stale and shouldn't modify anything
-                    guard nodeID == self.siteViewModel.selectedNode?.id else {
-                        // File was switched - don't update UI or modify state
-                        // The save to disk was successful, but UI updates are for the old file
-                        Logger.shared.info("[AutoSave] Successfully saved \(nodeURL.lastPathComponent) after file switch")
-                        return
-                    }
-
-                    Logger.shared.info("[AutoSave] Successfully saved \(nodeURL.lastPathComponent)")
-
-                    // Update modification date
-                    self.contentFile.lastModified = newModificationDate
-                    // Use the same markdown content that was actually written
-                    self.contentFile.markdownContent = markdownToSave
-
-                    // Record frontmatter version after successful auto-save
-                    self.lastSavedFrontmatterVersion = self.contentFile.frontmatter?.version ?? 0
-
-                    // Update file status in sidebar
-                    self.siteViewModel.markFileSaved(nodeID)
-
-                    // Show saved indicator briefly
-                    self.showSavedIndicator = true
-                    Task { [weak self] in
-                        try? await Task.sleep(for: .seconds(AppConstants.Timing.autoSaveIndicatorDuration))
-                        self?.showSavedIndicator = false
-                    }
-                },
-                onError: { @MainActor [weak self] error in
-                    guard let self = self else { return }
-                    // Only show error if this is still the selected file
-                    guard nodeID == self.siteViewModel.selectedNode?.id else {
-                        // Log the error even though we're not showing it to the user
-                        Logger.shared.warning("[AutoSave] Error saving \(nodeURL.lastPathComponent) after file switch: \(error.localizedDescription)")
-                        return
-                    }
-                    // Show error in site view model (unless it's a user cancellation)
-                    if !(error is AutoSaveError) {
-                        self.siteViewModel.errorMessage = error.localizedDescription
-                    }
-                }
-            )
+            // Always deregister - single exit point whether we were cancelled
+            // early or completed a write, so AutoSaveService's registry never
+            // grows unbounded and `cancelDebounce` never blocks on a Task that
+            // already finished (see AutoSaveService.cancelDebounce's doc
+            // comment for why this must be the Task's last action).
+            await service.deregisterDebounce(nodeID: nodeID, token: debounceToken)
         }
+        autoSaveTask = newTask
     }
 }

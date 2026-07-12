@@ -139,4 +139,128 @@ final class AutoSaveServiceTests: XCTestCase {
             "the two AutoSaveService instances must not share saveTasks/saveTokens state"
         )
     }
+
+    // MARK: - Node-Keyed Debounce Registry (victor-rnm TOCTOU hardening)
+    //
+    // Program review found the URL-keyed `cancelAutoSave(for:)` calls
+    // SiteViewModel.renameFile/moveNode made were dead - nothing in production
+    // registers into `saveTasks` (see `scheduleAutoSave`'s doc comment; only
+    // this suite's own tests above call it directly). These tests cover the
+    // node-ID-keyed registry that replaced that call, in isolation from
+    // EditorViewModel/TextEditorViewModel/SiteViewModel - see
+    // EditorViewModelTests/TextEditorViewModelTests/SiteViewModelTests for the
+    // real-caller wiring proofs.
+
+    func testRegistryDeregistersAfterTaskCompletesNormally() async throws {
+        let service = AutoSaveService()
+        let nodeID = UUID()
+        let token = UUID()
+
+        var task: Task<Void, Never>!
+        task = Task {
+            await service.registerDebounce(nodeID: nodeID, token: token, task: task)
+            await service.deregisterDebounce(nodeID: nodeID, token: token)
+        }
+        await task.value
+
+        let count = await service.debounceRegistrationCount
+        XCTAssertEqual(count, 0, "a debounce that runs to completion must remove its own registry entry - otherwise the registry grows unboundedly")
+    }
+
+    /// The token guard exists specifically to stop this: a superseded Task's
+    /// belated self-deregistration must not wipe out a NEWER registration for
+    /// the same nodeID (mirrors `saveTasks`/`saveTokens`' existing generation-
+    /// token pattern above, for exactly the same reason).
+    func testDeregisterDebounceIsNoOpWhenTokenDoesNotMatchNewerRegistration() async throws {
+        let service = AutoSaveService()
+        let nodeID = UUID()
+        let staleToken = UUID()
+        let currentToken = UUID()
+
+        // Simulate an old (superseded) Task's registration, followed by a
+        // keystroke reschedule registering a newer Task under the same nodeID.
+        let staleTask = Task<Void, Never> {}
+        await service.registerDebounce(nodeID: nodeID, token: staleToken, task: staleTask)
+        let currentTask = Task<Void, Never> {}
+        await service.registerDebounce(nodeID: nodeID, token: currentToken, task: currentTask)
+
+        // The stale Task's own (belated) deregistration call must be a no-op.
+        await service.deregisterDebounce(nodeID: nodeID, token: staleToken)
+
+        let count = await service.debounceRegistrationCount
+        XCTAssertEqual(count, 1, "a stale token's deregister call must not clobber the newer registration")
+    }
+
+    /// The core TOCTOU-closing guarantee: `cancelDebounce` must not return
+    /// until the registered Task has ACTUALLY finished, not merely been asked
+    /// to cancel. Simulates a write that (like AutoSaveService.performSave/
+    /// scheduleImmediateSave in production) does not observe `Task.isCancelled`
+    /// once started, via an artificial delay after the registration point.
+    func testCancelDebounceAwaitsInFlightWorkBeforeReturning() async throws {
+        let service = AutoSaveService()
+        let nodeID = UUID()
+        let token = UUID()
+
+        final class Box: @unchecked Sendable {
+            var writeCompleted = false
+        }
+        let box = Box()
+
+        var task: Task<Void, Never>!
+        task = Task {
+            await service.registerDebounce(nodeID: nodeID, token: token, task: task)
+            // Simulate an uncancellable in-flight write.
+            try? await Task.sleep(for: .milliseconds(300))
+            box.writeCompleted = true
+            await service.deregisterDebounce(nodeID: nodeID, token: token)
+        }
+
+        // Give the task a moment to register and enter its "write".
+        try await Task.sleep(for: .milliseconds(50))
+
+        await service.cancelDebounce(nodeID: nodeID)
+
+        XCTAssertTrue(
+            box.writeCompleted,
+            "cancelDebounce must wait for an in-flight write to finish, not just call .cancel() and return early"
+        )
+        let count = await service.debounceRegistrationCount
+        XCTAssertEqual(count, 0, "cancelDebounce must leave the registry clean once the Task it waited for is done")
+    }
+
+    /// A still-sleeping (not yet writing) Task must be genuinely interrupted -
+    /// cancelDebounce shouldn't need to wait for the full debounce interval.
+    func testCancelDebounceStopsAStillSleepingTaskQuickly() async throws {
+        let service = AutoSaveService()
+        let nodeID = UUID()
+        let token = UUID()
+
+        final class Box: @unchecked Sendable {
+            var wrote = false
+        }
+        let box = Box()
+
+        var task: Task<Void, Never>!
+        task = Task {
+            await service.registerDebounce(nodeID: nodeID, token: token, task: task)
+            try? await Task.sleep(for: .seconds(10)) // much longer than the test should take
+            if !Task.isCancelled {
+                box.wrote = true
+            }
+            await service.deregisterDebounce(nodeID: nodeID, token: token)
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+        await service.cancelDebounce(nodeID: nodeID)
+
+        XCTAssertFalse(box.wrote, "a cancelled, still-sleeping debounce must not proceed to write")
+    }
+
+    func testCancelDebounceOnUnregisteredNodeIsANoOp() async throws {
+        let service = AutoSaveService()
+        // Must return promptly without hanging or crashing when nothing is registered.
+        await service.cancelDebounce(nodeID: UUID())
+        let count = await service.debounceRegistrationCount
+        XCTAssertEqual(count, 0)
+    }
 }

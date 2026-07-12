@@ -107,7 +107,11 @@ actor AutoSaveService {
     /// compatibility need to preserve. It's kept because it's still correct, still
     /// covered by AutoSaveServiceTests, and deleting/rewriting working, tested code
     /// purely to shrink the file isn't worth the churn this session - see the
-    /// implementation report for victor's keystroke-lag fix.
+    /// implementation report for victor's keystroke-lag fix. Its URL-keyed
+    /// `saveTasks`/`cancelAutoSave(for:)` are a self-contained subsystem, separate
+    /// from the node-ID-keyed debounce registry below - SiteViewModel.renameFile/
+    /// moveNode use the latter, not this one, since nothing registers into
+    /// `saveTasks` in production (see the registry's intro comment for the story).
     func scheduleImmediateSave(
         fileURL: URL,
         content: String,
@@ -152,6 +156,93 @@ actor AutoSaveService {
         }
         saveTasks.removeAll()
         saveTokens.removeAll()
+    }
+
+    // MARK: - Node-Keyed Debounce Registry (victor-rnm TOCTOU hardening)
+    //
+    // Program review after victor-rnm shipped found the `cancelAutoSave(for:)`
+    // calls SiteViewModel.renameFile/moveNode made were dead: nothing in
+    // production calls `scheduleAutoSave` above (see its doc comment) - only
+    // EditorViewModel/TextEditorViewModel's own LOCAL per-keystroke debounce
+    // Tasks exist in production, and those were never registered anywhere this
+    // actor could reach. That left a real TOCTOU: a rename/move landing while
+    // one of those local Tasks was already past its own cancellation check and
+    // into `scheduleImmediateSave`/`performSave` (both of which run on THIS
+    // actor's executor, not the caller's MainActor, and don't check
+    // `Task.isCancelled` themselves) could still write to the pre-rename path
+    // after the rename completed - recreating the file there with rename's
+    // node-id-preserving semantics masking the corruption (staleness guards
+    // pass, "Saved" shows, but Hugo now sees two content files).
+    //
+    // This registry closes that structurally: callers register their own debounce
+    // Task under the FileNode.id it saves for (stable across rename/move, unlike
+    // a URL key), and `cancelDebounce(nodeID:)` doesn't just call `.cancel()` and
+    // hope - it AWAITS the Task's actual completion before returning, so a caller
+    // like SiteViewModel.renameFile can't proceed with the disk op until any
+    // in-flight write for that node has either been stopped (still sleeping) or
+    // has fully landed (already writing - lands at the pre-rename path, which is
+    // still valid at that moment, and the rename then carries that fresh content
+    // forward).
+
+    /// Debounce Tasks owned by callers (EditorViewModel/TextEditorViewModel),
+    /// keyed by the FileNode.id they save for - NOT the URL-keyed `saveTasks`
+    /// above, which only `scheduleAutoSave` writes into.
+    private var debounceTasksByNodeID: [UUID: Task<Void, Never>] = [:]
+
+    /// Generation token per nodeID, same pattern as `saveTokens` above: a
+    /// keystroke reschedule overwrites this entry with a new Task+token before
+    /// the superseded Task gets a chance to run its own (now-stale)
+    /// `deregisterDebounce` call - the token stops that stale call from
+    /// clobbering the newer registration.
+    private var debounceTokensByNodeID: [UUID: UUID] = [:]
+
+    /// Number of currently-registered debounce Tasks - test-visible hook for
+    /// asserting registry hygiene (no unbounded growth once debounces
+    /// complete/get cancelled).
+    var debounceRegistrationCount: Int {
+        debounceTasksByNodeID.count
+    }
+
+    /// Register a caller-owned debounce Task under `nodeID`, with a
+    /// caller-generated `token` (see `deregisterDebounce`). Overwrites any
+    /// previous registration for the same nodeID - callers re-register on
+    /// every keystroke reschedule, mirroring their own `.cancel()`-then-replace
+    /// of their local Task reference.
+    func registerDebounce(nodeID: UUID, token: UUID, task: Task<Void, Never>) {
+        debounceTasksByNodeID[nodeID] = task
+        debounceTokensByNodeID[nodeID] = token
+    }
+
+    /// Remove a debounce registration once its Task is done running (whether it
+    /// completed a write or exited early after cancellation) - callers call this
+    /// as the LAST action in their Task body, unconditionally, so the registry
+    /// never grows unbounded. No-op if a newer Task has already replaced this
+    /// registration for the same nodeID (token mismatch) - see `registerDebounce`.
+    func deregisterDebounce(nodeID: UUID, token: UUID) {
+        guard debounceTokensByNodeID[nodeID] == token else { return }
+        debounceTasksByNodeID.removeValue(forKey: nodeID)
+        debounceTokensByNodeID.removeValue(forKey: nodeID)
+    }
+
+    /// Cancel the debounce Task registered for `nodeID` (if any) and WAIT for it
+    /// to actually finish before returning - not just call `.cancel()` and move
+    /// on. Cancellation is cooperative: by the time a caller reaches this, the
+    /// Task may already be past its own `Task.isCancelled` check and into a
+    /// write that doesn't itself observe cancellation (see this section's intro
+    /// comment). Awaiting `task.value` blocks until the Task is completely done
+    /// either way, so there is no window left for a write to land after this
+    /// method returns.
+    ///
+    /// Loops rather than a single cancel-and-await: if a NEW debounce gets
+    /// registered for the same nodeID while we were awaiting the previous one
+    /// (e.g. a keystroke lands during the await), that new registration isn't
+    /// safe to leave pending either - re-checking the registry after each await
+    /// picks it up too, converging once nothing re-registers.
+    func cancelDebounce(nodeID: UUID) async {
+        while let task = debounceTasksByNodeID[nodeID] {
+            task.cancel()
+            await task.value
+        }
     }
 
     /// Perform the actual save operation with conflict detection

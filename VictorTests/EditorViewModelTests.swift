@@ -916,15 +916,24 @@ final class EditorViewModelTests: XCTestCase {
                        "ContentFile model should be updated with saved content")
     }
 
-    /// victor-rnm regression: `scheduleAutoSave` used to snapshot `fileNode.url`
-    /// into a local at SCHEDULE time and never re-read it, so a rename that
-    /// completed while the debounce was still sleeping caused the eventual save
-    /// to recreate the file at the OLD (now-deleted) path instead of writing to
-    /// the renamed one - flagged as the highest-risk bug in the victor-rnm
-    /// ticket. Fixed by reading `contentFile.url` fresh at fire time, after the
-    /// sleep: SiteViewModel.renameFile mutates that in place (same object,
-    /// shared between the FileNode tree and this EditorViewModel).
-    func testAutoSaveWritesToRenamedPathWhenRenameLandsDuringDebounce() async throws {
+    /// victor-rnm regression, hardened further after post-launch program review:
+    /// a debounced auto-save scheduled BEFORE a rename must not recreate the
+    /// file at the OLD (now-deleted) path once its debounce would have fired.
+    /// The FIRST fix (reading `contentFile.url` fresh at fire time) only
+    /// protected a write that was allowed to proceed; it did nothing to stop
+    /// one, so it couldn't prevent a genuinely in-flight write from racing the
+    /// rename (see AutoSaveServiceTests.testCancelDebounceAwaitsInFlightWorkBeforeReturning
+    /// for that half). The registry added on top makes cancellation REAL:
+    /// `SiteViewModel.renameFile` now cancels-and-awaits EditorViewModel's
+    /// registered debounce Task before touching disk. For a Task that's still
+    /// sleeping (this test's scenario - rename lands at 0.05s into a 0.4s
+    /// debounce), that means the debounce is genuinely interrupted and NEVER
+    /// writes - the edit stays pending in the per-file cache (survives the
+    /// rename, proven by testRenamePreservesEditedContentKeyedByUUID) rather
+    /// than landing anywhere. That's a deliberate, safe behavior change from
+    /// the first fix's draft (which let the write through, redirected to the
+    /// new path) - simpler, and the edit is never lost either way.
+    func testRenameCancelsStillSleepingDebounceInsteadOfLettingItWriteAnywhere() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
         defer {
@@ -940,7 +949,18 @@ final class EditorViewModelTests: XCTestCase {
         let originalURL = tempDir.appendingPathComponent("original.md")
         try "original content".write(to: originalURL, atomically: true, encoding: .utf8)
 
-        let renameSiteViewModel = SiteViewModel(fileSystemService: FileSystemService())
+        // Production wiring always has SiteViewModel and EditorViewModel sharing
+        // ONE AutoSaveService instance (both default to `.shared`) - a fresh
+        // instance here is for cross-TEST isolation only, and it must be the
+        // SAME instance passed to both, or renameFile's cancelDebounce would be
+        // cancelling a registry a different actor instance never saw (that bug
+        // existed in an earlier draft of this test - it happened to still pass
+        // because of the fresh-URL-read fix below, independent of cancellation
+        // actually reaching the Task - see
+        // testRenameFileCancelsAndDeregistersEditorViewModelsRegisteredDebounce
+        // for a test that WOULD catch that class of wiring bug).
+        let sharedAutoSaveService = AutoSaveService()
+        let renameSiteViewModel = SiteViewModel(fileSystemService: FileSystemService(), autoSaveService: sharedAutoSaveService)
         renameSiteViewModel.site = await HugoSite.create(rootURL: tempDir)
         let node = FileNode(url: originalURL, isDirectory: false, isPageBundle: false)
         let contentFile = ContentFile(url: originalURL, frontmatter: nil, markdownContent: "original content")
@@ -952,7 +972,7 @@ final class EditorViewModelTests: XCTestCase {
             fileNode: node,
             contentFile: contentFile,
             siteViewModel: renameSiteViewModel,
-            autoSaveService: AutoSaveService()
+            autoSaveService: sharedAutoSaveService
         )
         _ = editorVM // keep a strong reference to prevent deallocation
 
@@ -967,13 +987,85 @@ final class EditorViewModelTests: XCTestCase {
         let renamedURL = tempDir.appendingPathComponent("renamed.md")
         XCTAssertEqual(node.url, renamedURL) // sanity check the rename itself worked
 
-        // Wait past the debounce for the save to fire.
+        // Wait past what would have been the debounce interval - nothing should
+        // fire, since renameFile's cancelDebounce already stopped the Task.
         try await Task.sleep(for: .seconds(1))
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: originalURL.path),
-                       "the debounced auto-save must not recreate the file at the OLD path")
+                       "the cancelled debounce must not recreate the file at the OLD path")
+
+        // The cancelled Task never wrote, so the file at the new path still
+        // holds its ORIGINAL on-disk content...
         let renamedContent = try String(contentsOf: renamedURL, encoding: .utf8)
-        XCTAssertTrue(renamedContent.contains("edited content"),
-                      "the debounced auto-save must land at the NEW (renamed) path with the user's edit")
+        XCTAssertEqual(renamedContent, "original content",
+                       "a cancelled (still-sleeping) debounce must not write at all - not to the old path, not to the new one either")
+
+        // ...while the user's edit is still safe, pending in the per-file cache
+        // keyed by node.id (proven generally by testRenamePreservesEditedContentKeyedByUUID) -
+        // nothing was lost, it just wasn't flushed to disk by this cancelled debounce.
+        XCTAssertEqual(renameSiteViewModel.getEditedContent(for: node.id), "edited content",
+                       "the edit must survive the cancelled debounce, ready for the next auto-save or manual save")
+    }
+
+    /// Direct wiring proof (post-launch review followup): the disk-content test
+    /// above passes even if `renameFile`'s cancellation never reached
+    /// EditorViewModel's Task, because the rename happens well before the
+    /// debounce fires and `scheduleAutoSave` independently reads
+    /// `contentFile.url` fresh at fire time (see its doc comment). That test
+    /// alone can't distinguish "cancellation is wired correctly" from
+    /// "cancellation is a no-op and we got lucky on timing". This test can:
+    /// it asserts AutoSaveService's registry directly, which only reflects
+    /// reality if EditorViewModel truly registers under the node's id and
+    /// SiteViewModel.renameFile truly cancels-and-awaits that exact
+    /// registration.
+    func testRenameFileCancelsAndDeregistersEditorViewModelsRegisteredDebounce() async throws {
+        UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+        UserDefaults.standard.set(5.0, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) // long enough to still be pending when we check
+        defer {
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
+            UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EditorViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let originalURL = tempDir.appendingPathComponent("original.md")
+        try "original content".write(to: originalURL, atomically: true, encoding: .utf8)
+
+        let sharedAutoSaveService = AutoSaveService()
+        let renameSiteViewModel = SiteViewModel(fileSystemService: FileSystemService(), autoSaveService: sharedAutoSaveService)
+        renameSiteViewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: originalURL, isDirectory: false, isPageBundle: false)
+        let contentFile = ContentFile(url: originalURL, frontmatter: nil, markdownContent: "original content")
+        node.contentFile = contentFile
+        renameSiteViewModel.fileNodes = [node]
+        renameSiteViewModel.selectedNode = node
+
+        let editorVM = EditorViewModel(
+            fileNode: node,
+            contentFile: contentFile,
+            siteViewModel: renameSiteViewModel,
+            autoSaveService: sharedAutoSaveService
+        )
+        _ = editorVM
+
+        editorVM.editableContent = "edited content"
+        editorVM.handleContentChange()
+
+        // Give the debounce Task a moment to reach its first await (registerDebounce).
+        try await Task.sleep(for: .milliseconds(50))
+
+        let registeredCount = await sharedAutoSaveService.debounceRegistrationCount
+        XCTAssertEqual(registeredCount, 1,
+                       "EditorViewModel must register its debounce Task with AutoSaveService under the node's id")
+
+        await renameSiteViewModel.renameFile(node: node, to: "renamed.md")
+
+        let countAfterRename = await sharedAutoSaveService.debounceRegistrationCount
+        XCTAssertEqual(countAfterRename, 0,
+                       "renameFile's cancelDebounce must find and fully cancel-and-await the SAME registered Task - " +
+                       "if the nodeID/instance wiring were broken this would still show 1")
     }
 }

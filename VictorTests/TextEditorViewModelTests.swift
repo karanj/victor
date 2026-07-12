@@ -132,4 +132,80 @@ final class TextEditorViewModelTests: XCTestCase {
         )
         XCTAssertEqual(viewModel.editableContent, "body {}")
     }
+
+    // MARK: - Auto-Save Debounce Registry (victor-rnm TOCTOU hardening, post-launch review)
+
+    /// Mirrors EditorViewModelTests.testRenameFileCancelsAndDeregistersEditorViewModelsRegisteredDebounce:
+    /// `self.save()` writes via `fileSystemService.writeFile`, which is
+    /// `@concurrent` (runs off this ViewModel's MainActor) and doesn't observe
+    /// `Task.isCancelled`, so a plain `.cancel()` on the local debounce Task
+    /// can't stop a write already in flight - only AutoSaveService's node-ID-keyed
+    /// registry lets `SiteViewModel.renameFile` cancel-AND-AWAIT it before
+    /// touching disk. Asserts the registry directly (not just disk content/
+    /// timing) so a broken nodeID/instance wiring would fail this test instead
+    /// of passing for the wrong reason.
+    func testRenameFileCancelsAndDeregistersTextEditorViewModelsRegisteredDebounce() async throws {
+        let previousDelay = AppSettings.shared.autoSaveDelay
+        let previousEnabled = AppSettings.shared.isAutoSaveEnabled
+        AppSettings.shared.autoSaveDelay = 5.0 // long enough to still be pending when we check
+        AppSettings.shared.isAutoSaveEnabled = true
+        defer {
+            AppSettings.shared.autoSaveDelay = previousDelay
+            AppSettings.shared.isAutoSaveEnabled = previousEnabled
+        }
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TextEditorViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let fileURL = tempDir.appendingPathComponent("style.css")
+        try "body {}".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        // Production wiring always has SiteViewModel and TextEditorViewModel
+        // sharing ONE AutoSaveService instance (both default to `.shared`) - a
+        // fresh instance here is for cross-test isolation only, and it must be
+        // the SAME instance passed to both, or renameFile's cancelDebounce
+        // would be cancelling a registry a different actor instance never saw.
+        let sharedAutoSaveService = AutoSaveService()
+        let siteViewModel = SiteViewModel(fileSystemService: FileSystemService(), autoSaveService: sharedAutoSaveService)
+        siteViewModel.site = await HugoSite.create(rootURL: tempDir)
+        let node = FileNode(url: fileURL, isDirectory: false)
+        let textFile = TextFile(url: fileURL, content: "body {}", lastModified: Date())
+        node.textFile = textFile
+        siteViewModel.fileNodes = [node]
+
+        let viewModel = TextEditorViewModel(autoSaveService: sharedAutoSaveService)
+        viewModel.siteViewModel = siteViewModel
+        viewModel.loadFile(textFile, nodeID: node.id)
+
+        viewModel.editableContent = "body { color: blue; }"
+        viewModel.contentDidChange() // schedules the debounce, registers with `sharedAutoSaveService`
+
+        // Give the debounce Task a moment to reach its first await (registerDebounce).
+        try await Task.sleep(for: .milliseconds(50))
+
+        let registeredCount = await sharedAutoSaveService.debounceRegistrationCount
+        XCTAssertEqual(registeredCount, 1,
+                       "TextEditorViewModel must register its debounce Task with AutoSaveService under the node's id")
+
+        await siteViewModel.renameFile(node: node, to: "renamed.css")
+
+        let countAfterRename = await sharedAutoSaveService.debounceRegistrationCount
+        XCTAssertEqual(countAfterRename, 0,
+                       "renameFile's cancelDebounce must find and fully cancel-and-await the SAME registered Task - " +
+                       "if the nodeID/instance wiring were broken this would still show 1")
+
+        // The cancelled Task never wrote: old path is gone (renamed away), the
+        // new path still holds its pre-edit on-disk content, and the edit
+        // itself is still safe - unlike markdown, TextFile edits live directly
+        // on the shared model object (not a separate per-file cache, see
+        // CLAUDE.md's Content State Dual Storage section), so it isn't lost.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+        let renamedURL = tempDir.appendingPathComponent("renamed.css")
+        let renamedContent = try String(contentsOf: renamedURL, encoding: .utf8)
+        XCTAssertEqual(renamedContent, "body {}",
+                       "a cancelled (still-sleeping) debounce must not write at all - not to the old path, not to the new one either")
+        XCTAssertEqual(textFile.content, "body { color: blue; }",
+                       "the edit must survive on the shared TextFile object, ready for the next auto-save or manual save")
+    }
 }

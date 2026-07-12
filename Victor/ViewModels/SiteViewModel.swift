@@ -1680,16 +1680,19 @@ class SiteViewModel {
 
             // Cancel any pending debounced auto-save for this node - and, for a
             // directory rename, every descendant file - BEFORE touching disk.
-            // Otherwise a save already in flight can fire after the move and
-            // recreate the file at the OLD path (the highest-risk bug in
-            // victor-rnm). This covers AutoSaveService's own actor-tracked
-            // debounce (`scheduleAutoSave`); EditorViewModel's per-keystroke
-            // debounce is a separate local Task not registered here, and is
-            // hardened independently by reading `contentFile.url` live at fire
-            // time rather than a schedule-time snapshot - see
-            // EditorViewModel.scheduleAutoSave.
-            for url in [node.url] + allDescendantURLs(of: node) {
-                await autoSaveService.cancelAutoSave(for: url)
+            // Otherwise a save already in flight can fire after the rename and
+            // recreate the file at the OLD path (the highest-risk bug flagged in
+            // victor-rnm, and found still-open by the post-launch program review:
+            // the original `autoSaveService.cancelAutoSave(for: url)` here was
+            // dead - nothing in production registers into that URL-keyed
+            // dictionary). `cancelDebounce(nodeID:)` cancels AND AWAITS the real
+            // local debounce Task EditorViewModel/TextEditorViewModel register
+            // for this node (see AutoSaveService's node-keyed registry section),
+            // so this `await` doesn't return until any in-flight write for the
+            // node has either been stopped or has fully landed - there is no
+            // remaining window for a write to land after the rename below.
+            for nodeID in [node.id] + allDescendantNodeIDs(of: node) {
+                await autoSaveService.cancelDebounce(nodeID: nodeID)
             }
 
             let newURL = try await fileOperationsService.renameFile(at: node.url, to: newName, siteRoot: siteRoot)
@@ -1740,10 +1743,12 @@ class SiteViewModel {
         }
     }
 
-    /// Every descendant URL under `node`, for cancelling pending auto-saves
-    /// before a directory rename (see `renameFile`).
-    private func allDescendantURLs(of node: FileNode) -> [URL] {
-        node.children.flatMap { [$0.url] + allDescendantURLs(of: $0) }
+    /// Every descendant node ID under `node`, for cancelling pending auto-saves
+    /// before a directory rename/move (see `renameFile`/`moveNode`) - IDs, not
+    /// URLs, since `AutoSaveService`'s debounce registry is keyed by FileNode.id
+    /// (stable across the very rename/move this is cancelling for).
+    private func allDescendantNodeIDs(of node: FileNode) -> [UUID] {
+        node.children.flatMap { [$0.id] + allDescendantNodeIDs(of: $0) }
     }
 
     /// Rebuild every descendant's `url` (and its `contentFile`/`textFile` mirror)
@@ -1799,11 +1804,11 @@ class SiteViewModel {
 
         // Cancel any pending debounced auto-save for this node - and, for a
         // directory move, every descendant file - BEFORE touching disk. Same
-        // ordering rationale as renameFile (see its doc comment): a save
-        // already in flight could otherwise fire after the move and
-        // recreate the file at the OLD path.
-        for url in [node.url] + allDescendantURLs(of: node) {
-            await autoSaveService.cancelAutoSave(for: url)
+        // ordering rationale and mechanism as renameFile (see its doc comment):
+        // `cancelDebounce(nodeID:)` cancels AND AWAITS the real registered
+        // debounce Task, so a save already in flight can't land after the move.
+        for nodeID in [node.id] + allDescendantNodeIDs(of: node) {
+            await autoSaveService.cancelDebounce(nodeID: nodeID)
         }
 
         // Captured before reparenting below - the undo inverse moves back
