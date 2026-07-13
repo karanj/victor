@@ -63,8 +63,8 @@ targets:
         DEVELOPMENT_TEAM: 55V96YBUQ4
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: Victor/Victor.entitlements
-        MARKETING_VERSION: "0.2"
-        CURRENT_PROJECT_VERSION: "202601221106"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "202607130012"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Victor
         INFOPLIST_KEY_NSHumanReadableCopyright: ""
@@ -82,6 +82,11 @@ targets:
         Release:
           SWIFT_OPTIMIZATION_LEVEL: -O
           DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          # victor-dst (#49): required for notarization. Release only - the
+          # hardened runtime can interfere with debugger attachment in Debug.
+          # No entitlement exceptions needed: spawning hugo via Process and
+          # WKWebView both work under the default hardened runtime.
+          ENABLE_HARDENED_RUNTIME: YES
 
   VictorTests:
     type: bundle.unit-test
