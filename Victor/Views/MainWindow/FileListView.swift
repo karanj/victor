@@ -64,13 +64,18 @@ struct FileListView: View {
                 pendingTrashNodes: $pendingTrashNodes
             )
         } primaryAction: { ids in
-            // List(selection:)'s own click handling already updates
-            // selectedFileIDs on a plain click - unrelated to primaryAction,
-            // which only fires on double-click. Today there's no explicit
-            // double-click-to-open, since single-click-to-select already
-            // opens the file as a side effect of selection; this is a
-            // no-op-preserving safety net for exactly-one-target double-clicks.
-            if ids.count == 1, let node = siteViewModel.findNode(id: ids.first!) {
+            // Fires on double-click only (plain clicks go through
+            // List(selection:)'s own handling). Folders: toggle disclosure,
+            // Finder-style - mirrors the DisclosureGroup binding above,
+            // including the metadata load on expand. Files: re-select as a
+            // no-op-preserving safety net (single-click already opens).
+            guard ids.count == 1, let node = siteViewModel.findNode(id: ids.first!) else { return }
+            if node.isDirectory {
+                node.isExpanded.toggle()
+                if node.isExpanded {
+                    siteViewModel.onFolderExpanded(node)
+                }
+            } else {
                 siteViewModel.selectNode(node)
             }
         }

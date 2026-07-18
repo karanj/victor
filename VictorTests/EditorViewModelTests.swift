@@ -980,9 +980,23 @@ final class EditorViewModelTests: XCTestCase {
         editorVM.editableContent = "edited content"
         editorVM.handleContentChange()
 
-        try await Task.sleep(for: .milliseconds(50))
+        // De-flake (#51): wait for the debounce Task's actual registration
+        // signal instead of a wall-clock guess. Registration is the Task's
+        // first action, but Task scheduling can lag arbitrarily under a loaded
+        // suite - the old fixed 50ms sleep raced it, letting renameFile's
+        // cancelDebounce run against an empty registry so the test asserted a
+        // scenario it never actually set up. Polling the registry pins the
+        // intended precondition: registered AND still sleeping (the 0.4s
+        // debounce delay is far beyond this poll's resolution).
+        let registrationDeadline = Date().addingTimeInterval(5)
+        while await sharedAutoSaveService.debounceRegistrationCount == 0 {
+            guard Date() < registrationDeadline else {
+                return XCTFail("debounce never registered within 5s - can't exercise the cancel-while-sleeping scenario")
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
-        // Rename lands WHILE the debounce is still sleeping (0.4s delay, we're 0.05s in).
+        // Rename lands WHILE the debounce is registered and still sleeping.
         await renameSiteViewModel.renameFile(node: node, to: "renamed.md")
         let renamedURL = tempDir.appendingPathComponent("renamed.md")
         XCTAssertEqual(node.url, renamedURL) // sanity check the rename itself worked
