@@ -215,6 +215,11 @@ struct AssetBrowserView: View {
                         .onTapGesture {
                             selectedAsset = asset
                         }
+                        // .onDrag stays here (unlike the list view / sidebar,
+                        // victor-clk #50): .itemProvider is List-only and a
+                        // LazyVGrid has no native selection to preempt, so the
+                        // tap-vs-drag contention is far milder. If grid clicks
+                        // ever feel flaky, this is the first suspect.
                         .onDrag {
                             assetDragItemProvider(for: asset)
                         }
@@ -232,7 +237,11 @@ struct AssetBrowserView: View {
     private var assetListView: some View {
         List(filteredAssets, selection: $selectedAsset) { asset in
             AssetListRow(asset: asset, onInsert: onInsert)
-                .onDrag {
+                // .itemProvider, deliberately NOT .onDrag: on a selection List,
+                // .onDrag's own drag gesture front-runs the table's
+                // click-to-select and eats left-clicks (victor-clk / #50, same
+                // fix as the sidebar).
+                .itemProvider {
                     assetDragItemProvider(for: asset)
                 }
                 .task {

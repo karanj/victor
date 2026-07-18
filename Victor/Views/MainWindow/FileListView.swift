@@ -541,31 +541,18 @@ struct ContentStatusBadge: View {
 
 // MARK: - Drag Out
 
-/// Builds the drag-out payload for a sidebar row (victor-sel B.4). If `node`
-/// is part of the current multi-selection (2+ members), the grabbed row's
-/// own file is still the ONLY one draggable as a real file-copy - SwiftUI's
-/// `.onDrag` hands back exactly one `NSItemProvider` per drag gesture (same
-/// ceiling AssetBrowserView's single-asset drag source runs into), so a true
-/// multi-file Finder drop (N separate file-promise items from one gesture)
-/// isn't achievable with this API. The full selection's paths (tree order)
-/// are attached as a secondary plain-text representation instead, so a drop
-/// into a text-accepting destination (a text editor, Terminal) still
-/// surfaces every selected path - not silently dropped, just not expressed
-/// as N separate Finder-recognized files; a drop onto Finder itself will
-/// only copy the single grabbed file. Dragging a row that ISN'T part of the
-/// current selection drags just that row (standard macOS behavior).
-/// `@MainActor`: reads `selectedFileIDs`/`treeOrderIndex`/`findNode` on the
-/// main-actor-isolated SiteViewModel; `.onDrag` closures in the row views are
-/// main-actor-inferred (same pattern as AssetBrowserView's drag source).
+/// Builds the drag-out payload for ONE sidebar row (victor-clk / #50).
+/// Rows use `.itemProvider`, NOT `.onDrag`: `.onDrag` installs its own drag
+/// gesture that front-runs the List's native click-to-select handling and
+/// eats left-clicks (the #50 bug). `.itemProvider` registers with the
+/// NSTableView drag-source machinery instead - standard AppKit drag
+/// threshold, clicks never contested - and on a multi-selection drag the
+/// table collects one provider per selected row, so true N-file Finder
+/// drags come free (this replaced B.4's single-provider workaround that
+/// joined the other paths into a text representation).
 @MainActor
-private func dragItemProvider(for node: FileNode, siteViewModel: SiteViewModel) -> NSItemProvider {
-    let selection = siteViewModel.selectedFileIDs
-    if selection.count > 1, selection.contains(node.id) {
-        let allPaths = siteViewModel.treeOrderIndex(of: selection)
-            .compactMap { siteViewModel.findNode(id: $0)?.url.path }
-        return FileDragItemProvider.make(for: node.url, secondaryRepresentation: allPaths.joined(separator: "\n"))
-    }
-    return FileDragItemProvider.make(for: node.url, secondaryRepresentation: node.url.path)
+private func dragItemProvider(for node: FileNode) -> NSItemProvider {
+    FileDragItemProvider.make(for: node.url, secondaryRepresentation: node.url.path)
 }
 
 // MARK: - Row Wrappers
@@ -592,10 +579,10 @@ struct FolderRowWithSheets: View {
                         .stroke(Color.accentColor, lineWidth: 2)
                 }
             }
-            // Drag-out source (victor-sel B.4) - see dragItemProvider's doc
-            // comment above for the multi-selection/single-provider caveat.
-            .onDrag {
-                dragItemProvider(for: node, siteViewModel: siteViewModel)
+            // Drag-out source. .itemProvider, deliberately NOT .onDrag -
+            // see dragItemProvider's doc comment (victor-clk / #50).
+            .itemProvider {
+                dragItemProvider(for: node)
             }
             // Accept file drops onto folder rows - either a same-site MOVE or
             // (for drops from outside the site, e.g. Finder) the existing
@@ -628,8 +615,10 @@ struct FileRowWithSheets: View {
     var body: some View {
         FileRowView(viewModel: siteViewModel.rowViewModel(for: node), node: node)
             .equatable()
-            .onDrag {
-                dragItemProvider(for: node, siteViewModel: siteViewModel)
+            // .itemProvider, deliberately NOT .onDrag - see dragItemProvider's
+            // doc comment (victor-clk / #50).
+            .itemProvider {
+                dragItemProvider(for: node)
             }
     }
 }
