@@ -51,8 +51,8 @@ extra gate) and menu bindings. The 2026-07-03 analysis fixed five readers of
 (`@AppStorage`, raw `UserDefaults` reads, `didSet`-persisted properties) with
 no cross-pattern observation — that whole bug class dies here.
 
-**Departure from victor-stn as originally ticketed:** no JSON file. The
-CodeEdit-style settings.json + custom property wrapper solves problems Victor
+**Departure from victor-stn as originally ticketed:** no JSON file. An
+editor-style settings.json + custom property wrapper solves problems Victor
 doesn't have (nested settings, importable themes) and creates ones it would
 (rebuild SwiftUI observation, file I/O + debounce + corruption handling, key
 migration — while window restoration and the site bookmark stay in
