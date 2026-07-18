@@ -52,22 +52,8 @@ For detailed usage instructions, see the **[User Manual](Docs/USER-MANUAL.md)**.
 
 ## Installation
 
-1. Download **Victor.dmg** from the [latest release](https://github.com/karanj/victor/releases/latest)
-2. Open the DMG and drag Victor to your Applications folder
-3. **Important**: On first launch, right-click the app and select **Open** (see note below)
-
-### First Launch Security Note
-
-Victor is not notarized with Apple, so macOS will show an "unidentified developer" warning. To open it:
-
-- **Right-click** Victor.app → click **Open** → click **Open** in the dialog
-
-Alternatively, run this in Terminal:
-```bash
-xattr -cr /Applications/Victor.app
-```
-
-You only need to do this once. After that, Victor will open normally.
+1. Download **Victor.zip** from the [latest release](https://github.com/karanj/victor/releases/latest)
+2. Expand the zip and drag Victor to your Applications folder
 
 ## Building from Source
 
