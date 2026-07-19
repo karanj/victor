@@ -92,32 +92,37 @@ struct PermalinkResolver {
         let dayOfYear = cal.ordinality(of: .day, in: .year, for: date) ?? 1
 
         // The effective slug: :title and :slug both use slug override if present,
-        // :filename always uses the actual filename
+        // :filename/:contentbasename always use the actual filename
         let effectiveSlug = slug ?? fileSlug
 
-        var result = pattern
-
-        // Date tokens
-        result = result.replacingOccurrences(of: ":year", with: String(format: "%04d", year))
-        result = result.replacingOccurrences(of: ":month", with: String(format: "%02d", month))
-        result = result.replacingOccurrences(of: ":day", with: String(format: "%02d", day))
-        result = result.replacingOccurrences(of: ":yearday", with: String(format: "%03d", dayOfYear))
-
-        // Month name (use POSIX locale for consistency with Hugo)
+        // Names (use POSIX locale for consistency with Hugo)
         let monthName = date.formatted(Date.VerbatimFormatStyle.hugoMonthName(timeZone: utc))
-        result = result.replacingOccurrences(of: ":monthname", with: monthName.lowercased())
-
-        // Weekday
         let weekdayName = date.formatted(Date.VerbatimFormatStyle.hugoWeekdayName(timeZone: utc))
-        result = result.replacingOccurrences(of: ":weekdayname", with: weekdayName.lowercased())
-        result = result.replacingOccurrences(of: ":weekday", with: String(comps.weekday ?? 0))
 
-        // Content tokens
-        result = result.replacingOccurrences(of: ":section", with: section)
-        result = result.replacingOccurrences(of: ":sections", with: section)
-        result = result.replacingOccurrences(of: ":filename", with: fileSlug)
-        result = result.replacingOccurrences(of: ":slug", with: effectiveSlug)
-        result = result.replacingOccurrences(of: ":title", with: effectiveSlug)
+        let replacements: [(token: String, value: String)] = [
+            (":year", String(format: "%04d", year)),
+            (":month", String(format: "%02d", month)),
+            (":day", String(format: "%02d", day)),
+            (":yearday", String(format: "%03d", dayOfYear)),
+            (":monthname", monthName.lowercased()),
+            (":weekdayname", weekdayName.lowercased()),
+            (":weekday", String(comps.weekday ?? 0)),
+            (":section", section),
+            (":sections", section),
+            (":contentbasename", fileSlug),
+            (":filename", fileSlug),
+            (":slugorcontentbasename", effectiveSlug),
+            (":slugorfilename", effectiveSlug),
+            (":slug", effectiveSlug),
+            (":title", effectiveSlug),
+        ]
+
+        var result = pattern
+        // Longest token first, so a token that prefixes another (:year in
+        // :yearday, :section in :sections, :slug in :slugor…) can't corrupt it
+        for (token, value) in replacements.sorted(by: { $0.token.count > $1.token.count }) {
+            result = result.replacingOccurrences(of: token, with: value)
+        }
 
         // Ensure leading slash
         if !result.hasPrefix("/") {
@@ -140,9 +145,14 @@ struct PermalinkResolver {
         let token: String
         let description: String
         let example: String
+        /// Deprecated tokens stay recognized (files using them must not break)
+        /// but are excluded from the insert menu.
+        var deprecated: Bool = false
     }
 
     /// All valid Hugo permalink tokens.
+    /// :filename/:slugorfilename were deprecated in Hugo v0.144 in favor of
+    /// :contentbasename/:slugorcontentbasename (CONFIG-SCHEMA-SPEC finding #9).
     static let validTokens: [TokenInfo] = [
         TokenInfo(token: ":year", description: "4-digit year", example: "2024"),
         TokenInfo(token: ":month", description: "2-digit month", example: "03"),
@@ -155,8 +165,15 @@ struct PermalinkResolver {
         TokenInfo(token: ":sections", description: "Content sections path", example: "posts"),
         TokenInfo(token: ":title", description: "Page title/slug", example: "my-post"),
         TokenInfo(token: ":slug", description: "Slug (from frontmatter or filename)", example: "my-post"),
-        TokenInfo(token: ":filename", description: "Original filename", example: "my-post"),
+        TokenInfo(token: ":contentbasename", description: "Content file base name", example: "my-post"),
+        TokenInfo(token: ":slugorcontentbasename", description: "Slug, falling back to file base name", example: "my-post"),
+        TokenInfo(token: ":filename", description: "Original filename (deprecated — use :contentbasename)", example: "my-post", deprecated: true),
+        TokenInfo(token: ":slugorfilename", description: "Slug or filename (deprecated — use :slugorcontentbasename)", example: "my-post", deprecated: true),
     ]
+
+    /// Tokens offered in the insert menu — deprecated ones are recognized in
+    /// existing patterns but never offered for new ones.
+    static let insertableTokens: [TokenInfo] = validTokens.filter { !$0.deprecated }
 
     /// Set of valid token strings for fast lookup.
     private static let validTokenSet: Set<String> = Set(validTokens.map(\.token))

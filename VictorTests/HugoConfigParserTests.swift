@@ -1404,6 +1404,228 @@ final class HugoConfigParserTests: XCTestCase {
         try assertJSONRoundTrip(input)
     }
 
+    // MARK: - Phase 0: Sparse Serialization (CONFIG-SCHEMA-SPEC §5)
+
+    /// A minimal config must round-trip with exactly its own key set — no injected
+    /// defaults (design-doc issue #1). Editing one field adds only that field.
+    func testSparseSerializationMinimalTOML() throws {
+        let input = """
+        baseURL = "https://example.com/"
+        title = "My Site"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        config.title = "New Title"
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+
+        XCTAssertEqual(roundTrip.presentRootKeys, ["baseURL", "title"])
+        XCTAssertEqual(roundTrip.title, "New Title")
+    }
+
+    func testSparseSerializationMinimalYAML() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        title: "My Site"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .yaml)
+        config.title = "New Title"
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .yaml)
+
+        XCTAssertEqual(roundTrip.presentRootKeys, ["baseURL", "title"])
+        XCTAssertEqual(roundTrip.title, "New Title")
+    }
+
+    func testSparseSerializationMinimalJSON() throws {
+        let input = """
+        {
+          "baseURL": "https://example.com/",
+          "title": "My Site"
+        }
+        """
+
+        let config = try parser.parseConfig(content: input, format: .json)
+        config.title = "New Title"
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .json)
+
+        XCTAssertEqual(roundTrip.presentRootKeys, ["baseURL", "title"])
+        XCTAssertEqual(roundTrip.title, "New Title")
+    }
+
+    /// A field the user sets in the form is written even though the file lacked it.
+    func testUserSetFieldIsSerialized() throws {
+        let input = """
+        baseURL = "https://example.com/"
+        title = "My Site"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        config.buildDrafts = true
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+
+        XCTAssertEqual(roundTrip.presentRootKeys, ["baseURL", "title", "buildDrafts"])
+        XCTAssertTrue(roundTrip.buildDrafts)
+    }
+
+    /// Explicitly-declared default taxonomies must survive a save (design-doc issue #2).
+    func testExplicitDefaultTaxonomiesPreserved() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [taxonomies]
+        category = "categories"
+        tag = "tags"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+
+        XCTAssertTrue(roundTrip.presentRootKeys.contains("taxonomies"))
+        XCTAssertEqual(roundTrip.taxonomies, ["category": "categories", "tag": "tags"])
+    }
+
+    // MARK: - Phase 0: menu/menus Spelling (design-doc issue #3)
+
+    func testMenusSpellingPreserved() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [menus]
+        [[menus.main]]
+        name = "Home"
+        url = "/"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        XCTAssertEqual(config.menuKeySpelling, "menus")
+
+        let serialized = try parser.serialize(config)
+        XCTAssertTrue(serialized.contains("menus"), "menus spelling should be preserved")
+
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+        XCTAssertEqual(roundTrip.menuKeySpelling, "menus")
+        XCTAssertEqual(roundTrip.menus["main"]?.count, 1)
+    }
+
+    func testMenuSingularSpellingPreserved() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [menu]
+        [[menu.main]]
+        name = "Home"
+        url = "/"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        XCTAssertEqual(config.menuKeySpelling, "menu")
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+        XCTAssertEqual(roundTrip.menuKeySpelling, "menu")
+        XCTAssertEqual(roundTrip.menus["main"]?.count, 1)
+    }
+
+    /// New configs (no source file) use Hugo's documented spelling.
+    func testNewConfigDefaultsToMenusSpelling() {
+        XCTAssertEqual(HugoConfig().menuKeySpelling, "menus")
+    }
+
+    // MARK: - Phase 0: YAML menus Parsing (design-doc issue #4)
+
+    func testYAMLMenusSpellingParses() throws {
+        let input = """
+        baseURL: "https://example.com/"
+        menus:
+          main:
+            - name: "Home"
+              url: "/"
+              weight: 10
+            - name: "About"
+              url: "/about/"
+              weight: 20
+        """
+
+        let config = try parser.parseConfig(content: input, format: .yaml)
+        XCTAssertEqual(config.menus["main"]?.count, 2)
+        XCTAssertEqual(config.menus["main"]?.first?.name, "Home")
+
+        try assertYAMLRoundTrip(input)
+    }
+
+    // MARK: - Phase 0: Menu Item Field Passthrough (spec finding #8)
+
+    func testMenuItemExtraFieldsRoundTrip() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [menus]
+        [[menus.main]]
+        name = "Home"
+        url = "/"
+        weight = 10
+        title = "Go to the home page"
+        pre = "<i class='home'></i>"
+        post = "<span>new</span>"
+
+        [menus.main.params]
+        class = "highlight"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        let item = config.menus["main"]?.first
+        XCTAssertEqual(item?.title, "Go to the home page")
+        XCTAssertEqual(item?.extra["pre"] as? String, "<i class='home'></i>")
+        XCTAssertEqual(item?.extra["post"] as? String, "<span>new</span>")
+        XCTAssertEqual((item?.extra["params"] as? [String: Any])?["class"] as? String, "highlight")
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+        let rtItem = roundTrip.menus["main"]?.first
+        XCTAssertEqual(rtItem?.title, "Go to the home page")
+        XCTAssertEqual(rtItem?.extra["pre"] as? String, "<i class='home'></i>")
+        XCTAssertEqual(rtItem?.extra["post"] as? String, "<span>new</span>")
+        XCTAssertEqual((rtItem?.extra["params"] as? [String: Any])?["class"] as? String, "highlight")
+    }
+
+    // MARK: - Phase 0: .yml Discovery (spec finding #7)
+
+    func testFindConfigFileFindsYml() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hugo-yml-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configYml = tempDir.appendingPathComponent("config.yml")
+        try "baseURL: \"https://example.com/\"".write(to: configYml, atomically: true, encoding: .utf8)
+
+        var found = parser.findConfigFile(in: tempDir)
+        XCTAssertEqual(found?.lastPathComponent, "config.yml")
+
+        // Basename-major precedence: any hugo.* beats any config.*
+        let hugoYml = tempDir.appendingPathComponent("hugo.yml")
+        try "baseURL: \"https://example.com/\"".write(to: hugoYml, atomically: true, encoding: .utf8)
+
+        found = parser.findConfigFile(in: tempDir)
+        XCTAssertEqual(found?.lastPathComponent, "hugo.yml")
+
+        // Extension precedence within a basename: yaml before yml before json
+        let hugoYaml = tempDir.appendingPathComponent("hugo.yaml")
+        try "baseURL: \"https://example.com/\"".write(to: hugoYaml, atomically: true, encoding: .utf8)
+
+        found = parser.findConfigFile(in: tempDir)
+        XCTAssertEqual(found?.lastPathComponent, "hugo.yaml")
+    }
+
     // MARK: - Helper Methods
 
     /// Assert that TOML content survives a parse -> serialize -> parse round-trip

@@ -71,6 +71,11 @@ class HugoConfig: EditableFile {
     /// Menu definitions
     var menus: [String: [HugoMenuItem]] = [:]
 
+    /// Spelling of the menu root key in the source file ("menu" or "menus").
+    /// Hugo accepts both; we must not silently rename the user's key.
+    /// New configs use "menus" (Hugo's documented name).
+    @ObservationIgnored var menuKeySpelling: String = "menus"
+
     // MARK: - Custom Parameters
 
     /// Site-specific custom parameters (params section)
@@ -88,6 +93,45 @@ class HugoConfig: EditableFile {
 
     /// The original format of the config file
     var sourceFormat: ConfigFormat = .toml
+
+    // MARK: - Presence Tracking (sparse serialization)
+
+    /// Root keys present in the source file. A key that is absent here and
+    /// unchanged by the user is never written on save, so a minimal config
+    /// stays minimal (CONFIG-SCHEMA-SPEC §2.7).
+    @ObservationIgnored private(set) var presentRootKeys: Set<String> = []
+
+    /// Typed-field values as loaded, for detecting user edits to keys the
+    /// file didn't declare (those must be written once changed).
+    @ObservationIgnored private var loadedTypedValues: [String: AnyHashable] = [:]
+
+    /// Whether `key` belongs in the serialized output: it was in the source
+    /// file, or the user changed it from its loaded value.
+    func shouldSerializeRootKey(_ key: String, currentValue: AnyHashable) -> Bool {
+        presentRootKeys.contains(key) || loadedTypedValues[key] != currentValue
+    }
+
+    /// Snapshot the typed fields so later edits can be detected against them.
+    private func captureLoadedTypedValues() {
+        loadedTypedValues = [
+            "baseURL": baseURL,
+            "title": title,
+            "languageCode": languageCode,
+            "theme": theme ?? "",
+            "copyright": copyright ?? "",
+            "buildDrafts": buildDrafts,
+            "buildFuture": buildFuture,
+            "buildExpired": buildExpired,
+            "enableRobotsTXT": enableRobotsTXT,
+            "summaryLength": summaryLength,
+            "defaultContentLanguage": defaultContentLanguage,
+            "timeZone": timeZone ?? "",
+            "taxonomies": taxonomies,
+            "permalinks": permalinks
+        ]
+    }
+
+    // MARK: - Raw Content
 
     /// The raw file content from disk (for raw view)
     var rawContent: String = ""
@@ -127,6 +171,9 @@ class HugoConfig: EditableFile {
     init() {
         // When creating a new config, mark it as saved (empty is considered saved)
         markAsSaved()
+        // A fresh config has no source file: nothing is present, and only
+        // fields the user subsequently changes will serialize.
+        captureLoadedTypedValues()
     }
 
     /// Update structured properties from rawContent
@@ -156,9 +203,13 @@ class HugoConfig: EditableFile {
             self.defaultContentLanguage = parsed.defaultContentLanguage
             self.timeZone = parsed.timeZone
             self.taxonomies = parsed.taxonomies
+            self.permalinks = parsed.permalinks
             self.menus = parsed.menus
+            self.menuKeySpelling = parsed.menuKeySpelling
             self.params = parsed.params
             self.customFields = parsed.customFields
+            self.presentRootKeys = parsed.presentRootKeys
+            captureLoadedTypedValues()
 
             print("[HugoConfig] Parse successful")
         } catch {
@@ -252,44 +303,25 @@ extension HugoConfig {
         }
 
         // Parse permalinks
+        // The parser normalizes Yams' [AnyHashable: Any] nesting to [String: Any]
+        // at the parse boundary, so only the canonical shapes appear here.
         if let permalinksRaw = dictionary["permalinks"] {
             if let flat = permalinksRaw as? [String: String] {
                 self.permalinks = flat
             } else if let nested = permalinksRaw as? [String: Any],
                       let pagePermalinks = nested["page"] as? [String: String] {
                 self.permalinks = pagePermalinks
-            } else if let anyHashable = permalinksRaw as? [AnyHashable: Any] {
-                // Yams can produce [AnyHashable: Any] dictionaries
-                var result: [String: String] = [:]
-                // Check for nested "page" sub-key
-                if let pageValue = anyHashable["page" as AnyHashable] {
-                    if let pageDict = pageValue as? [AnyHashable: Any] {
-                        for (k, v) in pageDict {
-                            if let key = k as? String, let val = v as? String {
-                                result[key] = val
-                            }
-                        }
-                    }
-                }
-                // Fall back to flat format
-                if result.isEmpty {
-                    for (k, v) in anyHashable {
-                        if let key = k as? String, let val = v as? String {
-                            result[key] = val
-                        }
-                    }
-                }
-                self.permalinks = result
             }
         }
 
-        // Parse menus
+        // Parse menus, recording which spelling the file uses (issue #3)
         if let menusDict = dictionary["menus"] as? [String: [[String: Any]]] {
+            menuKeySpelling = "menus"
             for (menuName, items) in menusDict {
                 menus[menuName] = items.compactMap { HugoMenuItem(from: $0) }
             }
         } else if let menuDict = dictionary["menu"] as? [String: [[String: Any]]] {
-            // Also check for "menu" (singular) which some configs use
+            menuKeySpelling = "menu"
             for (menuName, items) in menuDict {
                 menus[menuName] = items.compactMap { HugoMenuItem(from: $0) }
             }
@@ -307,6 +339,11 @@ extension HugoConfig {
             customFields[key] = value
         }
 
+        // Record presence and the loaded values: serialization writes only
+        // keys the file had or the user later changes (sparse round-trip).
+        presentRootKeys = Set(dictionary.keys)
+        captureLoadedTypedValues()
+
         // Mark as saved since we just loaded from disk
         markAsSaved()
     }
@@ -314,6 +351,11 @@ extension HugoConfig {
 
 /// Represents a menu item in Hugo config
 struct HugoMenuItem: Identifiable {
+    /// Keys with dedicated properties; everything else round-trips via `extra`.
+    private static let knownKeys: Set<String> = [
+        "name", "url", "pageRef", "weight", "identifier", "parent", "title"
+    ]
+
     let id: UUID
     var name: String
     var url: String?
@@ -321,8 +363,13 @@ struct HugoMenuItem: Identifiable {
     var weight: Int
     var identifier: String?
     var parent: String?
+    /// Tooltip text (Hugo `title`)
+    var title: String?
+    /// Fields Victor doesn't edit (pre, post, params, …) — preserved so a
+    /// form-mode save never drops them (CONFIG-SCHEMA-SPEC finding #8)
+    var extra: [String: Any]
 
-    init(name: String, url: String? = nil, pageRef: String? = nil, weight: Int = 0, identifier: String? = nil, parent: String? = nil) {
+    init(name: String, url: String? = nil, pageRef: String? = nil, weight: Int = 0, identifier: String? = nil, parent: String? = nil, title: String? = nil, extra: [String: Any] = [:]) {
         self.id = UUID()
         self.name = name
         self.url = url
@@ -330,6 +377,8 @@ struct HugoMenuItem: Identifiable {
         self.weight = weight
         self.identifier = identifier
         self.parent = parent
+        self.title = title
+        self.extra = extra
     }
 
     init?(from dictionary: [String: Any]) {
@@ -343,15 +392,19 @@ struct HugoMenuItem: Identifiable {
         self.weight = dictionary["weight"] as? Int ?? 0
         self.identifier = dictionary["identifier"] as? String
         self.parent = dictionary["parent"] as? String
+        self.title = dictionary["title"] as? String
+        self.extra = dictionary.filter { !Self.knownKeys.contains($0.key) }
     }
 
     func toDictionary() -> [String: Any] {
-        var dict: [String: Any] = ["name": name]
+        var dict = extra
+        dict["name"] = name
         if let url = url { dict["url"] = url }
         if let pageRef = pageRef { dict["pageRef"] = pageRef }
         if weight != 0 { dict["weight"] = weight }
         if let identifier = identifier { dict["identifier"] = identifier }
         if let parent = parent { dict["parent"] = parent }
+        if let title = title { dict["title"] = title }
         return dict
     }
 }

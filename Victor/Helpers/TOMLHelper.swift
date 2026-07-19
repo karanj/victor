@@ -153,7 +153,15 @@ enum TOMLHelper {
                 }
                 lines.append("[[\(tablePathStr)]]")
 
-                for (itemKey, itemValue) in tableDict.sorted(by: { $0.key < $1.key }) {
+                // Scalars must all precede any nested [table.header] line —
+                // anything emitted after a header re-parses as a member of
+                // that nested table, not of this array element
+                let sortedItems = tableDict.sorted(by: { $0.key < $1.key })
+                for (itemKey, itemValue) in sortedItems
+                where !(itemValue is [String: Any]) && !(itemValue is [[String: Any]]) {
+                    lines.append(formatTOMLValue(key: itemKey, value: itemValue))
+                }
+                for (itemKey, itemValue) in sortedItems {
                     if let nestedDict = itemValue as? [String: Any] {
                         serializeTOMLTable(nestedDict, path: tablePath + [itemKey], lines: &lines)
                     } else if let nestedArray = itemValue as? [[String: Any]] {
@@ -165,8 +173,6 @@ enum TOMLHelper {
                                 lines.append(formatTOMLValue(key: nk, value: nv))
                             }
                         }
-                    } else {
-                        lines.append(formatTOMLValue(key: itemKey, value: itemValue))
                     }
                 }
             }

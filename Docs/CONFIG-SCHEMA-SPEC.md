@@ -410,3 +410,24 @@ One **"Locale"** row in Essentials, not two fields:
 
 - Comment/ordering loss on form save: accepted limitation; §2.7 narrows it (root key order kept, diff minimized by sparseness). UI copy: "form saves rewrite the file".
 - Schema drift across Hugo releases: static table pinned to v0.164.0; unknown keys degrade to Advanced editor, never data loss. Re-verify per Hugo minor by re-running the source diff (the research method above is repeatable: pull the new version from the Go module proxy, diff `RootConfig`, `newDefaultConfig`, section defaults).
+
+---
+
+## 8. Execution Log
+
+### Phase 0 — shipped 2026-07-19
+
+TDD red-first; all items from §5 Phase 0 plus §6 deltas. No UI change beyond the permalink insert menu losing its deprecated tokens.
+
+**Implementation notes (what differs from or refines the spec):**
+
+- Presence tracking pre-store: `HugoConfig` gains `presentRootKeys: Set<String>` (keys in the parsed file) plus a private `loadedTypedValues` snapshot of the 13 typed fields. `serialize()` writes a typed field iff `shouldSerializeRootKey(key, currentValue:)` — present in file OR changed from loaded value. This is the Phase 0 bridge; Phase 1's `ConfigValueStore` replaces it with setter-marks-present semantics.
+- Optional strings (`theme`/`copyright`/`timeZone`) additionally keep the pre-existing skip-when-empty guard, so presence never forces an empty value into the file.
+- Dict-valued fields (`taxonomies`/`permalinks`/`menus`/`params`) write when non-empty and present-or-changed; clearing the last entry still drops the key (Phase 1's `remove(at:)` will make that explicit).
+- Yams normalization moved to `HugoConfigParser.parse(content:format:)` — one call, all formats, all sections (§2.2's "kill the class of bug" point). The `[AnyHashable: Any]` special-casing in permalinks parsing is deleted.
+- `updateFromRawContent` now copies `permalinks`, `menuKeySpelling`, and `presentRootKeys` from the re-parse — it previously dropped permalinks Raw→Form entirely (unlisted pre-existing bug).
+- `HugoMenuItem`: `title` is a first-class field; `extra: [String: Any]` passes through everything else (`pre`/`post`/`params`/unknown). `toDictionary()` starts from `extra` and overlays known fields.
+- `TOMLHelper.serializeTOMLTable` array-of-tables branch emitted nested-dict headers mid-item, so scalar keys sorting after the nested key (`title` > `params`…) re-parsed as members of the nested table. Fixed by partitioning scalars-before-tables, matching the general-table branch. Found by the finding-#8 round-trip test.
+- `PermalinkResolver.expandPattern` replaced tokens in hardcoded order, corrupting `:sections`/`:yearday`/`:monthname` (shorter token substring-replaced first). Rewritten as a longest-first replacement table; tests pin all three. `TokenInfo` gains `deprecated`; `insertableTokens` feeds the insert menu.
+
+**Verification:** full suite 591 tests / clean run green (one unrelated flake: `testRenameCancelsStillSleepingDebounceInsteadOfLettingItWriteAnywhere`, fails under parallel load, passes isolated — pre-existing, tracked separately).

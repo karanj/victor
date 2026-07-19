@@ -15,10 +15,12 @@ final class HugoConfigParser: @unchecked Sendable {
     func findConfigFile(in siteURL: URL) -> URL? {
         let fileManager = FileManager.default
 
-        // Check for single-file configs in order of precedence
+        // Check for single-file configs in order of precedence: basename-major
+        // (any hugo.* beats any config.*), extensions toml/yaml/yml/json —
+        // matching Hugo's DefaultConfigNames × ValidConfigFileExtensions
         let configNames = [
-            "hugo.toml", "hugo.yaml", "hugo.json",
-            "config.toml", "config.yaml", "config.json"
+            "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
+            "config.toml", "config.yaml", "config.yml", "config.json"
         ]
 
         for name in configNames {
@@ -64,16 +66,21 @@ final class HugoConfigParser: @unchecked Sendable {
         return HugoConfig(from: dictionary, format: format, url: placeholderURL, rawContent: content)
     }
 
-    /// Parse content based on format
+    /// Parse content based on format.
+    /// The result is normalized once at this boundary — Yams nests
+    /// [AnyHashable: Any] dictionaries that can't serialize back — so every
+    /// consumer only ever sees [String: Any] (CONFIG-SCHEMA-SPEC §2.2).
     private func parse(content: String, format: ConfigFormat) throws -> [String: Any] {
+        let dictionary: [String: Any]
         switch format {
         case .toml:
-            return try parseTOML(content)
+            dictionary = try parseTOML(content)
         case .yaml:
-            return try parseYAML(content)
+            dictionary = try parseYAML(content)
         case .json:
-            return try parseJSON(content)
+            dictionary = try parseJSON(content)
         }
+        return SerializationHelper.normalizeForSerialization(dictionary) as? [String: Any] ?? dictionary
     }
 
     private func parseTOML(_ content: String) throws -> [String: Any] {
@@ -98,31 +105,29 @@ final class HugoConfigParser: @unchecked Sendable {
 
     // MARK: - Serialization
 
-    /// Serialize a HugoConfig back to string
+    /// Serialize a HugoConfig back to string.
+    /// Sparse by design: a key is written only when the source file had it or
+    /// the user changed it — never injected because Victor has a typed field
+    /// for it (design-doc issues #1/#2).
     func serialize(_ config: HugoConfig) throws -> String {
         var dictionary: [String: Any] = [:]
 
-        // Debug: log customFields types
-        print("[HugoConfigParser] Building dictionary for serialization...")
-        print("[HugoConfigParser] customFields keys: \(config.customFields.keys.sorted())")
-        for (key, value) in config.customFields {
-            print("[HugoConfigParser]   \(key): \(type(of: value))")
-        }
-
-        // Required fields
-        if !config.baseURL.isEmpty {
+        // Root scalars
+        if config.shouldSerializeRootKey("baseURL", currentValue: config.baseURL) {
             dictionary["baseURL"] = config.baseURL
         }
-        if !config.title.isEmpty {
+        if config.shouldSerializeRootKey("title", currentValue: config.title) {
             dictionary["title"] = config.title
         }
-        if !config.languageCode.isEmpty {
+        if config.shouldSerializeRootKey("languageCode", currentValue: config.languageCode) {
             dictionary["languageCode"] = config.languageCode
         }
 
-        // Optional fields
+        // Optional strings: empty means "not set", so presence alone doesn't
+        // force an empty value back into the file
         // Theme can be a string or array - preserve original format
-        if let theme = config.theme, !theme.isEmpty {
+        if let theme = config.theme, !theme.isEmpty,
+           config.shouldSerializeRootKey("theme", currentValue: theme) {
             if config.themeIsArray || theme.contains(", ") {
                 // Array format - split by comma
                 dictionary["theme"] = theme.components(separatedBy: ", ").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -131,37 +136,49 @@ final class HugoConfigParser: @unchecked Sendable {
                 dictionary["theme"] = theme
             }
         }
-        if let copyright = config.copyright, !copyright.isEmpty {
+        if let copyright = config.copyright, !copyright.isEmpty,
+           config.shouldSerializeRootKey("copyright", currentValue: copyright) {
             dictionary["copyright"] = copyright
         }
-
-        // Always include boolean fields - don't omit false values
-        // Hugo's defaults may differ from ours, so explicit is safer
-        dictionary["buildDrafts"] = config.buildDrafts
-        dictionary["buildFuture"] = config.buildFuture
-        dictionary["buildExpired"] = config.buildExpired
-        dictionary["enableRobotsTXT"] = config.enableRobotsTXT
-
-        // Always include these even if they match "defaults" - the user may have set them explicitly
-        dictionary["summaryLength"] = config.summaryLength
-        dictionary["defaultContentLanguage"] = config.defaultContentLanguage
-        if let timeZone = config.timeZone, !timeZone.isEmpty {
+        if let timeZone = config.timeZone, !timeZone.isEmpty,
+           config.shouldSerializeRootKey("timeZone", currentValue: timeZone) {
             dictionary["timeZone"] = timeZone
         }
 
-        // Taxonomies (if different from default)
-        let defaultTaxonomies = ["category": "categories", "tag": "tags"]
-        if config.taxonomies != defaultTaxonomies {
+        // Booleans and numbers: explicit false/default values are preserved
+        // when the file declared them, but never injected when it didn't
+        if config.shouldSerializeRootKey("buildDrafts", currentValue: config.buildDrafts) {
+            dictionary["buildDrafts"] = config.buildDrafts
+        }
+        if config.shouldSerializeRootKey("buildFuture", currentValue: config.buildFuture) {
+            dictionary["buildFuture"] = config.buildFuture
+        }
+        if config.shouldSerializeRootKey("buildExpired", currentValue: config.buildExpired) {
+            dictionary["buildExpired"] = config.buildExpired
+        }
+        if config.shouldSerializeRootKey("enableRobotsTXT", currentValue: config.enableRobotsTXT) {
+            dictionary["enableRobotsTXT"] = config.enableRobotsTXT
+        }
+        if config.shouldSerializeRootKey("summaryLength", currentValue: config.summaryLength) {
+            dictionary["summaryLength"] = config.summaryLength
+        }
+        if config.shouldSerializeRootKey("defaultContentLanguage", currentValue: config.defaultContentLanguage) {
+            dictionary["defaultContentLanguage"] = config.defaultContentLanguage
+        }
+
+        // Taxonomies: explicitly-declared defaults round-trip (issue #2)
+        if !config.taxonomies.isEmpty,
+           config.shouldSerializeRootKey("taxonomies", currentValue: config.taxonomies) {
             dictionary["taxonomies"] = config.taxonomies
         }
 
-        // Menus (use "menu" as it's more common in Hugo configs)
+        // Menus, under the same key spelling the file used (issue #3)
         if !config.menus.isEmpty {
             var menuDict: [String: [[String: Any]]] = [:]
             for (menuName, items) in config.menus {
                 menuDict[menuName] = items.map { $0.toDictionary() }
             }
-            dictionary["menu"] = menuDict
+            dictionary[config.menuKeySpelling] = menuDict
         }
 
         // Permalinks

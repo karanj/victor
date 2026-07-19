@@ -269,12 +269,12 @@ private struct InsertTokenMenuButton: View {
     var body: some View {
         Menu {
             Section("Date Tokens") {
-                ForEach(PermalinkResolver.validTokens.filter { isDateToken($0.token) }) { info in
+                ForEach(PermalinkResolver.insertableTokens.filter { isDateToken($0.token) }) { info in
                     tokenButton(info)
                 }
             }
             Section("Content Tokens") {
-                ForEach(PermalinkResolver.validTokens.filter { !isDateToken($0.token) }) { info in
+                ForEach(PermalinkResolver.insertableTokens.filter { !isDateToken($0.token) }) { info in
                     tokenButton(info)
                 }
             }
