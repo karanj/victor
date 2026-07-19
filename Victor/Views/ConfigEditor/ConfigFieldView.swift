@@ -134,15 +134,18 @@ struct ConfigFieldView: View {
                 }
             )
 
+        case .boolOrEnum(let options):
+            ConfigBoolOrEnumFieldRow(spec: spec, options: options, store: store, commit: commit)
+
         // Later-phase union/recursive/raw types: no tab wires these yet
         // (Phase 1d re-plumbs only bool/string/int/duration/stringArray/
-        // choice/stringOrStringArray fields). Rendered as an inert,
-        // clearly-labeled row so the generic renderer degrades safely if a
-        // future spec of one of these types is ever passed to it before its
-        // dedicated editor (dictionary → Advanced tab's `DataDictionaryEditor`,
-        // boolOrSectionMap/boolOrEnum → their own controls, rawOnly →
-        // "Edit in Raw") ships.
-        case .boolOrEnum, .boolOrSectionMap, .dictionary, .stringMap, .rawOnly:
+        // choice/stringOrStringArray fields; Phase 4 adds boolOrEnum above).
+        // Rendered as an inert, clearly-labeled row so the generic renderer
+        // degrades safely if a future spec of one of these types is ever
+        // passed to it before its dedicated editor (dictionary → Advanced
+        // tab's `DataDictionaryEditor`, boolOrSectionMap → its own control,
+        // rawOnly → "Edit in Raw") ships.
+        case .boolOrSectionMap, .dictionary, .stringMap, .rawOnly:
             ConfigComingLaterRow(spec: spec)
         }
     }
@@ -289,12 +292,23 @@ private struct ConfigBoolFieldRow: View {
     private var defaultBool: Bool { spec.defaultValue.boolValue ?? false }
     private var isPresent: Bool { store.isPresent(spec.key) }
 
+    /// `displayed`/`stored` are each other's inverse when
+    /// `spec.invertedBoolLabel` is set, and the identity otherwise — applying
+    /// either direction twice is a no-op, so one function covers both the
+    /// toggle's `get` (stored → displayed) and `set` (displayed → stored).
+    private func flip(_ value: Bool) -> Bool {
+        spec.invertedBoolLabel ? !value : value
+    }
+
     var body: some View {
         HStack(spacing: 6) {
             Toggle("", isOn: Binding(
-                get: { isPresent ? (store.boolValue(spec.key) ?? defaultBool) : defaultBool },
-                set: { newValue in
-                    store.set(newValue, at: spec.key)
+                get: {
+                    let stored = isPresent ? (store.boolValue(spec.key) ?? defaultBool) : defaultBool
+                    return flip(stored)
+                },
+                set: { newDisplayValue in
+                    store.set(flip(newDisplayValue), at: spec.key)
                     commit()
                 }
             ))
@@ -311,7 +325,31 @@ private struct ConfigBoolFieldRow: View {
 
 // MARK: - choice
 
+/// Dispatches between the plain menu `Picker` and the filterable popover
+/// variant purely on case count — not on which key it is — so any `.choice`
+/// spec that grows past the threshold (not just `markup.highlight.style`'s
+/// 74 chroma styles) gets the searchable control automatically.
 private struct ConfigChoiceFieldRow: View {
+    let spec: ConfigSettingSpec
+    let options: [String]
+    let store: ConfigValueStore
+    let commit: () -> Void
+
+    /// A plain `Picker(.menu)` with ~15 items is still a single readable
+    /// dropdown; past that (chroma styles' 74) it becomes an unusable wall
+    /// of text, hence the searchable popover.
+    private static let searchableThreshold = 15
+
+    var body: some View {
+        if options.count > Self.searchableThreshold {
+            ConfigSearchableChoiceFieldRow(spec: spec, options: options, store: store, commit: commit)
+        } else {
+            ConfigMenuChoiceFieldRow(spec: spec, options: options, store: store, commit: commit)
+        }
+    }
+}
+
+private struct ConfigMenuChoiceFieldRow: View {
     let spec: ConfigSettingSpec
     let options: [String]
     let store: ConfigValueStore
@@ -338,6 +376,224 @@ private struct ConfigChoiceFieldRow: View {
             )) {
                 Text("— default (\(defaultString.isEmpty ? "none" : defaultString)) —")
                     .tag(Self.defaultTag)
+                ForEach(options, id: \.self) { option in
+                    Text(option).tag(option)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .opacity(isPresent ? 1.0 : 0.6)
+        }
+    }
+}
+
+/// Filterable popover for `.choice` specs with many cases (e.g. the 74 chroma
+/// highlight styles): a button showing the current/default value opens a
+/// popover with a local-`@State` filter `TextField` over a scrollable list.
+/// The filter text never touches the store — it's pure display filtering,
+/// so it can't violate the per-keystroke invalidation contract even though
+/// it re-renders per keystroke (this view is already the observation leaf).
+private struct ConfigSearchableChoiceFieldRow: View {
+    let spec: ConfigSettingSpec
+    let options: [String]
+    let store: ConfigValueStore
+    let commit: () -> Void
+
+    @State private var isPresented = false
+    @State private var filterText = ""
+
+    private var defaultString: String { spec.defaultValue.stringValue ?? "" }
+    private var isPresent: Bool { store.isPresent(spec.key) }
+    private var current: String { store.stringValue(spec.key) ?? defaultString }
+
+    private var filteredOptions: [String] {
+        let trimmed = filterText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return options }
+        return options.filter { $0.lowercased().contains(trimmed) }
+    }
+
+    var body: some View {
+        Button {
+            isPresented = true
+        } label: {
+            HStack(spacing: 4) {
+                Text(isPresent ? current : "default (\(defaultString.isEmpty ? "none" : defaultString))")
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .opacity(isPresent ? 1.0 : 0.6)
+        .popover(isPresented: $isPresented) {
+            searchableList
+        }
+        .onChange(of: isPresented) { _, presented in
+            if !presented { filterText = "" }
+        }
+    }
+
+    private var searchableList: some View {
+        VStack(spacing: 0) {
+            TextField("Search…", text: $filterText)
+                .textFieldStyle(.roundedBorder)
+                .padding(8)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    optionRow(
+                        label: "— default (\(defaultString.isEmpty ? "none" : defaultString)) —",
+                        isSelected: !isPresent,
+                        dimmed: true
+                    ) {
+                        store.remove(at: spec.key)
+                        commit()
+                        isPresented = false
+                    }
+
+                    ForEach(filteredOptions, id: \.self) { option in
+                        optionRow(label: option, isSelected: isPresent && current == option, dimmed: false) {
+                            store.set(option, at: spec.key)
+                            commit()
+                            isPresented = false
+                        }
+                    }
+
+                    if filteredOptions.isEmpty {
+                        Text("No matches")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(10)
+                    }
+                }
+            }
+            .frame(maxHeight: 260)
+        }
+        .frame(width: 260)
+    }
+
+    private func optionRow(label: String, isSelected: Bool, dimmed: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label)
+                    .foregroundStyle(dimmed ? .secondary : .primary)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(isSelected ? Color.accentColor.opacity(0.15) : .clear)
+    }
+}
+
+// MARK: - boolOrEnum
+
+/// Store-value ↔ picker-selection mapping for `.boolOrEnum` fields
+/// (`markup.highlight.lineNos`: `false`/`true`/`"inline"`/`"table"`).
+/// Pure and side-effect-free so it's directly unit-testable without a
+/// `ConfigValueStore`/view in scope (CONFIG-SCHEMA-SPEC §2.6, task brief's
+/// "extract testable" instruction).
+enum ConfigBoolOrEnumSelection: Equatable {
+    case off
+    case on
+    case enumCase(String)
+}
+
+enum ConfigBoolOrEnumMapping {
+    /// Maps a raw stored value to a selection. `nil` in ⇒ `nil` out (caller
+    /// falls back to the schema default). Lenient like `ConfigValueStore`'s
+    /// other typed reads: accepts `Bool`, a recognized enum-case `String`,
+    /// `"true"`/`"false"` `String`, or `0`/`1` `Int`. Any other shape (e.g.
+    /// an unrecognized string) maps to `nil` rather than guessing.
+    static func selection(for rawValue: Any?, options: [String]) -> ConfigBoolOrEnumSelection? {
+        guard let rawValue else { return nil }
+        if let bool = rawValue as? Bool { return bool ? .on : .off }
+        if let string = rawValue as? String {
+            if options.contains(string) { return .enumCase(string) }
+            switch string.lowercased() {
+            case "true": return .on
+            case "false": return .off
+            default: return nil
+            }
+        }
+        if let int = rawValue as? Int {
+            if int == 0 { return .off }
+            if int == 1 { return .on }
+        }
+        return nil
+    }
+
+    /// Maps a selection to the canonical Swift type written to the store:
+    /// `Bool` for off/on, `String` for an enum case (CONFIG-SCHEMA-SPEC
+    /// §2.3's "Store representation: false/true as Bool, enum case as
+    /// String").
+    static func storeValue(for selection: ConfigBoolOrEnumSelection) -> Any {
+        switch selection {
+        case .off: return false
+        case .on: return true
+        case .enumCase(let value): return value
+        }
+    }
+}
+
+private struct ConfigBoolOrEnumFieldRow: View {
+    let spec: ConfigSettingSpec
+    let options: [String]
+    let store: ConfigValueStore
+    let commit: () -> Void
+
+    private static let defaultTag = "__default__"
+    private static let offTag = "__off__"
+    private static let onTag = "__on__"
+
+    private var isPresent: Bool { store.isPresent(spec.key) }
+    private var defaultIsOn: Bool { spec.defaultValue.boolValue ?? false }
+
+    private var currentSelection: ConfigBoolOrEnumSelection {
+        ConfigBoolOrEnumMapping.selection(for: store.value(at: spec.key), options: options)
+            ?? (defaultIsOn ? .on : .off)
+    }
+
+    private func tag(for selection: ConfigBoolOrEnumSelection) -> String {
+        switch selection {
+        case .off: return Self.offTag
+        case .on: return Self.onTag
+        case .enumCase(let value): return value
+        }
+    }
+
+    private func selection(forTag tag: String) -> ConfigBoolOrEnumSelection {
+        switch tag {
+        case Self.offTag: return .off
+        case Self.onTag: return .on
+        default: return .enumCase(tag)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Picker("", selection: Binding(
+                get: { isPresent ? tag(for: currentSelection) : Self.defaultTag },
+                set: { newTag in
+                    if newTag == Self.defaultTag {
+                        store.remove(at: spec.key)
+                    } else {
+                        store.set(ConfigBoolOrEnumMapping.storeValue(for: selection(forTag: newTag)), at: spec.key)
+                    }
+                    commit()
+                }
+            )) {
+                Text("— default (\(defaultIsOn ? "On" : "Off")) —")
+                    .tag(Self.defaultTag)
+                Text("Off").tag(Self.offTag)
+                Text("On").tag(Self.onTag)
                 ForEach(options, id: \.self) { option in
                     Text(option).tag(option)
                 }

@@ -28,6 +28,7 @@
 		1AB800034AD6B46009B0CF37 /* TranslationEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE3B3FDD8FB3F3B4F879F11 /* TranslationEditorView.swift */; };
 		1C03AF9B620F1639386046F1 /* Archetype.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DDA15AF4B156F54C8752CCD /* Archetype.swift */; };
 		1F4223BCDF34F90372E3CEFF /* SearchResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B2626CEE130D9177FC25EF6 /* SearchResult.swift */; };
+		20EE5CB0DD7186F39C8A1A6C /* ConfigMarkupTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE1949E3EE03822BF48532D /* ConfigMarkupTab.swift */; };
 		2368600ABEB1A40330E69A3D /* SerializationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB76908CA997A064CA8DCE5B /* SerializationHelper.swift */; };
 		2538C075CE5EBA279F72D544 /* EditableEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF05AD132C65C81E233BF3FE /* EditableEditor.swift */; };
 		27ED6CD148A0F254E6EF63F8 /* ShortcodeCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A04F65FFABF26EC4375A4A /* ShortcodeCardView.swift */; };
@@ -47,6 +48,7 @@
 		37F289BE8152825E0B88BF08 /* ConfigAdvancedTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0FCE4C2EBB98AA782BC0E0 /* ConfigAdvancedTab.swift */; };
 		381A233A08D39B9F9F584960 /* DataFileParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E48282E0D260FE4E514D9777 /* DataFileParser.swift */; };
 		38A7BD928B342BA35E420BA2 /* EditorActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21BDBAD978C1AE90B730A574 /* EditorActionsTests.swift */; };
+		3DC554882266E3B61EB04A8A /* ConfigBoolOrEnumMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DAF48106C8A30B6B10CE048 /* ConfigBoolOrEnumMappingTests.swift */; };
 		3F171CECAC9DE9E69C206642 /* Highlightr in Frameworks */ = {isa = PBXBuildFile; productRef = C690ED29A7B61276BCA08FBB /* Highlightr */; };
 		401723A9BF52E565758A4A9A /* SiteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA94411ADE4D941B623452C5 /* SiteViewModel.swift */; };
 		405335F179D0CCFF442DCD7D /* ArchetypeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7C05C4033AD36F669C7AF0 /* ArchetypeManager.swift */; };
@@ -215,6 +217,7 @@
 		2BA9C7BE480C560AAF1EEE82 /* FrontmatterEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontmatterEditorView.swift; sourceTree = "<group>"; };
 		2CAC2609C5C9E175A47C8BD2 /* HugoSite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoSite.swift; sourceTree = "<group>"; };
 		2D0DB7A682658E1D8A3E39F5 /* OffActorFileIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffActorFileIO.swift; sourceTree = "<group>"; };
+		2DAF48106C8A30B6B10CE048 /* ConfigBoolOrEnumMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigBoolOrEnumMappingTests.swift; sourceTree = "<group>"; };
 		2DDA15AF4B156F54C8752CCD /* Archetype.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Archetype.swift; sourceTree = "<group>"; };
 		2E394C27DB0DEEF088DDEC4C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3029686F52381DE7B1046E6A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -325,6 +328,7 @@
 		CA68BE193A73BFA40E4F5EE4 /* RenameSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
 		CA9CF34E8384633FA5738322 /* Color+Semantic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Semantic.swift"; sourceTree = "<group>"; };
 		CE4B3092C1F675CE6F2DFE0B /* SyntaxHighlightedTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxHighlightedTextView.swift; sourceTree = "<group>"; };
+		CEE1949E3EE03822BF48532D /* ConfigMarkupTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigMarkupTab.swift; sourceTree = "<group>"; };
 		D03696993E969C4B2AEFF0AC /* preview-styles.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = "preview-styles.css"; sourceTree = "<group>"; };
 		D0F71B5CB356171D3521AB28 /* EssentialFieldsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EssentialFieldsTab.swift; sourceTree = "<group>"; };
 		D122C36615D335552966B909 /* FormRawEditorComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormRawEditorComponents.swift; sourceTree = "<group>"; };
@@ -575,6 +579,7 @@
 				84D0FD1175E8EB9D0D6867A9 /* ArchetypeTemplateGenerationTests.swift */,
 				5AD065A15BEF162C0514544D /* AutoSaveServiceTests.swift */,
 				425911CC8DD01C91D8855F8B /* ConfigAdvancedKeyClassifierTests.swift */,
+				2DAF48106C8A30B6B10CE048 /* ConfigBoolOrEnumMappingTests.swift */,
 				5AC6167D47E2477315A95BCD /* ConfigSchemaTests.swift */,
 				AA1E2B85C4C474B34E68DEAE /* ConfigValueStoreTests.swift */,
 				3CA78287241B161C53327133 /* DataFileParserTests.swift */,
@@ -608,6 +613,7 @@
 				7A0FCE4C2EBB98AA782BC0E0 /* ConfigAdvancedTab.swift */,
 				25118DE64F3A0EEE5206284A /* ConfigContentTab.swift */,
 				7EA038693246237236E4D9DE /* ConfigEssentialsTab.swift */,
+				CEE1949E3EE03822BF48532D /* ConfigMarkupTab.swift */,
 				D7ECABBEC4FEB92EABC170CF /* ConfigMenusTab.swift */,
 				223F74E0E401E8F149482D2B /* ConfigTaxonomiesTab.swift */,
 			);
@@ -947,6 +953,7 @@
 				FCFFCC21FFC297D199295FAF /* ConfigEditorView.swift in Sources */,
 				F8715F970102DFD2187857D7 /* ConfigEssentialsTab.swift in Sources */,
 				A2E84235A8DD1EC355DDDBDE /* ConfigFieldView.swift in Sources */,
+				20EE5CB0DD7186F39C8A1A6C /* ConfigMarkupTab.swift in Sources */,
 				D0B2ED3BD9E67D37915C3C40 /* ConfigMenusTab.swift in Sources */,
 				FEE7F992E0A0E509A89147DA /* ConfigSchema.swift in Sources */,
 				30E860A721BB929412AE5492 /* ConfigTaxonomiesTab.swift in Sources */,
@@ -1069,6 +1076,7 @@
 				95A360256947190F4809CED1 /* ArchetypeTemplateGenerationTests.swift in Sources */,
 				FCA0A8EFC7B3A53F725E7FE8 /* AutoSaveServiceTests.swift in Sources */,
 				DF9AFADCB32BB6840934BDED /* ConfigAdvancedKeyClassifierTests.swift in Sources */,
+				3DC554882266E3B61EB04A8A /* ConfigBoolOrEnumMappingTests.swift in Sources */,
 				5415C945263D49ED81FF4204 /* ConfigSchemaTests.swift in Sources */,
 				0A2A13CF7BFE5730089E49C7 /* ConfigValueStoreTests.swift in Sources */,
 				DD891B78440979B155AD97EC /* DataFileParserTests.swift in Sources */,

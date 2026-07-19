@@ -94,18 +94,21 @@ struct ConfigAdvancedTab: View {
     }
 
     /// Schema keys already rendered by `ConfigEssentialsTab`/
-    /// `ConfigContentTab`/`ConfigTaxonomiesTab` today (read directly off
-    /// those views' source, not the design doc's aspirational full-tab
-    /// lists — several `.essentials`/`.contentBuild`/`.urlsTaxonomies`-group
-    /// entries aren't wired up on their tab yet and so correctly surface in
-    /// All Settings (b) below instead of going missing). `taxonomies` has a
-    /// schema entry but is rendered by `ConfigTaxonomiesTab`'s bespoke
-    /// editor, not `ConfigFieldView` — still "rendered elsewhere".
-    private static let renderedOnOtherTabs: Set<String> = [
+    /// `ConfigContentTab`/`ConfigTaxonomiesTab`/`ConfigMarkupTab` today (read
+    /// directly off those views' source, not the design doc's aspirational
+    /// full-tab lists — several `.essentials`/`.contentBuild`/
+    /// `.urlsTaxonomies`-group entries aren't wired up on their tab yet and
+    /// so correctly surface in All Settings (b) below instead of going
+    /// missing). `taxonomies` has a schema entry but is rendered by
+    /// `ConfigTaxonomiesTab`'s bespoke editor, not `ConfigFieldView` — still
+    /// "rendered elsewhere". `ConfigMarkupTab.allRenderedKeys` (§3.5's
+    /// main-table 26 keys) is pulled from that tab's own source rather than
+    /// re-listed here, so the two can't drift.
+    private static let renderedOnOtherTabs: Set<String> = ([
         "baseURL", "title", "languageCode", "theme", "copyright",
         "buildDrafts", "buildFuture", "buildExpired", "enableRobotsTXT", "summaryLength",
         "taxonomies"
-    ]
+    ] as Set<String>).union(ConfigMarkupTab.allRenderedKeys)
 
     var body: some View {
         let _ = config.store.version // §2.8 exception — see header doc.

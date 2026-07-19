@@ -62,6 +62,16 @@ struct ConfigSettingSpec: Identifiable, Sendable {
     let group: ConfigGroup
     let validator: ConfigValidator?
     let deprecation: ConfigDeprecation?
+    /// `.bool` entries only: when true, `ConfigFieldView`'s toggle displays
+    /// (and writes) the logical NOT of the stored value. Exists for keys
+    /// like `markup.goldmark.extensions.typographer.disable` — Hugo's key is
+    /// phrased as "disable X", but the row reads "X" ("Smart Punctuation")
+    /// and should read ON when X is active, i.e. when the stored value is
+    /// `false`. Defaults to `false` so every other bool entry (and every
+    /// existing call site of the `entry`/`boolEntry` builders below) is
+    /// unaffected. The stored key/type never changes — only the toggle's
+    /// display+interaction direction flips (CONFIG-SCHEMA-SPEC §3.5).
+    var invertedBoolLabel: Bool = false
 }
 
 // MARK: - Entry builders
@@ -77,16 +87,17 @@ private func entry(
     _ help: String,
     _ group: ConfigGroup,
     validator: ConfigValidator? = nil,
-    deprecation: ConfigDeprecation? = nil
+    deprecation: ConfigDeprecation? = nil,
+    invertedBoolLabel: Bool = false
 ) -> ConfigSettingSpec {
-    ConfigSettingSpec(key: key, type: type, defaultValue: defaultValue, label: label, help: help, group: group, validator: validator, deprecation: deprecation)
+    ConfigSettingSpec(key: key, type: type, defaultValue: defaultValue, label: label, help: help, group: group, validator: validator, deprecation: deprecation, invertedBoolLabel: invertedBoolLabel)
 }
 
 private func boolEntry(
     _ key: String, _ def: Bool, _ label: String, _ help: String, _ group: ConfigGroup,
-    deprecation: ConfigDeprecation? = nil
+    deprecation: ConfigDeprecation? = nil, invertedBoolLabel: Bool = false
 ) -> ConfigSettingSpec {
-    entry(key, .bool, .value(def), label, help, group, deprecation: deprecation)
+    entry(key, .bool, .value(def), label, help, group, deprecation: deprecation, invertedBoolLabel: invertedBoolLabel)
 }
 
 private func stringEntry(
@@ -220,7 +231,7 @@ private let markupEntries: [ConfigSettingSpec] = [
     choiceEntry("markup.defaultMarkdownHandler", ["goldmark", "asciidocext", "org", "pandoc", "rst"], "goldmark", "Markdown Handler", "Content renderer for Markdown files; only goldmark needs no external tool.", .markup),
     boolEntry("markup.goldmark.renderer.unsafe", false, "Allow Raw HTML", "Permit raw HTML and unsafe links to pass through in rendered Markdown.", .markup),
     boolEntry("markup.goldmark.renderer.hardWraps", false, "Hard Line Wraps", "Render a single newline within a paragraph as <br>.", .markup),
-    boolEntry("markup.goldmark.extensions.typographer.disable", false, "Smart Punctuation", "Disables automatic curly quotes/dashes/ellipses when true (inverted: false keeps Hugo's default smart punctuation on).", .markup),
+    boolEntry("markup.goldmark.extensions.typographer.disable", false, "Smart Punctuation", "Disables automatic curly quotes/dashes/ellipses when true (inverted: false keeps Hugo's default smart punctuation on).", .markup, invertedBoolLabel: true),
     boolEntry("markup.goldmark.extensions.table", true, "Tables", "Enable GitHub-style pipe tables in Markdown.", .markup),
     boolEntry("markup.goldmark.extensions.strikethrough", true, "Strikethrough", "Enable ~~strikethrough~~ syntax.", .markup),
     boolEntry("markup.goldmark.extensions.linkify", true, "Auto-link URLs", "Automatically turn bare URLs and email addresses into links.", .markup),
