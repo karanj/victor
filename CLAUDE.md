@@ -18,7 +18,7 @@ Native macOS application (SwiftUI) serving as a CMS for Hugo static sites. Provi
 |-----------|---------------|
 | Markdown (.md) | EditorPanelView + live preview + frontmatter |
 | Images | ImageViewerPanel with zoom/pan |
-| hugo.toml/yaml/json | ConfigEditorView (Form/Raw tabs) |
+| hugo/config .toml/yaml/yml/json | ConfigEditorView (Form/Raw tabs) |
 | data/*.yaml/json/toml | DataFileEditorView (dynamic fields) |
 | i18n/*.yaml/json/toml | TranslationEditorView |
 | layouts/, themes/ HTML | TemplateEditorView (Go syntax) |
@@ -195,6 +195,7 @@ Open issues are tracked in **GitHub Issues** (migrated from `Docs/ISSUES.yaml` 2
 - Close on completion; reference issues in commit messages (`victor-cjp / #9`).
 
 Key areas:
+- **Recently completed**: Config Editor v2 (Phases 0–5, 2026-07-19/20): sparse schema-driven config GUI — `ConfigValueStore` (structural presence, version-only observation), `ConfigSchema` (222 entries, Hugo v0.164.0-verified), `ConfigFieldView` generic renderer, 7 tabs incl. new Menus/Markup/Integrations, removed-key lints. Spec + execution log: `Docs/CONFIG-SCHEMA-SPEC.md`. Phase 6 (config dir, languages, modules) deferred. Suite 591 → 728 tests.
 - **Recently completed**: Mac-arsed gap closure program, executed 2026-07-11/12 (commits c8c61ef..88854b1) — Edit-menu text services, rename UI, multi-select sidebar with drag out/move, file-op undo/redo, VoiceOver sweep. Execution log + rubric re-score (~25 → ~31/36) in `Docs/MAC-ARSED-GAP-PLAN.md`; selection design in `Docs/SELECTION-MODEL-MEMO.md`; pending human verification lists in both plan doc and `Docs/ACCESSIBILITY-AUDIT-2026-07.md`. The predecessor Mac polish + modernisation program shipped Phases 0–3 earlier the same week; only victor-mbe/victor-icn remain from it
 - **P2**: editor track (cursor-jump bug victor-cjp, line numbers, tab bar → session restore, breadcrumbs, quick open), FSEvents file watching (9 tickets, dependency chain)
 - **P2 (release)**: Developer ID signing + notarization for direct-download builds (#49, victor-dst) — replaced App Sandbox (#45, closed won't-fix: MAS-only, incompatible with spawning user-installed hugo/git)

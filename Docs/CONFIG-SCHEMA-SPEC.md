@@ -1,6 +1,6 @@
 # Config Editor v2 — Schema Specification & Architecture
 
-**Status**: Vetted, ready for implementation | **Date**: 2026-07-19 | **Companion to**: `CONFIG-EDITOR-DESIGN.md`
+**Status**: Phases 0–5 implemented (see §8 execution log); Phase 6 deferred | **Date**: 2026-07-19, updated 2026-07-20 | **Companion to**: `CONFIG-EDITOR-DESIGN.md`
 
 **Research method**: The design doc's coverage review was written against the Hugo docs site. This spec was verified against the **Hugo v0.164.0 source code** (fetched from the Go module proxy): `config/allconfig/allconfig.go` (`RootConfig` + `newDefaultConfig()`), `config/allconfig/alldecoders.go` (per-section decoders and their defaults), and each section package (`markup_config`, `highlight`, `goldmark_config`, `tableofcontents`, `services`, `privacy`, `navigation`, `related`, `config.Pagination/SitemapConfig/PageConfig`, `resources/images`, `minifiers`). Every default and deprecation below is from source, not docs prose. Highlight style names are from chroma v2.27.0 (the version pinned in Hugo v0.164.0's `go.mod`).
 
@@ -431,3 +431,20 @@ TDD red-first; all items from §5 Phase 0 plus §6 deltas. No UI change beyond t
 - `PermalinkResolver.expandPattern` replaced tokens in hardcoded order, corrupting `:sections`/`:yearday`/`:monthname` (shorter token substring-replaced first). Rewritten as a longest-first replacement table; tests pin all three. `TokenInfo` gains `deprecated`; `insertableTokens` feeds the insert menu.
 
 **Verification:** full suite 591 tests / clean run green (one unrelated flake: `testRenameCancelsStillSleepingDebounceInsteadOfLettingItWriteAnywhere`, fails under parallel load, passes isolated — pre-existing, tracked separately).
+
+### Phases 1–5 — shipped 2026-07-20 (subagent-driven delivery)
+
+Executed as one implementation agent per chunk (1a store → 1b schema → 1c HugoConfig migration → 1d ConfigFieldView/tab re-plumb → 2 Advanced → 3 Menus → 4 Markup → 5 URLs/Integrations/lints), orchestrator gating each with a full-suite run + commit. Suite grew 591 → 728, green at every gate.
+
+**Deltas vs. spec worth knowing:**
+
+- §2.2/§2.7 root key order: `init(root:)` can't recover document order from a Swift dictionary, and TOMLKit (toml++) alphabetizes tables, so order capture lives in `HugoConfigParser.rootKeyOrder(of:format:)` — Yams.compose for YAML, a source-text line scan for TOML, nil for JSON (its writer sorts). The store reconciles captured order against parsed keys (missing → appended sorted). Emission honors order for TOML root level only. Interim dictionary-order seeding shipped in 1c and FLAKED two tests across process launches; fixed same day.
+- §2.3: `ConfigSettingSpec` gained `invertedBoolLabel` (typographer "Smart punctuation" row); `permalinks` has NO schema entry (bespoke editor; the §3.3 row's "(bespoke, exists)" reading); `.menus` group is empty by design.
+- §4.5: chroma list is 74 styles, not 73 — the spec's own count was off; label corrected.
+- Schema rawOnly section names are lowercase but Hugo files write camelCase (`mediaTypes`, `httpCache`, …) — the Advanced-tab root-key classifier matches rawOnly case-insensitively (`ConfigAdvancedKeyClassifier`, tested).
+- §3.6 outputs matrix: built-ins write §4.4 canonical lowercase; existing on-disk casing matched case-insensitively and preserved until toggled.
+- 1c flipped `languageCode`'s absent-fallback from Victor's historical "en-us" to Hugo-accurate "".
+- Pure logic extracted for testability throughout: `ConfigBoolOrEnumMapping`, `ConfigOutputsMatrix`, `ConfigLocaleResolver`, `ConfigLintCatalog`, `ConfigAdvancedKeyClassifier`, `HugoMenuItem.reweighted/settingLink`.
+- Phase 2 extracted the recursive value-editor family to `Views/Components/RecursiveValueEditor.swift`, converting its leaf rows to commit-on-blur drafts (typing-latency contract now that it's reachable from the config editor).
+
+**Still deferred (unchanged):** Phase 6 (config directory, languages editor, module GUI); YAML/JSON root-order emission; comment preservation (§7.2).

@@ -1,6 +1,6 @@
 # Config Editor v2 — Coverage Review & Design
 
-**Status**: Vetted — see `CONFIG-SCHEMA-SPEC.md` for the full schema table, architecture, and source-verified research (2026-07-19) | **Date**: 2026-07-19 | **Hugo baseline**: v0.164.0 (verified against Hugo source, not just docs)
+**Status**: Implemented — Phases 0–5 shipped 2026-07-20 (execution log in `CONFIG-SCHEMA-SPEC.md` §8); Phase 6 deferred | **Date**: 2026-07-19 | **Hugo baseline**: v0.164.0 (verified against Hugo source, not just docs)
 
 Review of Victor's Hugo config GUI (`ConfigEditorView` + 4 tabs, `HugoConfig`, `HugoConfigParser`) against Hugo's current configuration surface, plus a phased plan to close the gap.
 
