@@ -59,6 +59,10 @@ struct ConfigEditorView: View {
                 // across all 4 tabs (CONFIG-SCHEMA-SPEC §2.8): each leaf row
                 // calls this instead of reaching for `HugoConfig` directly.
                 .environment(\.configCommitAction, config.syncRawContentFromStructuredData)
+                // Advanced tab's raw-only sections list ("Edit in Raw"
+                // button, §3.7) switches this view's own `showRawEditor`
+                // state without `ConfigAdvancedTab` reaching for it directly.
+                .environment(\.configSwitchToRawAction, { showRawEditor = true })
             }
         }
         .onChange(of: showRawEditor) { oldValue, newValue in
