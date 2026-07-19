@@ -51,7 +51,8 @@ final class HugoConfigParser: @unchecked Sendable {
         let format = ConfigFormat(filename: url.lastPathComponent) ?? .toml
         let dictionary = try parse(content: content, format: format)
 
-        return HugoConfig(from: dictionary, format: format, url: url, rawContent: content)
+        return HugoConfig(from: dictionary, format: format, url: url, rawContent: content,
+                          orderedRootKeys: rootKeyOrder(of: content, format: format))
     }
 
     /// Parse a Hugo config from a string
@@ -63,7 +64,78 @@ final class HugoConfigParser: @unchecked Sendable {
         let dictionary = try parse(content: content, format: format)
         // Use a placeholder URL for string-based parsing (not associated with a file)
         let placeholderURL = URL(fileURLWithPath: "/dev/null")
-        return HugoConfig(from: dictionary, format: format, url: placeholderURL, rawContent: content)
+        return HugoConfig(from: dictionary, format: format, url: placeholderURL, rawContent: content,
+                          orderedRootKeys: rootKeyOrder(of: content, format: format))
+    }
+
+    /// Document order of the root-level keys (CONFIG-SCHEMA-SPEC §2.7).
+    /// Captured BEFORE the config collapses into an unordered Swift
+    /// dictionary. YAML: Yams.compose, whose mapping nodes are ordered.
+    /// TOML: a line scan — TOMLKit wraps toml++, whose tables are std::map
+    /// (alphabetical), so document order is unrecoverable through the parser
+    /// and must come from the text. JSON returns nil (that writer sorts keys,
+    /// so order is moot); the store then falls back to sorted. Best-effort by
+    /// spec: ConfigValueStore reconciles this list against the actual parsed
+    /// keys, so scan misses degrade to sorted placement, never data loss.
+    private func rootKeyOrder(of content: String, format: ConfigFormat) -> [String]? {
+        switch format {
+        case .toml:
+            return tomlRootKeyOrder(content)
+        case .yaml:
+            guard let node = try? Yams.compose(yaml: content), case let .mapping(mapping) = node else {
+                return nil
+            }
+            return mapping.compactMap { $0.key.string }
+        case .json:
+            return nil
+        }
+    }
+
+    /// First-seen order of root-level TOML keys: bare `key = …` lines before
+    /// any table header, plus the first path segment of `[table]` /
+    /// `[[array]]` headers and dotted keys. Skips comments and the interior
+    /// of multiline strings.
+    private func tomlRootKeyOrder(_ content: String) -> [String] {
+        var keys: [String] = []
+        var seen = Set<String>()
+        var multilineDelimiter: String?
+
+        func record(_ rawKey: Substring) {
+            let key = rawKey
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            if !key.isEmpty, seen.insert(key).inserted {
+                keys.append(key)
+            }
+        }
+
+        for rawLine in content.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+
+            if let delimiter = multilineDelimiter {
+                if line.contains(delimiter) { multilineDelimiter = nil }
+                continue
+            }
+            if line.isEmpty || line.hasPrefix("#") { continue }
+
+            if line.hasPrefix("[") {
+                let name = line.drop(while: { $0 == "[" })
+                let end = name.firstIndex(where: { $0 == "." || $0 == "]" }) ?? name.endIndex
+                record(name[..<end])
+            } else if let equals = line.firstIndex(of: "=") {
+                let keyPart = line[..<equals]
+                let dot = keyPart.firstIndex(of: ".") ?? keyPart.endIndex
+                record(keyPart[..<dot])
+
+                let value = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+                for delimiter in ["\"\"\"", "'''"] where value.hasPrefix(delimiter) {
+                    if !value.dropFirst(3).contains(delimiter) {
+                        multilineDelimiter = delimiter
+                    }
+                }
+            }
+        }
+        return keys
     }
 
     /// Parse content based on format.

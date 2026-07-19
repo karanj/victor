@@ -32,15 +32,30 @@ final class ConfigValueStore {
     @ObservationIgnored
     private(set) var orderedRootKeys: [String]
 
-    /// - Parameter root: the parsed config dictionary. Normalized recursively
-    ///   at this boundary: Yams hands back `[AnyHashable: Any]` for nested
-    ///   mappings, which can't serialize back to TOML/YAML/JSON, so every
-    ///   nested dictionary is converted to `[String: Any]` here, once, per
-    ///   CLAUDE.md's "Yams Type Normalization" note.
-    init(root: [String: Any]) {
+    /// - Parameters:
+    ///   - root: the parsed config dictionary. Normalized recursively at this
+    ///     boundary: Yams hands back `[AnyHashable: Any]` for nested mappings,
+    ///     which can't serialize back to TOML/YAML/JSON, so every nested
+    ///     dictionary is converted to `[String: Any]` here, once, per
+    ///     CLAUDE.md's "Yams Type Normalization" note.
+    ///   - orderedRootKeys: document order of the root keys, captured by the
+    ///     parser before the ordered source collapsed into an unordered Swift
+    ///     dictionary. Without it the fallback is sorted — a Swift
+    ///     dictionary's iteration order varies per process launch, and
+    ///     seeding from it made "order preserved" tests flake.
+    init(root: [String: Any], orderedRootKeys: [String]? = nil) {
         let normalized = SerializationHelper.normalizeForSerialization(root) as? [String: Any] ?? root
         self.root = normalized
-        self.orderedRootKeys = Array(normalized.keys)
+        self.orderedRootKeys = Self.reconcile(order: orderedRootKeys, with: normalized)
+    }
+
+    /// The provided order filtered to keys actually present, plus any present
+    /// keys the order missed (appended sorted). nil order → sorted keys.
+    private static func reconcile(order: [String]?, with dict: [String: Any]) -> [String] {
+        guard let order else { return dict.keys.sorted() }
+        let known = order.filter { dict[$0] != nil }
+        let remaining = dict.keys.filter { !order.contains($0) }.sorted()
+        return known + remaining
     }
 
     // MARK: - Path access
@@ -108,10 +123,10 @@ final class ConfigValueStore {
     /// the whole document was re-read from scratch and the old tree is
     /// meaningless to diff against. Resets `orderedRootKeys` to the new
     /// document's order, same as `init`.
-    func replaceRoot(with newRoot: [String: Any]) {
+    func replaceRoot(with newRoot: [String: Any], orderedRootKeys: [String]? = nil) {
         let normalized = SerializationHelper.normalizeForSerialization(newRoot) as? [String: Any] ?? newRoot
         root = normalized
-        orderedRootKeys = Array(normalized.keys)
+        self.orderedRootKeys = Self.reconcile(order: orderedRootKeys, with: normalized)
         version += 1
     }
 

@@ -373,7 +373,7 @@ class HugoConfig: EditableFile {
 
             // Rebuild the store wholesale from the re-parse, then
             // re-materialize the menus/spelling that live outside it.
-            store.replaceRoot(with: parsed.store.snapshotRoot())
+            store.replaceRoot(with: parsed.store.snapshotRoot(), orderedRootKeys: parsed.store.orderedRootKeys)
             menuKeySpelling = parsed.menuKeySpelling
             materializeMenus()
 
@@ -413,8 +413,8 @@ extension HugoConfig {
     ///   flat-vs-nested, menu/menus spelling) now falls out of the store
     ///   holding the raw dictionary verbatim, rather than bespoke per-field
     ///   parsing.
-    convenience init(from dictionary: [String: Any], format: ConfigFormat, url: URL, rawContent: String = "") {
-        self.init(store: ConfigValueStore(root: dictionary))
+    convenience init(from dictionary: [String: Any], format: ConfigFormat, url: URL, rawContent: String = "", orderedRootKeys: [String]? = nil) {
+        self.init(store: ConfigValueStore(root: dictionary, orderedRootKeys: orderedRootKeys))
         self.sourceURL = url
         self.sourceFormat = format
         self.rawContent = rawContent
