@@ -308,7 +308,7 @@ Item fields (from `navigation.MenuConfig`): `name` (required in Victor's UI; Hug
 | `markup.goldmark.parser.autoIDType` | choice | "github" | §4.2 |
 | `markup.goldmark.parser.attribute.title` | bool | true | Toggle |
 | `markup.goldmark.parser.attribute.block` | bool | false | Toggle |
-| `markup.highlight.style` | choice | "monokai" | searchable Picker, §4.5 (73 styles) |
+| `markup.highlight.style` | choice | "monokai" | searchable Picker, §4.5 (74 styles) |
 | `markup.highlight.codeFences` | bool | true | Toggle |
 | `markup.highlight.lineNos` | boolOrEnum(inline,table) | false | §2.6 |
 | `markup.highlight.lineNumbersInTable` | bool | true | Toggle |
@@ -364,7 +364,7 @@ Three sections (design doc §3.2 stands):
 2. **autoIDType**: `github`, `github-ascii`, `blackfriday`.
 3. **Page kinds** (for `disableKinds` / `outputs` rows): `page`, `home`, `section`, `taxonomy`, `term`, plus temporary kinds `rss`, `sitemap`, `sitemapindex`, `robotstxt`, `404`. (Pre-0.73 spellings `taxonomy`/`taxonomyTerm` swap is handled by Hugo with a deprecation — lint, don't offer.)
 4. **Built-in output format names**: `html`, `rss`, `amp`, `alias`, `calendar`, `css`, `csv`, `json`, `markdown`, `robots`, `sitemap`, `sitemapindex`, `webappmanifest`. Default `outputs`: page=[html]; home/section/taxonomy/term=[html, rss].
-5. **Chroma styles** (v2.27.0, 73): abap, algol, algol_nu, arduino, ashen, aura-theme-dark, aura-theme-dark-soft, autumn, average, base16-snazzy, borland, bw, catppuccin-frappe, catppuccin-latte, catppuccin-macchiato, catppuccin-mocha, colorful, darcula, doom-one, doom-one2, dracula, emacs, evergarden, friendly, fruity, github, github-dark, gruvbox, gruvbox-light, hr_high_contrast, hrdark, igor, kanagawa-dragon, kanagawa-lotus, kanagawa-wave, lovelace, manni, modus-operandi, modus-vivendi, monokai, monokailight, murphy, native, nord, nordic, onedark, onesenterprise, paraiso-dark, paraiso-light, pastie, perldoc, pygments, rainbow_dash, rose-pine, rose-pine-dawn, rose-pine-moon, rpgle, rrt, solarized-dark, solarized-dark256, solarized-light, swapoff, tango, tokyonight-day, tokyonight-moon, tokyonight-night, tokyonight-storm, trac, vim, vs, vulcan, witchhazel, xcode, xcode-dark.
+5. **Chroma styles** (v2.27.0, 74): abap, algol, algol_nu, arduino, ashen, aura-theme-dark, aura-theme-dark-soft, autumn, average, base16-snazzy, borland, bw, catppuccin-frappe, catppuccin-latte, catppuccin-macchiato, catppuccin-mocha, colorful, darcula, doom-one, doom-one2, dracula, emacs, evergarden, friendly, fruity, github, github-dark, gruvbox, gruvbox-light, hr_high_contrast, hrdark, igor, kanagawa-dragon, kanagawa-lotus, kanagawa-wave, lovelace, manni, modus-operandi, modus-vivendi, monokai, monokailight, murphy, native, nord, nordic, onedark, onesenterprise, paraiso-dark, paraiso-light, pastie, perldoc, pygments, rainbow_dash, rose-pine, rose-pine-dawn, rose-pine-moon, rpgle, rrt, solarized-dark, solarized-dark256, solarized-light, swapoff, tango, tokyonight-day, tokyonight-moon, tokyonight-night, tokyonight-storm, trac, vim, vs, vulcan, witchhazel, xcode, xcode-dark.
 6. **sitemap.changeFreq**: "", `always`, `hourly`, `daily`, `weekly`, `monthly`, `yearly`, `never`.
 7. **renderHooks useEmbedded**: `always`, `auto`, `fallback`, `never` (D `auto`).
 8. **lineNos**: `false`, `true`, `"inline"`, `"table"`.
