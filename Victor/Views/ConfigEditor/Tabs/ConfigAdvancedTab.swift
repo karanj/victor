@@ -94,32 +94,86 @@ struct ConfigAdvancedTab: View {
     }
 
     /// Schema keys already rendered by `ConfigEssentialsTab`/
-    /// `ConfigContentTab`/`ConfigTaxonomiesTab`/`ConfigMarkupTab` today (read
-    /// directly off those views' source, not the design doc's aspirational
-    /// full-tab lists — several `.essentials`/`.contentBuild`/
-    /// `.urlsTaxonomies`-group entries aren't wired up on their tab yet and
-    /// so correctly surface in All Settings (b) below instead of going
-    /// missing). `taxonomies` has a schema entry but is rendered by
-    /// `ConfigTaxonomiesTab`'s bespoke editor, not `ConfigFieldView` — still
-    /// "rendered elsewhere". `ConfigMarkupTab.allRenderedKeys` (§3.5's
-    /// main-table 26 keys) is pulled from that tab's own source rather than
-    /// re-listed here, so the two can't drift.
+    /// `ConfigContentTab`/`ConfigURLsTaxonomiesTab`/`ConfigMarkupTab`/
+    /// `ConfigIntegrationsTab` today (read directly off those views' source,
+    /// not the design doc's aspirational full-tab lists — several
+    /// `.essentials`/`.contentBuild`-group entries aren't wired up on their
+    /// tab yet and so correctly surface in All Settings (b) below instead of
+    /// going missing). `locale`/`languageCode` are both excluded: Phase 5's
+    /// bespoke Essentials "Locale" row (`ConfigLocaleRowView`) serves both
+    /// keys, so neither has a standalone `ConfigFieldView` row anywhere.
+    /// `ConfigURLsTaxonomiesTab.allRenderedKeys`/`ConfigMarkupTab.allRenderedKeys`/
+    /// `ConfigIntegrationsTab.allRenderedKeys` are pulled from each tab's own
+    /// source rather than re-listed here, so none of the four can drift.
     private static let renderedOnOtherTabs: Set<String> = ([
-        "baseURL", "title", "languageCode", "theme", "copyright",
-        "buildDrafts", "buildFuture", "buildExpired", "enableRobotsTXT", "summaryLength",
-        "taxonomies"
-    ] as Set<String>).union(ConfigMarkupTab.allRenderedKeys)
+        "baseURL", "title", "locale", "languageCode", "theme", "copyright", "timeZone",
+        "buildDrafts", "buildFuture", "buildExpired", "summaryLength"
+    ] as Set<String>)
+        .union(ConfigMarkupTab.allRenderedKeys)
+        .union(ConfigURLsTaxonomiesTab.allRenderedKeys)
+        .union(ConfigIntegrationsTab.allRenderedKeys)
 
     var body: some View {
         let _ = config.store.version // §2.8 exception — see header doc.
 
         Form {
+            legacyKeysSection
             siteParamsSection
             allSettingsSection
             unknownKeysSection
             rawOnlySectionsList
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: - Legacy keys (CONFIG-SCHEMA-SPEC §2.5 mechanism 2)
+
+    /// Removed-key lint findings (`ConfigLintCatalog.scan`), rendered at the
+    /// top of the tab per the task brief. Unlike mechanism 1's per-field
+    /// deprecation badge (`ConfigFieldView.deprecationRow`), these keys have
+    /// no `ConfigSettingSpec` row of their own — `paginate`/`paginatePath`
+    /// were *removed*, not deprecated-but-still-read, and the permalink
+    /// token warnings live inside a value, not a key — so they need a
+    /// dedicated section instead. Only `paginate`/`paginatePath` get a
+    /// one-click "Use <new key>" button (pure rename, §2.5); the
+    /// `googleAnalytics`/`disqusShortname` root fallbacks and the permalink
+    /// token findings are explanatory-only, per the task brief.
+    @ViewBuilder
+    private var legacyKeysSection: some View {
+        let warnings = ConfigLintCatalog.scan(store: config.store)
+        if !warnings.isEmpty {
+            Section {
+                ForEach(warnings) { warning in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.Status.warning)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(warning.key)
+                                .font(.system(.body, design: .monospaced))
+                            Text(warning.message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if let replacementKey = warning.replacementKey {
+                            Button("Use \(replacementKey)") {
+                                guard let value = config.store.value(at: warning.key) else { return }
+                                config.store.remove(at: warning.key)
+                                config.store.set(value, at: replacementKey)
+                                commit()
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+            } header: {
+                Text("Legacy Keys")
+            } footer: {
+                Text("Keys Hugo no longer reads (or reads only as a fallback), found in this file.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     // MARK: - (a) Site Params

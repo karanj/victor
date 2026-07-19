@@ -183,7 +183,17 @@ private let essentialsEntries: [ConfigSettingSpec] = [
         deprecation: ConfigDeprecation(since: "0.158.0", message: "Use locale instead.", replacementKey: "locale")
     ),
     stringEntry("defaultContentLanguage", "en", "Default Content Language", "Language used for content with no language suffix, and the default in multilingual sites.", .essentials, validator: ConfigValidators.bcp47ish),
-    stringEntry("timeZone", "", "Time Zone", "IANA time zone identifier used to interpret dates that have no explicit offset.", .essentials, validator: ConfigValidators.timezone)
+    // `.choice` (not a bespoke row) deliberately: `TimeZone.knownTimeZoneIdentifiers`
+    // is >15 entries, so `ConfigFieldView`'s existing searchable-choice control
+    // (`ConfigSearchableChoiceFieldRow`) kicks in automatically — no new UI
+    // code needed for the "searchable timezone picker" requirement (Phase 5
+    // task brief item 7; see ConfigEssentialsTab's header comment for the
+    // theme-row counterpart, which *does* need a bespoke row).
+    entry(
+        "timeZone", .choice(ConfigSchema.timeZoneIdentifiers), .value(""), "Time Zone",
+        "IANA time zone identifier used to interpret dates that have no explicit offset.",
+        .essentials, validator: ConfigValidators.timezone
+    )
 ]
 
 // MARK: - §3.2 Content & Build
@@ -515,6 +525,11 @@ enum ConfigSchema {
 
     /// §4.9 page sort orders.
     static let pageSortOrders: [String] = ["asc", "desc"]
+
+    /// IANA time zone identifiers backing the `timeZone` `.choice` picker
+    /// (Phase 5 task brief item 7). Sorted for deterministic ordering —
+    /// `TimeZone.knownTimeZoneIdentifiers`'s own order isn't guaranteed.
+    static let timeZoneIdentifiers: [String] = TimeZone.knownTimeZoneIdentifiers.sorted()
 
     // MARK: - Lookup
 

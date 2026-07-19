@@ -21,9 +21,10 @@ struct ConfigEditorView: View {
     enum ConfigTab: String, CaseIterable {
         case essentials = "Essentials"
         case content = "Content"
-        case taxonomies = "Taxonomies"
+        case urlsTaxonomies = "URLs & Taxonomies"
         case menus = "Menus"
         case markup = "Markup"
+        case integrations = "Integrations"
         case advanced = "Advanced"
     }
 
@@ -48,9 +49,9 @@ struct ConfigEditorView: View {
                         .tabItem { Label("Content", systemImage: "doc.text") }
                         .tag(ConfigTab.content)
 
-                    ConfigTaxonomiesTab(config: config)
-                        .tabItem { Label("Taxonomies", systemImage: "tag") }
-                        .tag(ConfigTab.taxonomies)
+                    ConfigURLsTaxonomiesTab(config: config)
+                        .tabItem { Label("URLs & Taxonomies", systemImage: "tag") }
+                        .tag(ConfigTab.urlsTaxonomies)
 
                     ConfigMenusTab(config: config)
                         .tabItem { Label("Menus", systemImage: "list.bullet.indent") }
@@ -59,6 +60,10 @@ struct ConfigEditorView: View {
                     ConfigMarkupTab(config: config)
                         .tabItem { Label("Markup", systemImage: "textformat") }
                         .tag(ConfigTab.markup)
+
+                    ConfigIntegrationsTab(config: config)
+                        .tabItem { Label("Integrations", systemImage: "link") }
+                        .tag(ConfigTab.integrations)
 
                     ConfigAdvancedTab(config: config)
                         .tabItem { Label("Advanced", systemImage: "gearshape.2") }

@@ -137,15 +137,15 @@ struct ConfigFieldView: View {
         case .boolOrEnum(let options):
             ConfigBoolOrEnumFieldRow(spec: spec, options: options, store: store, commit: commit)
 
-        // Later-phase union/recursive/raw types: no tab wires these yet
-        // (Phase 1d re-plumbs only bool/string/int/duration/stringArray/
-        // choice/stringOrStringArray fields; Phase 4 adds boolOrEnum above).
+        case .boolOrSectionMap:
+            ConfigBoolOrSectionMapFieldRow(spec: spec, store: store, commit: commit)
+
+        // Later-phase recursive/raw types: no tab wires these yet.
         // Rendered as an inert, clearly-labeled row so the generic renderer
         // degrades safely if a future spec of one of these types is ever
         // passed to it before its dedicated editor (dictionary → Advanced
-        // tab's `DataDictionaryEditor`, boolOrSectionMap → its own control,
-        // rawOnly → "Edit in Raw") ships.
-        case .boolOrSectionMap, .dictionary, .stringMap, .rawOnly:
+        // tab's `DataDictionaryEditor`, rawOnly → "Edit in Raw") ships.
+        case .dictionary, .stringMap, .rawOnly:
             ConfigComingLaterRow(spec: spec)
         }
     }
@@ -318,6 +318,58 @@ private struct ConfigBoolFieldRow: View {
 
             if !isPresent {
                 DefaultValueTag()
+            }
+        }
+    }
+}
+
+// MARK: - boolOrSectionMap
+
+/// `uglyURLs`-shaped fields: `bool` or a per-section `map[string]bool`
+/// (CONFIG-SCHEMA-SPEC §2.6). A plain `Toggle` when the stored value is a
+/// bool or absent; when it's a map, a read-only summary + "Edit in Raw"
+/// button — the per-section shape isn't worth a bespoke sub-editor for one
+/// field, and Raw mode already round-trips it losslessly.
+private struct ConfigBoolOrSectionMapFieldRow: View {
+    let spec: ConfigSettingSpec
+    let store: ConfigValueStore
+    let commit: () -> Void
+
+    @Environment(\.configSwitchToRawAction) private var switchToRaw
+
+    private var defaultBool: Bool { spec.defaultValue.boolValue ?? false }
+    private var isPresent: Bool { store.isPresent(spec.key) }
+    private var rawValue: Any? { store.value(at: spec.key) }
+    private var sectionMap: [String: Any]? {
+        guard let dict = rawValue as? [String: Any], !(rawValue is Bool) else { return nil }
+        return dict
+    }
+
+    var body: some View {
+        if let sectionMap {
+            HStack(spacing: 6) {
+                Text("Per-section map (\(sectionMap.count)) — edit in Raw")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Edit in Raw") { switchToRaw() }
+                    .buttonStyle(.borderless)
+            }
+        } else {
+            HStack(spacing: 6) {
+                Toggle("", isOn: Binding(
+                    get: { isPresent ? (store.boolValue(spec.key) ?? defaultBool) : defaultBool },
+                    set: { newValue in
+                        store.set(newValue, at: spec.key)
+                        commit()
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(.checkbox)
+                .opacity(isPresent ? 1.0 : 0.6)
+
+                if !isPresent {
+                    DefaultValueTag()
+                }
             }
         }
     }
