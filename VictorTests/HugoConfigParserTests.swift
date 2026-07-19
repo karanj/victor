@@ -1626,6 +1626,149 @@ final class HugoConfigParserTests: XCTestCase {
         XCTAssertEqual(found?.lastPathComponent, "hugo.yaml")
     }
 
+    // MARK: - Phase 1c: HugoConfig ↔ ConfigValueStore migration (CONFIG-SCHEMA-SPEC §2.9, §5)
+
+    /// Setting a typed accessor marks its key present in the store, and that
+    /// presence survives a save/reparse round-trip.
+    func testSetTypedFieldMarksStorePresentAndSerializes() throws {
+        let config = HugoConfig()
+        XCTAssertFalse(config.store.isPresent("buildDrafts"))
+
+        config.buildDrafts = true
+        XCTAssertTrue(config.store.isPresent("buildDrafts"))
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+        XCTAssertTrue(roundTrip.presentRootKeys.contains("buildDrafts"))
+        XCTAssertTrue(roundTrip.buildDrafts)
+    }
+
+    /// An absent key reads the Hugo default without marking anything present.
+    func testAbsentTypedFieldReadsDefaultWithoutMarkingPresent() {
+        let config = HugoConfig()
+        XCTAssertEqual(config.summaryLength, 70)
+        XCTAssertEqual(config.defaultContentLanguage, "en")
+        XCTAssertFalse(config.buildDrafts)
+        XCTAssertFalse(config.store.isPresent("summaryLength"))
+        XCTAssertFalse(config.store.isPresent("defaultContentLanguage"))
+        XCTAssertFalse(config.store.isPresent("buildDrafts"))
+    }
+
+    /// languageCode's fallback is Hugo-accurate ("") rather than the old
+    /// hardcoded "en-us" — no existing test depended on the old default, so
+    /// this flips per CONFIG-SCHEMA-SPEC §2.9's explicit allowance.
+    func testLanguageCodeDefaultsToEmptyNotEnUS() {
+        XCTAssertEqual(HugoConfig().languageCode, "")
+    }
+
+    /// `hasUnsavedChanges` still fires exactly on commit (rawContent vs
+    /// originalContent), not on every store mutation — the typing-latency
+    /// contract's blast radius is unchanged even though presence tracking
+    /// moved into the store.
+    func testHasUnsavedChangesFiresOnlyAfterSyncNotOnBareStoreMutation() throws {
+        let config = try parser.parseConfig(content: "baseURL = \"https://example.com/\"", format: .toml)
+        XCTAssertFalse(config.hasUnsavedChanges)
+
+        // Mutating the store directly (as a computed setter does) does not
+        // by itself touch rawContent/originalContent.
+        config.title = "New Title"
+        XCTAssertFalse(config.hasUnsavedChanges, "hasUnsavedChanges must not react to store mutation alone")
+
+        config.syncRawContentFromStructuredData()
+        XCTAssertTrue(config.hasUnsavedChanges, "syncRawContentFromStructuredData is the commit point")
+
+        config.markAsSaved()
+        XCTAssertFalse(config.hasUnsavedChanges)
+    }
+
+    /// Root-level TOML key order follows the store's `orderedRootKeys`
+    /// (parse-time document order), not alphabetical (CONFIG-SCHEMA-SPEC §2.7).
+    func testTOMLRootKeyOrderPreservedOnSerialize() throws {
+        let input = """
+        title = "My Site"
+        baseURL = "https://example.com/"
+        summaryLength = 42
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        let serialized = try parser.serialize(config)
+
+        let titleRange = serialized.range(of: "title")
+        let baseURLRange = serialized.range(of: "baseURL")
+        let summaryRange = serialized.range(of: "summaryLength")
+        XCTAssertNotNil(titleRange)
+        XCTAssertNotNil(baseURLRange)
+        XCTAssertNotNil(summaryRange)
+        // Original document order: title, baseURL, summaryLength — not the
+        // alphabetical order TOMLHelper would otherwise apply.
+        XCTAssertLessThan(titleRange!.lowerBound, baseURLRange!.lowerBound)
+        XCTAssertLessThan(baseURLRange!.lowerBound, summaryRange!.lowerBound)
+    }
+
+    /// A key appended after load (never present in the source file) lands
+    /// after the original document's keys, in the order it was set.
+    func testTOMLNewlySetRootKeyAppendsAfterOriginalOrder() throws {
+        let input = """
+        title = "My Site"
+        baseURL = "https://example.com/"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        config.buildDrafts = true
+
+        let serialized = try parser.serialize(config)
+        let titleRange = serialized.range(of: "title")
+        let baseURLRange = serialized.range(of: "baseURL")
+        let buildDraftsRange = serialized.range(of: "buildDrafts")
+        XCTAssertLessThan(titleRange!.lowerBound, baseURLRange!.lowerBound)
+        XCTAssertLessThan(baseURLRange!.lowerBound, buildDraftsRange!.lowerBound)
+    }
+
+    /// commitMenus() is the single write path: editing `menus` in memory and
+    /// serializing writes the change back under the same key spelling.
+    func testCommitMenusWritesEditsBackUnderOriginalSpelling() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [menu]
+        [[menu.main]]
+        name = "Home"
+        url = "/"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        XCTAssertEqual(config.menuKeySpelling, "menu")
+
+        config.menus["main"]?.append(HugoMenuItem(name: "About", url: "/about/", weight: 20))
+
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+        XCTAssertEqual(roundTrip.menuKeySpelling, "menu")
+        XCTAssertEqual(roundTrip.menus["main"]?.count, 2)
+    }
+
+    /// Clearing every menu item drops the menu key entirely on save (same
+    /// presence policy as every other dict-valued field).
+    func testCommitMenusRemovesKeyWhenMenusEmptied() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [menus]
+        [[menus.main]]
+        name = "Home"
+        url = "/"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        config.menus = [:]
+
+        let serialized = try parser.serialize(config)
+        XCTAssertFalse(serialized.contains("menus"), "emptied menus should not be written back")
+
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+        XCTAssertTrue(roundTrip.menus.isEmpty)
+    }
+
     // MARK: - Helper Methods
 
     /// Assert that TOML content survives a parse -> serialize -> parse round-trip

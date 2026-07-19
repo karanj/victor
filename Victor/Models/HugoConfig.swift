@@ -1,7 +1,14 @@
 import Foundation
 import SwiftUI
 
-/// Represents a Hugo site configuration
+/// Represents a Hugo site configuration.
+///
+/// Phase 1c (CONFIG-SCHEMA-SPEC §2.9): backed by `ConfigValueStore`. The 13
+/// legacy typed fields below are computed accessors over the store — getters
+/// fall back to Hugo's default when the key is absent, setters write through
+/// `store.set`/`store.remove`, which is what marks a key present or absent.
+/// Presence is now purely structural ("is this key in the store"), replacing
+/// the Phase 0 `presentRootKeys`/`loadedTypedValues` bridge.
 @Observable
 class HugoConfig: EditableFile {
     // MARK: - Identification
@@ -9,66 +16,210 @@ class HugoConfig: EditableFile {
     /// Unique identifier for this config
     let id: UUID = UUID()
 
+    // MARK: - Backing Store
+
+    /// Sparse key-path store. NOT observable itself (`@ObservationIgnored`
+    /// internally) — every computed accessor below reads `store.version`
+    /// first so SwiftUI still invalidates on mutation (CLAUDE.md's
+    /// Per-Keystroke Invalidation Contract / CONFIG-SCHEMA-SPEC §2.8).
+    let store: ConfigValueStore
+
     // MARK: - Required Fields
 
     /// The base URL of the site (e.g., "https://example.com/")
-    var baseURL: String = ""
+    var baseURL: String {
+        get { tracked { store.stringValue("baseURL") ?? "" } }
+        set { store.set(newValue, at: "baseURL") }
+    }
 
     /// The site title
-    var title: String = ""
+    var title: String {
+        get { tracked { store.stringValue("title") ?? "" } }
+        set { store.set(newValue, at: "title") }
+    }
 
-    /// Language code (e.g., "en-us")
-    var languageCode: String = "en-us"
+    /// Language code (e.g., "en-us"). Hugo-accurate default is "" (empty) —
+    /// Hugo itself has no default for this deprecated key. No existing test
+    /// depends on the historical Victor default of "en-us" when absent, so
+    /// this getter's fallback flips to match Hugo (CONFIG-SCHEMA-SPEC §2.9).
+    var languageCode: String {
+        get { tracked { store.stringValue("languageCode") ?? "" } }
+        set { store.set(newValue, at: "languageCode") }
+    }
 
     // MARK: - Common Fields
 
-    /// Theme name or array of themes (comma-separated if multiple)
-    var theme: String?
+    /// Theme name or array of themes (comma-separated if multiple). Stored in
+    /// the underlying config in whatever shape (string or array) the source
+    /// file used — shape preservation is structural, not flag-based.
+    var theme: String? {
+        get {
+            tracked {
+                guard let raw = store.value(at: "theme") else { return nil }
+                if let string = raw as? String { return string.isEmpty ? nil : string }
+                if let array = store.stringArrayValue("theme"), !array.isEmpty {
+                    return array.joined(separator: ", ")
+                }
+                return nil
+            }
+        }
+        set {
+            guard let newValue, !newValue.isEmpty else {
+                store.remove(at: "theme")
+                return
+            }
+            if newValue.contains(", ") {
+                let parts = newValue.components(separatedBy: ", ").map { $0.trimmingCharacters(in: .whitespaces) }
+                store.set(parts, at: "theme")
+            } else {
+                store.set(newValue, at: "theme")
+            }
+        }
+    }
 
-    /// Whether the theme was originally specified as an array (even if single item)
-    var themeIsArray: Bool = false
+    /// Whether the theme is currently stored as an array (even if single item).
+    /// Derived from the stored shape; kept for source compatibility with call
+    /// sites written against the old flag-based field.
+    var themeIsArray: Bool {
+        get {
+            tracked {
+                let raw = store.value(at: "theme")
+                return raw is [Any] || raw is [String]
+            }
+        }
+        set {
+            guard let current = theme else { return }
+            if newValue {
+                let parts = current.components(separatedBy: ", ").map { $0.trimmingCharacters(in: .whitespaces) }
+                store.set(parts, at: "theme")
+            } else {
+                store.set(current, at: "theme")
+            }
+        }
+    }
 
     /// Copyright notice
-    var copyright: String?
+    var copyright: String? {
+        get {
+            tracked {
+                let string = store.stringValue("copyright")
+                return (string?.isEmpty ?? true) ? nil : string
+            }
+        }
+        set {
+            if let newValue, !newValue.isEmpty {
+                store.set(newValue, at: "copyright")
+            } else {
+                store.remove(at: "copyright")
+            }
+        }
+    }
 
     /// Whether to include draft content in builds
-    var buildDrafts: Bool = false
+    var buildDrafts: Bool {
+        get { tracked { store.boolValue("buildDrafts") ?? false } }
+        set { store.set(newValue, at: "buildDrafts") }
+    }
 
     /// Whether to include future-dated content
-    var buildFuture: Bool = false
+    var buildFuture: Bool {
+        get { tracked { store.boolValue("buildFuture") ?? false } }
+        set { store.set(newValue, at: "buildFuture") }
+    }
 
     /// Whether to include expired content
-    var buildExpired: Bool = false
+    var buildExpired: Bool {
+        get { tracked { store.boolValue("buildExpired") ?? false } }
+        set { store.set(newValue, at: "buildExpired") }
+    }
 
     /// Whether to generate robots.txt
-    var enableRobotsTXT: Bool = false
+    var enableRobotsTXT: Bool {
+        get { tracked { store.boolValue("enableRobotsTXT") ?? false } }
+        set { store.set(newValue, at: "enableRobotsTXT") }
+    }
 
-    /// Summary length for auto-generated summaries
-    var summaryLength: Int = 70
+    /// Summary length for auto-generated summaries (Hugo default: 70)
+    var summaryLength: Int {
+        get { tracked { store.intValue("summaryLength") ?? 70 } }
+        set { store.set(newValue, at: "summaryLength") }
+    }
 
-    /// Default content language
-    var defaultContentLanguage: String = "en"
+    /// Default content language (Hugo default: "en")
+    var defaultContentLanguage: String {
+        get { tracked { store.stringValue("defaultContentLanguage") ?? "en" } }
+        set { store.set(newValue, at: "defaultContentLanguage") }
+    }
 
     /// Time zone for dates
-    var timeZone: String?
+    var timeZone: String? {
+        get {
+            tracked {
+                let string = store.stringValue("timeZone")
+                return (string?.isEmpty ?? true) ? nil : string
+            }
+        }
+        set {
+            if let newValue, !newValue.isEmpty {
+                store.set(newValue, at: "timeZone")
+            } else {
+                store.remove(at: "timeZone")
+            }
+        }
+    }
 
     // MARK: - Taxonomies
 
-    /// Custom taxonomies (singular: plural)
-    var taxonomies: [String: String] = [
-        "category": "categories",
-        "tag": "tags"
-    ]
+    /// Custom taxonomies (singular: plural). Falls back to Hugo's default
+    /// pair when absent; the fallback is never written until the store is
+    /// actually touched (design-doc issue #2: explicit declarations of the
+    /// default still round-trip, because presence is structural).
+    var taxonomies: [String: String] {
+        get {
+            tracked {
+                (store.value(at: "taxonomies") as? [String: String]) ?? ["category": "categories", "tag": "tags"]
+            }
+        }
+        set {
+            if newValue.isEmpty {
+                store.remove(at: "taxonomies")
+            } else {
+                store.set(newValue, at: "taxonomies")
+            }
+        }
+    }
 
     // MARK: - Permalinks
 
-    /// Permalink patterns keyed by section name (e.g. ["posts": "/:year/:month/:title/"])
-    /// Parsed from [permalinks] or [permalinks.page] in Hugo config
-    var permalinks: [String: String] = [:]
+    /// Permalink patterns keyed by section name (e.g. ["posts": "/:year/:month/:title/"]).
+    /// Reads either the flat `[permalinks]` shape or the nested `[permalinks.page]`
+    /// shape Hugo also accepts; always writes the flat shape.
+    var permalinks: [String: String] {
+        get {
+            tracked {
+                guard let raw = store.value(at: "permalinks") else { return [:] }
+                if let flat = raw as? [String: String] { return flat }
+                if let nested = raw as? [String: Any], let page = nested["page"] as? [String: String] {
+                    return page
+                }
+                return [:]
+            }
+        }
+        set {
+            if newValue.isEmpty {
+                store.remove(at: "permalinks")
+            } else {
+                store.set(newValue, at: "permalinks")
+            }
+        }
+    }
 
     // MARK: - Menus
 
-    /// Menu definitions
+    /// Menu definitions. The one documented exception to the store-computed
+    /// pattern: menus stay a typed materialization (CONFIG-SCHEMA-SPEC §2.9,
+    /// §3.4) — parsed from the store on load/`updateFromRawContent`, written
+    /// back through `commitMenus()`, the single write path.
     var menus: [String: [HugoMenuItem]] = [:]
 
     /// Spelling of the menu root key in the source file ("menu" or "menus").
@@ -76,15 +227,71 @@ class HugoConfig: EditableFile {
     /// New configs use "menus" (Hugo's documented name).
     @ObservationIgnored var menuKeySpelling: String = "menus"
 
+    /// Rebuilds `menus` from whatever's currently under `menuKeySpelling` in
+    /// the store. Called at init and after a full store replacement
+    /// (Raw→Form re-parse).
+    private func materializeMenus() {
+        guard let menuDict = store.subtree(menuKeySpelling) else {
+            menus = [:]
+            return
+        }
+        var result: [String: [HugoMenuItem]] = [:]
+        for (menuName, itemsAny) in menuDict {
+            guard let items = itemsAny as? [[String: Any]] else { continue }
+            result[menuName] = items.compactMap { HugoMenuItem(from: $0) }
+        }
+        menus = result
+    }
+
+    /// Writes `menus` back into the store under `menuKeySpelling`. Empty
+    /// menus prune the key entirely, matching every other dict-valued field's
+    /// presence policy. Called by `HugoConfigParser.serialize` before it
+    /// snapshots the store, so menus are never stale at save time.
+    func commitMenus() {
+        guard !menus.isEmpty else {
+            store.remove(at: menuKeySpelling)
+            return
+        }
+        let menuDict: [String: [[String: Any]]] = menus.mapValues { items in items.map { $0.toDictionary() } }
+        store.replaceSubtree(menuKeySpelling, with: menuDict.mapValues { $0 as Any })
+    }
+
     // MARK: - Custom Parameters
 
     /// Site-specific custom parameters (params section)
-    var params: [String: Any] = [:]
+    var params: [String: Any] {
+        get { tracked { store.subtree("params") ?? [:] } }
+        set {
+            if newValue.isEmpty {
+                store.remove(at: "params")
+            } else {
+                store.replaceSubtree("params", with: newValue)
+            }
+        }
+    }
 
     // MARK: - Unknown Fields
 
-    /// Fields not recognized by Victor (preserved for round-trip)
-    var customFields: [String: Any] = [:]
+    /// Root keys with no dedicated HugoConfig field — everything the schema
+    /// doesn't materialize. Read-only: unknown keys live directly in the
+    /// store and round-trip through it; this is just a view for display
+    /// (Advanced tab's "Other Fields (Preserved)" section).
+    private static let knownRootKeys: Set<String> = [
+        "baseURL", "title", "languageCode", "theme", "copyright",
+        "buildDrafts", "buildFuture", "buildExpired", "enableRobotsTXT",
+        "summaryLength", "defaultContentLanguage", "timeZone",
+        "taxonomies", "permalinks", "params", "menus", "menu"
+    ]
+
+    var customFields: [String: Any] {
+        tracked {
+            var result: [String: Any] = [:]
+            for (key, value) in store.snapshotRoot() where !Self.knownRootKeys.contains(key) {
+                result[key] = value
+            }
+            return result
+        }
+    }
 
     // MARK: - Metadata
 
@@ -94,41 +301,11 @@ class HugoConfig: EditableFile {
     /// The original format of the config file
     var sourceFormat: ConfigFormat = .toml
 
-    // MARK: - Presence Tracking (sparse serialization)
-
-    /// Root keys present in the source file. A key that is absent here and
-    /// unchanged by the user is never written on save, so a minimal config
-    /// stays minimal (CONFIG-SCHEMA-SPEC §2.7).
-    @ObservationIgnored private(set) var presentRootKeys: Set<String> = []
-
-    /// Typed-field values as loaded, for detecting user edits to keys the
-    /// file didn't declare (those must be written once changed).
-    @ObservationIgnored private var loadedTypedValues: [String: AnyHashable] = [:]
-
-    /// Whether `key` belongs in the serialized output: it was in the source
-    /// file, or the user changed it from its loaded value.
-    func shouldSerializeRootKey(_ key: String, currentValue: AnyHashable) -> Bool {
-        presentRootKeys.contains(key) || loadedTypedValues[key] != currentValue
-    }
-
-    /// Snapshot the typed fields so later edits can be detected against them.
-    private func captureLoadedTypedValues() {
-        loadedTypedValues = [
-            "baseURL": baseURL,
-            "title": title,
-            "languageCode": languageCode,
-            "theme": theme ?? "",
-            "copyright": copyright ?? "",
-            "buildDrafts": buildDrafts,
-            "buildFuture": buildFuture,
-            "buildExpired": buildExpired,
-            "enableRobotsTXT": enableRobotsTXT,
-            "summaryLength": summaryLength,
-            "defaultContentLanguage": defaultContentLanguage,
-            "timeZone": timeZone ?? "",
-            "taxonomies": taxonomies,
-            "permalinks": permalinks
-        ]
+    /// Root keys present in the source file (or since set by the user). This
+    /// is now purely structural — "is this key in the store" — replacing the
+    /// Phase 0 presence bridge (CONFIG-SCHEMA-SPEC §2.9 item 6).
+    var presentRootKeys: Set<String> {
+        tracked { Set(store.snapshotRoot().keys) }
     }
 
     // MARK: - Raw Content
@@ -168,12 +345,18 @@ class HugoConfig: EditableFile {
 
     // MARK: - Initialization
 
-    init() {
-        // When creating a new config, mark it as saved (empty is considered saved)
+    /// - Parameter store: seeded store backing this config. Defaults to an
+    ///   empty store for a brand-new (unsaved) config.
+    init(store: ConfigValueStore = ConfigValueStore(root: [:])) {
+        self.store = store
+        // Favor "menus" per Hugo's documented spelling; only detect "menu"
+        // when the file used the singular form exclusively.
+        if store.isPresent("menu") && !store.isPresent("menus") {
+            menuKeySpelling = "menu"
+        }
+        materializeMenus()
+        // When creating a new config, mark it as saved (empty is considered saved).
         markAsSaved()
-        // A fresh config has no source file: nothing is present, and only
-        // fields the user subsequently changes will serialize.
-        captureLoadedTypedValues()
     }
 
     /// Update structured properties from rawContent
@@ -188,28 +371,11 @@ class HugoConfig: EditableFile {
         do {
             let parsed = try HugoConfigParser.shared.parseConfig(content: rawContent, format: sourceFormat)
 
-            // Update all structured properties from the parsed config
-            self.baseURL = parsed.baseURL
-            self.title = parsed.title
-            self.languageCode = parsed.languageCode
-            self.theme = parsed.theme
-            self.themeIsArray = parsed.themeIsArray
-            self.copyright = parsed.copyright
-            self.buildDrafts = parsed.buildDrafts
-            self.buildFuture = parsed.buildFuture
-            self.buildExpired = parsed.buildExpired
-            self.enableRobotsTXT = parsed.enableRobotsTXT
-            self.summaryLength = parsed.summaryLength
-            self.defaultContentLanguage = parsed.defaultContentLanguage
-            self.timeZone = parsed.timeZone
-            self.taxonomies = parsed.taxonomies
-            self.permalinks = parsed.permalinks
-            self.menus = parsed.menus
-            self.menuKeySpelling = parsed.menuKeySpelling
-            self.params = parsed.params
-            self.customFields = parsed.customFields
-            self.presentRootKeys = parsed.presentRootKeys
-            captureLoadedTypedValues()
+            // Rebuild the store wholesale from the re-parse, then
+            // re-materialize the menus/spelling that live outside it.
+            store.replaceRoot(with: parsed.store.snapshotRoot())
+            menuKeySpelling = parsed.menuKeySpelling
+            materializeMenus()
 
             print("[HugoConfig] Parse successful")
         } catch {
@@ -239,110 +405,19 @@ enum ConfigParseError: LocalizedError {
 // MARK: - HugoConfig Dictionary Initializer
 
 extension HugoConfig {
+    /// - Parameter dictionary: the parsed config, seeded directly into a
+    ///   fresh `ConfigValueStore` — normalization already happened once in
+    ///   `HugoConfigParser.parse`, and the store re-normalizes defensively
+    ///   at construction (harmless double-normalize, CONFIG-SCHEMA-SPEC §2.9
+    ///   item 1). All shape preservation (theme string-vs-array, permalinks
+    ///   flat-vs-nested, menu/menus spelling) now falls out of the store
+    ///   holding the raw dictionary verbatim, rather than bespoke per-field
+    ///   parsing.
     convenience init(from dictionary: [String: Any], format: ConfigFormat, url: URL, rawContent: String = "") {
-        self.init()
+        self.init(store: ConfigValueStore(root: dictionary))
         self.sourceURL = url
         self.sourceFormat = format
         self.rawContent = rawContent
-
-        // Parse known fields
-        if let baseURL = dictionary["baseURL"] as? String {
-            self.baseURL = baseURL
-        }
-        if let title = dictionary["title"] as? String {
-            self.title = title
-        }
-        if let languageCode = dictionary["languageCode"] as? String {
-            self.languageCode = languageCode
-        }
-        // Theme can be a string or array of strings (for theme composition)
-        if let theme = dictionary["theme"] as? String {
-            self.theme = theme
-            self.themeIsArray = false
-        } else if let themes = dictionary["theme"] as? [String] {
-            // Store as comma-separated for array format
-            self.theme = themes.joined(separator: ", ")
-            self.themeIsArray = true
-        } else if let themes = dictionary["theme"] as? [Any] {
-            // Handle mixed array types
-            let themeStrings = themes.compactMap { $0 as? String }
-            if !themeStrings.isEmpty {
-                self.theme = themeStrings.joined(separator: ", ")
-                self.themeIsArray = true
-            }
-        }
-        if let copyright = dictionary["copyright"] as? String {
-            self.copyright = copyright
-        }
-        if let buildDrafts = dictionary["buildDrafts"] as? Bool {
-            self.buildDrafts = buildDrafts
-        }
-        if let buildFuture = dictionary["buildFuture"] as? Bool {
-            self.buildFuture = buildFuture
-        }
-        if let buildExpired = dictionary["buildExpired"] as? Bool {
-            self.buildExpired = buildExpired
-        }
-        if let enableRobotsTXT = dictionary["enableRobotsTXT"] as? Bool {
-            self.enableRobotsTXT = enableRobotsTXT
-        }
-        if let summaryLength = dictionary["summaryLength"] as? Int {
-            self.summaryLength = summaryLength
-        }
-        if let defaultContentLanguage = dictionary["defaultContentLanguage"] as? String {
-            self.defaultContentLanguage = defaultContentLanguage
-        }
-        if let timeZone = dictionary["timeZone"] as? String {
-            self.timeZone = timeZone
-        }
-        if let taxonomies = dictionary["taxonomies"] as? [String: String] {
-            self.taxonomies = taxonomies
-        }
-        if let params = dictionary["params"] as? [String: Any] {
-            self.params = params
-        }
-
-        // Parse permalinks
-        // The parser normalizes Yams' [AnyHashable: Any] nesting to [String: Any]
-        // at the parse boundary, so only the canonical shapes appear here.
-        if let permalinksRaw = dictionary["permalinks"] {
-            if let flat = permalinksRaw as? [String: String] {
-                self.permalinks = flat
-            } else if let nested = permalinksRaw as? [String: Any],
-                      let pagePermalinks = nested["page"] as? [String: String] {
-                self.permalinks = pagePermalinks
-            }
-        }
-
-        // Parse menus, recording which spelling the file uses (issue #3)
-        if let menusDict = dictionary["menus"] as? [String: [[String: Any]]] {
-            menuKeySpelling = "menus"
-            for (menuName, items) in menusDict {
-                menus[menuName] = items.compactMap { HugoMenuItem(from: $0) }
-            }
-        } else if let menuDict = dictionary["menu"] as? [String: [[String: Any]]] {
-            menuKeySpelling = "menu"
-            for (menuName, items) in menuDict {
-                menus[menuName] = items.compactMap { HugoMenuItem(from: $0) }
-            }
-        }
-
-        // Store all other fields as custom
-        let knownFields: Set<String> = [
-            "baseURL", "title", "languageCode", "theme", "copyright",
-            "buildDrafts", "buildFuture", "buildExpired", "enableRobotsTXT",
-            "summaryLength", "defaultContentLanguage", "timeZone",
-            "taxonomies", "params", "menus", "menu", "permalinks"
-        ]
-
-        for (key, value) in dictionary where !knownFields.contains(key) {
-            customFields[key] = value
-        }
-
-        // Record presence and the loaded values: serialization writes only
-        // keys the file had or the user later changes (sparse round-trip).
-        presentRootKeys = Set(dictionary.keys)
-        captureLoadedTypedValues()
 
         // Mark as saved since we just loaded from disk
         markAsSaved()
@@ -406,5 +481,19 @@ struct HugoMenuItem: Identifiable {
         if let parent = parent { dict["parent"] = parent }
         if let title = title { dict["title"] = title }
         return dict
+    }
+}
+
+private extension HugoConfig {
+    /// Establishes the observation dependency on `store.version` before
+    /// running `body`, so every computed accessor above depends on the
+    /// store's single observable signal (`store.root` itself is
+    /// `@ObservationIgnored` and must never be read directly by a getter —
+    /// CLAUDE.md's Per-Keystroke Invalidation Contract / CONFIG-SCHEMA-SPEC
+    /// §2.8). A method (not a free function) so `_ = store.version` is
+    /// spelled once and can't be forgotten on a new accessor.
+    func tracked<T>(_ body: () -> T) -> T {
+        _ = store.version
+        return body()
     }
 }

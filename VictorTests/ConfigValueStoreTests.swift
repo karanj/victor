@@ -390,6 +390,38 @@ final class ConfigValueStoreTests: XCTestCase {
         XCTAssertEqual(Set(store.orderedRootKeys), Set(["title", "baseURL"]))
     }
 
+    // MARK: - replaceRoot (Phase 1c: HugoConfig.updateFromRawContent)
+
+    func testReplaceRootReplacesContentsWholesale() {
+        let store = ConfigValueStore(root: ["title": "Old", "buildDrafts": true])
+        store.replaceRoot(with: ["title": "New"])
+
+        XCTAssertEqual(store.value(at: "title") as? String, "New")
+        XCTAssertFalse(store.isPresent("buildDrafts"), "old keys not in the new root must be gone")
+    }
+
+    func testReplaceRootResetsOrderedRootKeys() {
+        let store = ConfigValueStore(root: ["title": "Old", "buildDrafts": true])
+        store.replaceRoot(with: ["baseURL": "https://example.com/", "title": "New"])
+
+        XCTAssertEqual(Set(store.orderedRootKeys), Set(["baseURL", "title"]))
+    }
+
+    func testReplaceRootBumpsVersion() {
+        let store = ConfigValueStore(root: [:])
+        let before = store.version
+        store.replaceRoot(with: ["title": "New"])
+        XCTAssertGreaterThan(store.version, before)
+    }
+
+    func testReplaceRootNormalizesAnyHashableDictionaries() {
+        let store = ConfigValueStore(root: [:])
+        let innerAnyHashable: [AnyHashable: Any] = ["unsafe": true]
+        store.replaceRoot(with: ["markup": ["goldmark": ["renderer": innerAnyHashable]]])
+
+        XCTAssertEqual(store.boolValue("markup.goldmark.renderer.unsafe"), true)
+    }
+
     func testRemoveNestedKeyThatPrunesRootDropsRootKeyFromOrder() {
         let store = ConfigValueStore(root: ["title": "My Site"])
         store.set(true, at: "markup.goldmark.renderer.unsafe")

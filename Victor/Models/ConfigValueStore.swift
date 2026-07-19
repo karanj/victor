@@ -104,6 +104,17 @@ final class ConfigValueStore {
         root
     }
 
+    /// Replace the entire root dictionary — e.g. a Raw→Form re-parse, where
+    /// the whole document was re-read from scratch and the old tree is
+    /// meaningless to diff against. Resets `orderedRootKeys` to the new
+    /// document's order, same as `init`.
+    func replaceRoot(with newRoot: [String: Any]) {
+        let normalized = SerializationHelper.normalizeForSerialization(newRoot) as? [String: Any] ?? newRoot
+        root = normalized
+        orderedRootKeys = Array(normalized.keys)
+        version += 1
+    }
+
     // MARK: - Mutation helpers
 
     private func setValue(_ value: Any, at segments: [String], in dict: inout [String: Any]) {

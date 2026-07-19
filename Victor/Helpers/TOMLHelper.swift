@@ -92,11 +92,17 @@ enum TOMLHelper {
     // MARK: - Text Serialization
 
     /// Serialize a dictionary to TOML text format
-    /// - Parameter dictionary: The dictionary to serialize
+    /// - Parameters:
+    ///   - dictionary: The dictionary to serialize
+    ///   - rootKeyOrder: Optional root-level key order (e.g.
+    ///     `ConfigValueStore.orderedRootKeys`) — honored only at the root
+    ///     table (CONFIG-SCHEMA-SPEC §2.7). Nested tables always sort
+    ///     alphabetically, same as before; `nil` keeps the old
+    ///     alphabetical-root behavior.
     /// - Returns: TOML-formatted string with trailing newline
-    static func serializeToTOML(_ dictionary: [String: Any]) -> String {
+    static func serializeToTOML(_ dictionary: [String: Any], rootKeyOrder: [String]? = nil) -> String {
         var lines: [String] = []
-        serializeTOMLTable(dictionary, path: [], lines: &lines)
+        serializeTOMLTable(dictionary, path: [], lines: &lines, rootKeyOrder: rootKeyOrder)
         return lines.joined(separator: "\n") + "\n"
     }
 
@@ -105,12 +111,23 @@ enum TOMLHelper {
     ///   - dict: The dictionary to serialize
     ///   - path: The current key path (e.g., ["menu", "main"] for [menu.main])
     ///   - lines: The output lines array
-    static func serializeTOMLTable(_ dict: [String: Any], path: [String], lines: inout [String]) {
+    ///   - rootKeyOrder: Root-level key order, applied only when `path` is empty.
+    static func serializeTOMLTable(_ dict: [String: Any], path: [String], lines: inout [String], rootKeyOrder: [String]? = nil) {
         var simpleValues: [(String, Any)] = []
         var nestedTables: [(String, [String: Any])] = []
         var arrayOfTables: [(String, [[String: Any]])] = []
 
-        for (key, value) in dict.sorted(by: { $0.key < $1.key }) {
+        let orderedKeys: [String]
+        if path.isEmpty, let rootKeyOrder {
+            let known = rootKeyOrder.filter { dict[$0] != nil }
+            let remaining = dict.keys.filter { !rootKeyOrder.contains($0) }.sorted()
+            orderedKeys = known + remaining
+        } else {
+            orderedKeys = dict.keys.sorted()
+        }
+
+        for key in orderedKeys {
+            guard let value = dict[key] else { continue }
             if let arrayValue = value as? [Any] {
                 if let dictArray = arrayValue as? [[String: Any]], !dictArray.isEmpty {
                     arrayOfTables.append((key, dictArray))

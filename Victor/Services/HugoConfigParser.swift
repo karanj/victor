@@ -106,103 +106,25 @@ final class HugoConfigParser: @unchecked Sendable {
     // MARK: - Serialization
 
     /// Serialize a HugoConfig back to string.
-    /// Sparse by design: a key is written only when the source file had it or
-    /// the user changed it — never injected because Victor has a typed field
-    /// for it (design-doc issues #1/#2).
+    /// Sparse by design: a key is written iff it's present in `config.store`
+    /// — never injected just because HugoConfig has a computed accessor for
+    /// it (design-doc issues #1/#2). Presence is now structural: every
+    /// computed accessor's setter is the only thing that puts a key in the
+    /// store, so this function no longer needs field-by-field presence
+    /// checks (CONFIG-SCHEMA-SPEC §2.9 item 7) — it just snapshots the store.
     func serialize(_ config: HugoConfig) throws -> String {
-        var dictionary: [String: Any] = [:]
-
-        // Root scalars
-        if config.shouldSerializeRootKey("baseURL", currentValue: config.baseURL) {
-            dictionary["baseURL"] = config.baseURL
-        }
-        if config.shouldSerializeRootKey("title", currentValue: config.title) {
-            dictionary["title"] = config.title
-        }
-        if config.shouldSerializeRootKey("languageCode", currentValue: config.languageCode) {
-            dictionary["languageCode"] = config.languageCode
-        }
-
-        // Optional strings: empty means "not set", so presence alone doesn't
-        // force an empty value back into the file
-        // Theme can be a string or array - preserve original format
-        if let theme = config.theme, !theme.isEmpty,
-           config.shouldSerializeRootKey("theme", currentValue: theme) {
-            if config.themeIsArray || theme.contains(", ") {
-                // Array format - split by comma
-                dictionary["theme"] = theme.components(separatedBy: ", ").map { $0.trimmingCharacters(in: .whitespaces) }
-            } else {
-                // String format
-                dictionary["theme"] = theme
-            }
-        }
-        if let copyright = config.copyright, !copyright.isEmpty,
-           config.shouldSerializeRootKey("copyright", currentValue: copyright) {
-            dictionary["copyright"] = copyright
-        }
-        if let timeZone = config.timeZone, !timeZone.isEmpty,
-           config.shouldSerializeRootKey("timeZone", currentValue: timeZone) {
-            dictionary["timeZone"] = timeZone
-        }
-
-        // Booleans and numbers: explicit false/default values are preserved
-        // when the file declared them, but never injected when it didn't
-        if config.shouldSerializeRootKey("buildDrafts", currentValue: config.buildDrafts) {
-            dictionary["buildDrafts"] = config.buildDrafts
-        }
-        if config.shouldSerializeRootKey("buildFuture", currentValue: config.buildFuture) {
-            dictionary["buildFuture"] = config.buildFuture
-        }
-        if config.shouldSerializeRootKey("buildExpired", currentValue: config.buildExpired) {
-            dictionary["buildExpired"] = config.buildExpired
-        }
-        if config.shouldSerializeRootKey("enableRobotsTXT", currentValue: config.enableRobotsTXT) {
-            dictionary["enableRobotsTXT"] = config.enableRobotsTXT
-        }
-        if config.shouldSerializeRootKey("summaryLength", currentValue: config.summaryLength) {
-            dictionary["summaryLength"] = config.summaryLength
-        }
-        if config.shouldSerializeRootKey("defaultContentLanguage", currentValue: config.defaultContentLanguage) {
-            dictionary["defaultContentLanguage"] = config.defaultContentLanguage
-        }
-
-        // Taxonomies: explicitly-declared defaults round-trip (issue #2)
-        if !config.taxonomies.isEmpty,
-           config.shouldSerializeRootKey("taxonomies", currentValue: config.taxonomies) {
-            dictionary["taxonomies"] = config.taxonomies
-        }
-
-        // Menus, under the same key spelling the file used (issue #3)
-        if !config.menus.isEmpty {
-            var menuDict: [String: [[String: Any]]] = [:]
-            for (menuName, items) in config.menus {
-                menuDict[menuName] = items.map { $0.toDictionary() }
-            }
-            dictionary[config.menuKeySpelling] = menuDict
-        }
-
-        // Permalinks
-        if !config.permalinks.isEmpty {
-            dictionary["permalinks"] = config.permalinks
-        }
-
-        // Params - normalize for proper serialization
-        if !config.params.isEmpty {
-            dictionary["params"] = SerializationHelper.normalizeForSerialization(config.params)
-        }
-
-        // Custom fields - need to normalize types for proper serialization
-        for (key, value) in config.customFields {
-            dictionary[key] = SerializationHelper.normalizeForSerialization(value)
-        }
-
-        return try serialize(dictionary: dictionary, format: config.sourceFormat)
+        // Menus are the one typed materialization outside the store; commit
+        // them before snapshotting so a form-mode save reflects the latest
+        // in-memory edits (single write path, CONFIG-SCHEMA-SPEC §2.9 item 5).
+        config.commitMenus()
+        let dictionary = config.store.snapshotRoot()
+        return try serialize(dictionary: dictionary, format: config.sourceFormat, rootKeyOrder: config.store.orderedRootKeys)
     }
 
-    private func serialize(dictionary: [String: Any], format: ConfigFormat) throws -> String {
+    private func serialize(dictionary: [String: Any], format: ConfigFormat, rootKeyOrder: [String]? = nil) throws -> String {
         switch format {
         case .toml:
-            return try serializeToTOML(dictionary)
+            return try serializeToTOML(dictionary, rootKeyOrder: rootKeyOrder)
         case .yaml:
             return try serializeToYAML(dictionary)
         case .json:
@@ -210,8 +132,13 @@ final class HugoConfigParser: @unchecked Sendable {
         }
     }
 
-    private func serializeToTOML(_ dictionary: [String: Any]) throws -> String {
-        return TOMLHelper.serializeToTOML(dictionary)
+    /// Root-level key order is honored for TOML only (CONFIG-SCHEMA-SPEC §2.7):
+    /// TOMLKit/Yams both preserve document order, but Victor's own TOML writer
+    /// (`TOMLHelper`) sorts alphabetically by default, so it's the one writer
+    /// that needs an explicit order hint. YAML/JSON writers are unchanged —
+    /// best-effort only, per spec.
+    private func serializeToTOML(_ dictionary: [String: Any], rootKeyOrder: [String]? = nil) throws -> String {
+        return TOMLHelper.serializeToTOML(dictionary, rootKeyOrder: rootKeyOrder)
     }
 
     private func serializeToYAML(_ dictionary: [String: Any]) throws -> String {
