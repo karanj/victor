@@ -204,7 +204,8 @@ Key areas:
 
 ## Project Docs
 
-- `Docs/ISSUES.yaml` - STUB: tracker migrated to GitHub Issues 2026-07-12; holds the legacy-ID map
+- `Docs/CONFIG-EDITOR-DESIGN.md` - Config Editor v2: coverage review, round-trip issues, phased plan (vetted 2026-07-19)
+- `Docs/CONFIG-SCHEMA-SPEC.md` - Config Editor v2: full schema table + `ConfigValueStore` architecture, source-verified against Hugo v0.164.0
 - `Docs/CODE-REVIEW-PLAN.md` - Code review findings and status
 - `Docs/CODE-ANALYSIS-2026-07-03.md` - Critical analysis session: 10 fixes (data loss, hang, dead prefs) + leftovers
 - `Docs/MAC-POLISH-DESIGN.md` - Mac polish design: window chrome, menus, system integration, modernisation track (approved 2026-07-04)
