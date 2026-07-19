@@ -504,6 +504,23 @@ enum ConfigSchema {
 
     /// §4.9 page sort orders.
     static let pageSortOrders: [String] = ["asc", "desc"]
+
+    // MARK: - Lookup
+
+    /// Key → spec, built once. Tabs re-plumbed onto `ConfigFieldView` (Phase 1d)
+    /// look up their handful of fields by key rather than hardcoding entries a
+    /// second time — the table stays the single source of truth.
+    private static let byKey: [String: ConfigSettingSpec] = Dictionary(
+        uniqueKeysWithValues: all.map { ($0.key, $0) }
+    )
+
+    /// The spec for `key`, if one exists. `nil` is a programmer error at a
+    /// tab call site (a typo'd key) — callers force-unwrap deliberately so
+    /// the mistake surfaces immediately in debug/test runs rather than
+    /// silently dropping a field from the UI.
+    static func spec(for key: String) -> ConfigSettingSpec? {
+        byKey[key]
+    }
 }
 
 private let rawOnlySpecs: [ConfigSettingSpec] = ConfigSchema.rawOnlySections.map { rawOnlyEntry($0.key, $0.label, $0.help) }

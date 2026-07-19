@@ -2,72 +2,38 @@ import SwiftUI
 
 /// Essentials tab for Hugo configuration editor
 /// Handles basic site identity, theme, and copyright settings
+///
+/// Phase 1d (CONFIG-SCHEMA-SPEC §2.6/§2.8): fields render via
+/// `ConfigFieldView`, driven off `config.store` directly. This body reads
+/// `config.store` (a plain `let`, not observed) and never a computed
+/// accessor (`config.baseURL` etc.) or `store.version` — that's
+/// `ConfigFieldView`'s job as the sole observation leaf, so a keystroke in
+/// one field invalidates only that field's row, not this tab body.
 struct ConfigEssentialsTab: View {
-    @Bindable var config: HugoConfig
+    let config: HugoConfig
+    /// Site root, for the `theme` field's `themeExists` validator (checks
+    /// `themes/<name>` on disk). `nil` when no site is open (tests, or a
+    /// config with no known root) — the validator no-ops in that case.
+    var siteRootURL: URL? = nil
+
+    private var validationContext: ValidationContext {
+        ValidationContext(siteURL: siteRootURL, store: config.store)
+    }
 
     var body: some View {
         Form {
             Section("Site Identity") {
-                LabeledContent("Base URL") {
-                    TextField("",text: $config.baseURL, prompt: Text("https://example.com/"))
-                        .padding(6)
-                        .background(Color(nsColor: .textBackgroundColor))
-                        .disableAutocorrection(true)
-                        .onChange(of: config.baseURL) { _, _ in
-                            config.syncRawContentFromStructuredData()
-                        }
-                }
-                .help("The absolute URL of your site")
-
-                LabeledContent("Title") {
-                    TextField("", text: $config.title, prompt: Text("My Site"))
-                        .padding(6)
-                        .background(Color(nsColor: .textBackgroundColor))
-                        .onChange(of: config.title) { _, _ in
-                            config.syncRawContentFromStructuredData()
-                        }
-                }
-                .help("The title of your site")
-
-                LabeledContent("Language Code") {
-                    TextField("", text: $config.languageCode,prompt: Text("en-us"))
-                        .padding(6)
-                        .background(Color(nsColor: .textBackgroundColor))
-                        .onChange(of: config.languageCode) { _, _ in
-                            config.syncRawContentFromStructuredData()
-                        }
-                }
-                .help("RFC 5646 language code (e.g., en-us)")
+                ConfigFieldView(spec: ConfigSchema.spec(for: "baseURL")!, store: config.store, context: validationContext)
+                ConfigFieldView(spec: ConfigSchema.spec(for: "title")!, store: config.store, context: validationContext)
+                ConfigFieldView(spec: ConfigSchema.spec(for: "languageCode")!, store: config.store, context: validationContext)
             }
 
             Section("Theme") {
-                LabeledContent("Theme") {
-                    TextField("", text: Binding(
-                        get: { config.theme ?? "" },
-                        set: { config.theme = $0.isEmpty ? nil : $0 }
-                    ),prompt: Text("theme-name"))
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .onChange(of: config.theme) { _, _ in
-                        config.syncRawContentFromStructuredData()
-                    }
-                }
-                .help("Theme name or comma-separated list of themes")
+                ConfigFieldView(spec: ConfigSchema.spec(for: "theme")!, store: config.store, context: validationContext)
             }
 
             Section("Copyright") {
-                LabeledContent("Copyright") {
-                    TextField("", text: Binding(
-                        get: { config.copyright ?? "" },
-                        set: { config.copyright = $0.isEmpty ? nil : $0 }
-                    ), prompt: Text("© 2025 Your Name"))
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .onChange(of: config.copyright) { _, _ in
-                        config.syncRawContentFromStructuredData()
-                    }
-                }
-                .help("Copyright notice for your site footer")
+                ConfigFieldView(spec: ConfigSchema.spec(for: "copyright")!, store: config.store, context: validationContext)
             }
         }
         .formStyle(.grouped)

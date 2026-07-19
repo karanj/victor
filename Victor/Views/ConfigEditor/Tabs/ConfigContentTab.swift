@@ -2,52 +2,37 @@ import SwiftUI
 
 /// Content tab for Hugo configuration editor
 /// Handles build options, permalinks, and output settings
+///
+/// Phase 1d: buildDrafts/buildFuture/buildExpired/enableRobotsTXT/
+/// summaryLength render via `ConfigFieldView` off `config.store`. The
+/// Permalinks section stays bespoke and untouched (its own commit-on-blur
+/// `PermalinkRowView` predates and is the pattern generalized by
+/// `ConfigFieldView` — see `ConfigFieldView.swift`'s header comment).
+/// `enableRobotsTXT` stays on this tab (not Advanced): the design doc's
+/// Phase 1d field list assumed it already lived on Advanced, but it's on
+/// Content in the shipped app, so "same field coverage/placement as today"
+/// keeps it here, just converted off the per-keystroke `$config` binding.
 struct ConfigContentTab: View {
-    @Bindable var config: HugoConfig
+    let config: HugoConfig
+
+    /// No validator on this tab's migrated fields needs `siteURL`.
+    private var validationContext: ValidationContext {
+        ValidationContext(siteURL: nil, store: config.store)
+    }
 
     var body: some View {
         Form {
             Section("Build Options") {
-                Toggle("Build Drafts", isOn: $config.buildDrafts)
-                    .toggleStyle(.checkbox)
-                    .help("Include draft content in builds")
-                    .onChange(of: config.buildDrafts) { _, _ in
-                        config.syncRawContentFromStructuredData()
-                    }
-
-                Toggle("Build Future", isOn: $config.buildFuture)
-                    .toggleStyle(.checkbox)
-                    .help("Include future-dated content in builds")
-                    .onChange(of: config.buildFuture) { _, _ in
-                        config.syncRawContentFromStructuredData()
-                    }
-
-                Toggle("Build Expired", isOn: $config.buildExpired)
-                    .toggleStyle(.checkbox)
-                    .help("Include expired content in builds")
-                    .onChange(of: config.buildExpired) { _, _ in
-                        config.syncRawContentFromStructuredData()
-                    }
+                ConfigFieldView(spec: ConfigSchema.spec(for: "buildDrafts")!, store: config.store, context: validationContext)
+                ConfigFieldView(spec: ConfigSchema.spec(for: "buildFuture")!, store: config.store, context: validationContext)
+                ConfigFieldView(spec: ConfigSchema.spec(for: "buildExpired")!, store: config.store, context: validationContext)
             }
 
             PermalinksSectionView(config: config)
 
             Section("Output") {
-                Toggle("Enable robots.txt", isOn: $config.enableRobotsTXT)
-                    .toggleStyle(.checkbox)
-                    .help("Generate robots.txt file")
-                    .onChange(of: config.enableRobotsTXT) { _, _ in
-                        config.syncRawContentFromStructuredData()
-                    }
-
-                LabeledContent("Summary Length") {
-                    Stepper("\(config.summaryLength) words",
-                            value: $config.summaryLength, in: 10...500, step: 10)
-                        .onChange(of: config.summaryLength) { _, _ in
-                            config.syncRawContentFromStructuredData()
-                        }
-                }
-                .help("Default length for auto-generated summaries")
+                ConfigFieldView(spec: ConfigSchema.spec(for: "enableRobotsTXT")!, store: config.store, context: validationContext)
+                ConfigFieldView(spec: ConfigSchema.spec(for: "summaryLength")!, store: config.store, context: validationContext)
             }
         }
         .formStyle(.grouped)

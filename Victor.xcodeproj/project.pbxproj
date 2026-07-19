@@ -115,6 +115,7 @@
 		9AD72BC7D7D317FBFE58951B /* BreadcrumbBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38A675A95C53D709DA512994 /* BreadcrumbBar.swift */; };
 		9B728D3E62FDC83B62A62935 /* AdvancedTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2430A3C7888FF7CC094C6E7 /* AdvancedTab.swift */; };
 		A0D05E0C4A813EB3572AA068 /* ArchetypeManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA8BB843F3E8E092985F4DA /* ArchetypeManagerTests.swift */; };
+		A2E84235A8DD1EC355DDDBDE /* ConfigFieldView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F301C7418DFC90CB5E75A0CF /* ConfigFieldView.swift */; };
 		A4460481D03FDBC2AE246411 /* TextEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED03CD64BCDC16ACEBF130BD /* TextEditorViewModel.swift */; };
 		A79E3F427A27EF0AA7353D18 /* LabeledTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 952E8F28A91414F968E8DB7F /* LabeledTextField.swift */; };
 		A8CC31FBC252A0A378D69562 /* ServerLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 567B4F249410EB4B5B88B633 /* ServerLogView.swift */; };
@@ -342,6 +343,7 @@
 		F05BF6D6F0B380354DE43BB8 /* VictorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VictorApp.swift; sourceTree = "<group>"; };
 		F0FA85402B1F22ED8C36F632 /* VictorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VictorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F204538C5A9B5E2FBD303D5A /* StateViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateViewTests.swift; sourceTree = "<group>"; };
+		F301C7418DFC90CB5E75A0CF /* ConfigFieldView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigFieldView.swift; sourceTree = "<group>"; };
 		FA41D9A1277C904AD8ABD61B /* FileNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNode.swift; sourceTree = "<group>"; };
 		FB76908CA997A064CA8DCE5B /* SerializationHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SerializationHelper.swift; sourceTree = "<group>"; };
 		FCBABD9E712D1C124E8CD106 /* SiteViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteViewModelTests.swift; sourceTree = "<group>"; };
@@ -553,6 +555,7 @@
 			children = (
 				89345B17EFCCCA539B359260 /* Tabs */,
 				4B079A275E62933402BD92F8 /* ConfigEditorView.swift */,
+				F301C7418DFC90CB5E75A0CF /* ConfigFieldView.swift */,
 			);
 			path = ConfigEditor;
 			sourceTree = "<group>";
@@ -934,6 +937,7 @@
 				5A8189CA518D721E6E146EAF /* ConfigContentTab.swift in Sources */,
 				FCFFCC21FFC297D199295FAF /* ConfigEditorView.swift in Sources */,
 				F8715F970102DFD2187857D7 /* ConfigEssentialsTab.swift in Sources */,
+				A2E84235A8DD1EC355DDDBDE /* ConfigFieldView.swift in Sources */,
 				FEE7F992E0A0E509A89147DA /* ConfigSchema.swift in Sources */,
 				30E860A721BB929412AE5492 /* ConfigTaxonomiesTab.swift in Sources */,
 				151DC6E98CFF24C412169DCB /* ConfigValidators.swift in Sources */,

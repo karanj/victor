@@ -2,34 +2,30 @@ import SwiftUI
 
 /// Advanced tab for Hugo configuration editor
 /// Handles localization settings and displays custom fields and params
+///
+/// Phase 1d: defaultContentLanguage/timeZone render via `ConfigFieldView`
+/// off `config.store`, fixing the per-keystroke `$config`/`.onChange`
+/// binding that was here before. Their schema group is `.essentials`
+/// (§3.1), but they stay on this tab — "keep today's placement" (Phase 1d
+/// scope note) defers the essentials/locale reshuffle to a later phase.
+/// The customFields/params sections stay bespoke read-only rows (Phase 2
+/// replaces them with `DataDictionaryEditor`); they already read
+/// `config.customFields`/`config.params` today and are unchanged here.
 struct ConfigAdvancedTab: View {
     @Bindable var config: HugoConfig
+
+    /// No validator on this tab's migrated fields needs `siteURL` (bcp47ish
+    /// / timezone are pure string checks), so it's `nil` rather than
+    /// threaded from `SiteViewModel` for no benefit.
+    private var validationContext: ValidationContext {
+        ValidationContext(siteURL: nil, store: config.store)
+    }
 
     var body: some View {
         Form {
             Section("Localization") {
-                LabeledContent("Default Language") {
-                    TextField("", text: $config.defaultContentLanguage,prompt: Text("en"))
-                        .frame(width: 100)
-                        .padding(6)
-                        .background(Color(nsColor: .textBackgroundColor))
-                        .onChange(of: config.defaultContentLanguage) { _, _ in
-                            config.syncRawContentFromStructuredData()
-                        }
-                }
-
-                LabeledContent("Time Zone") {
-                    TextField("", text: Binding(
-                        get: { config.timeZone ?? "" },
-                        set: { config.timeZone = $0.isEmpty ? nil : $0 }
-                    ),prompt: Text("America/New_York"))
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .onChange(of: config.timeZone) { _, _ in
-                        config.syncRawContentFromStructuredData()
-                    }
-                }
-                .help("IANA time zone (e.g., America/New_York, Europe/London)")
+                ConfigFieldView(spec: ConfigSchema.spec(for: "defaultContentLanguage")!, store: config.store, context: validationContext)
+                ConfigFieldView(spec: ConfigSchema.spec(for: "timeZone")!, store: config.store, context: validationContext)
             }
 
             if !config.customFields.isEmpty {
