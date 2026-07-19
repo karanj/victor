@@ -22,6 +22,7 @@ struct ConfigEditorView: View {
         case essentials = "Essentials"
         case content = "Content"
         case taxonomies = "Taxonomies"
+        case menus = "Menus"
         case advanced = "Advanced"
     }
 
@@ -49,6 +50,10 @@ struct ConfigEditorView: View {
                     ConfigTaxonomiesTab(config: config)
                         .tabItem { Label("Taxonomies", systemImage: "tag") }
                         .tag(ConfigTab.taxonomies)
+
+                    ConfigMenusTab(config: config)
+                        .tabItem { Label("Menus", systemImage: "list.bullet.indent") }
+                        .tag(ConfigTab.menus)
 
                     ConfigAdvancedTab(config: config)
                         .tabItem { Label("Advanced", systemImage: "gearshape.2") }

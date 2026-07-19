@@ -1769,6 +1769,136 @@ final class HugoConfigParserTests: XCTestCase {
         XCTAssertTrue(roundTrip.menus.isEmpty)
     }
 
+    // MARK: - Phase 3: Menus Tab — HugoMenuItem.reweighted (CONFIG-SCHEMA-SPEC §3.4)
+
+    /// Moving an item within a menu (drag-reorder) rewrites every item's
+    /// weight in steps of 10, in the new order.
+    func testReweightedAssignsStepsOfTenInOrder() {
+        let items = [
+            HugoMenuItem(name: "Home", weight: 5),
+            HugoMenuItem(name: "About", weight: 47),
+            HugoMenuItem(name: "Blog", weight: 100)
+        ]
+
+        let result = HugoMenuItem.reweighted(items)
+
+        XCTAssertEqual(result.map(\.name), ["Home", "About", "Blog"])
+        XCTAssertEqual(result.map(\.weight), [10, 20, 30])
+    }
+
+    /// Simulates a drag-reorder: move the last item to the front, then
+    /// reweight — weights follow the new order, not the old one.
+    func testReweightedAfterMoveReflectsNewOrder() {
+        var items = [
+            HugoMenuItem(name: "Home", weight: 10),
+            HugoMenuItem(name: "About", weight: 20),
+            HugoMenuItem(name: "Blog", weight: 30)
+        ]
+        items.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+
+        let result = HugoMenuItem.reweighted(items)
+
+        XCTAssertEqual(result.map(\.name), ["Blog", "Home", "About"])
+        XCTAssertEqual(result.map(\.weight), [10, 20, 30])
+    }
+
+    /// Stable (doesn't crash / returns the same shape) for empty and
+    /// single-item input.
+    func testReweightedStableForEmptyAndSingleItemLists() {
+        XCTAssertEqual(HugoMenuItem.reweighted([]).count, 0)
+
+        let single = HugoMenuItem.reweighted([HugoMenuItem(name: "Home", weight: 999)])
+        XCTAssertEqual(single.count, 1)
+        XCTAssertEqual(single.first?.weight, 10)
+        XCTAssertEqual(single.first?.name, "Home")
+    }
+
+    // MARK: - Phase 3: Menus Tab — HugoMenuItem.settingLink (url XOR pageRef)
+
+    /// Setting a non-empty url clears an existing pageRef.
+    func testSettingLinkURLClearsPageRef() {
+        let item = HugoMenuItem(name: "About", pageRef: "/about/")
+        let updated = HugoMenuItem.settingLink(item, type: .url, value: "/about-us/")
+        XCTAssertEqual(updated.url, "/about-us/")
+        XCTAssertNil(updated.pageRef)
+    }
+
+    /// Setting a non-empty pageRef clears an existing url.
+    func testSettingLinkPageRefClearsURL() {
+        let item = HugoMenuItem(name: "About", url: "/about/")
+        let updated = HugoMenuItem.settingLink(item, type: .pageRef, value: "/posts/about")
+        XCTAssertEqual(updated.pageRef, "/posts/about")
+        XCTAssertNil(updated.url)
+    }
+
+    /// Clearing (empty/whitespace) one field only clears that field — it
+    /// must not wipe a value already set on the other, unused field.
+    func testSettingLinkEmptyValueDoesNotClearSibling() {
+        let item = HugoMenuItem(name: "About", pageRef: "/about/")
+        let updated = HugoMenuItem.settingLink(item, type: .url, value: "   ")
+        XCTAssertNil(updated.url)
+        XCTAssertEqual(updated.pageRef, "/about/", "clearing the unused url field must not touch pageRef")
+    }
+
+    // MARK: - Phase 3: Menus Tab — round-trip through commitMenus + serialize
+
+    /// Build a config from TOML with nested (parent/identifier) menu items,
+    /// reorder via the pure reweight function, commit, serialize, re-parse:
+    /// new weights and preserved extra fields (pre/post/params) all survive.
+    func testMenusTabReorderCommitSerializeRoundTrip() throws {
+        let input = """
+        baseURL = "https://example.com/"
+
+        [menus]
+        [[menus.main]]
+        name = "Services"
+        identifier = "services"
+        url = "/services/"
+        weight = 10
+        pre = "<i class='services'></i>"
+
+        [[menus.main]]
+        name = "Consulting"
+        parent = "services"
+        pageRef = "/services/consulting"
+        weight = 20
+        title = "Consulting services"
+
+        [menus.main.params]
+        class = "highlight"
+        """
+
+        let config = try parser.parseConfig(content: input, format: .toml)
+        XCTAssertEqual(config.menus["main"]?.count, 2)
+
+        // Reorder: Consulting first, Services second, then reweight in steps of 10.
+        let original = (config.menus["main"] ?? []).sorted { $0.weight < $1.weight }
+        var reordered = original
+        reordered.move(fromOffsets: IndexSet(integer: 1), toOffset: 0)
+        config.menus["main"] = HugoMenuItem.reweighted(reordered)
+
+        config.commitMenus()
+        let serialized = try parser.serialize(config)
+        let roundTrip = try parser.parseConfig(content: serialized, format: .toml)
+
+        let items = (roundTrip.menus["main"] ?? []).sorted { $0.weight < $1.weight }
+        XCTAssertEqual(items.map(\.name), ["Consulting", "Services"])
+        XCTAssertEqual(items.map(\.weight), [10, 20])
+
+        let consulting = items.first { $0.name == "Consulting" }
+        XCTAssertEqual(consulting?.parent, "services")
+        XCTAssertEqual(consulting?.pageRef, "/services/consulting")
+        XCTAssertEqual(consulting?.title, "Consulting services")
+        // `[menus.main.params]` in the source TOML follows the Consulting
+        // array-of-tables entry, so it belongs to Consulting, not Services.
+        XCTAssertEqual((consulting?.extra["params"] as? [String: Any])?["class"] as? String, "highlight")
+
+        let services = items.first { $0.name == "Services" }
+        XCTAssertEqual(services?.identifier, "services")
+        XCTAssertEqual(services?.url, "/services/")
+        XCTAssertEqual(services?.extra["pre"] as? String, "<i class='services'></i>")
+    }
+
     // MARK: - Helper Methods
 
     /// Assert that TOML content survives a parse -> serialize -> parse round-trip

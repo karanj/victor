@@ -484,6 +484,50 @@ struct HugoMenuItem: Identifiable {
     }
 }
 
+extension HugoMenuItem {
+    /// Which of the two mutually-exclusive link fields is being edited
+    /// (CONFIG-SCHEMA-SPEC §3.4: `url` XOR `pageRef`).
+    enum LinkType {
+        case url
+        case pageRef
+    }
+
+    /// Enforces `url` XOR `pageRef`. Setting a **non-empty** value for one
+    /// field clears the other (Hugo only honors one). Setting an empty/nil
+    /// value only clears the field being edited — blanking an unused field
+    /// must never wipe out a value already set on its sibling.
+    ///
+    /// Pure: returns a new item, never mutates `item`. Used by
+    /// `ConfigMenusTab`'s per-item link editor.
+    static func settingLink(_ item: HugoMenuItem, type: LinkType, value: String?) -> HugoMenuItem {
+        var updated = item
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nonEmpty = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        switch type {
+        case .url:
+            updated.url = nonEmpty
+            if nonEmpty != nil { updated.pageRef = nil }
+        case .pageRef:
+            updated.pageRef = nonEmpty
+            if nonEmpty != nil { updated.url = nil }
+        }
+        return updated
+    }
+
+    /// Reassigns `weight` in steps of 10 (10, 20, 30, …) following `items`'
+    /// order — the effect of a drag-reorder in the Menus tab
+    /// (CONFIG-SCHEMA-SPEC §3.4). Pure: returns a new array, never mutates
+    /// `items`. Stable (returns `[]`/single-item unchanged in shape) for
+    /// empty/single-item input.
+    static func reweighted(_ items: [HugoMenuItem]) -> [HugoMenuItem] {
+        items.enumerated().map { index, item in
+            var copy = item
+            copy.weight = (index + 1) * 10
+            return copy
+        }
+    }
+}
+
 private extension HugoConfig {
     /// Establishes the observation dependency on `store.version` before
     /// running `body`, so every computed accessor above depends on the
