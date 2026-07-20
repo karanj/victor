@@ -135,8 +135,8 @@ Extract `DataDictionaryEditor` family into `Views/Components/`; wire recursive e
 
 **Phase 5 — URLs additions, Integrations tab** (pagination, services+privacy, sitemap, outputs matrix), theme/timezone pickers, deprecation lints.
 
-**Phase 6 — Deferred, separate specs when wanted**
-Config directory (`config/_default` + environments) — touches site loading, merge semantics, and "which file does a form edit write to"; multilingual `languages` editor; module imports/mounts GUI.
+**Phase 6 — Deferred, broken out in `CONFIG-EDITOR-PHASE6-DESIGN.md` (2026-07-20)**
+Config directory (`config/_default` + environments) — touches site loading, merge semantics, and "which file does a form edit write to"; multilingual `languages` editor; module imports/mounts GUI. Each needs a Hugo source-verification pass (per this doc's own research method, §1 above) before a schema/architecture doc can be written — none of the three are implementable as specced yet.
 
 Rough sizing: P0 small; P1 the big architectural lift; P2–P5 each a focused view-layer chunk once P1 exists.
 
