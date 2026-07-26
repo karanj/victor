@@ -115,32 +115,32 @@ struct DataFileEditorView: View {
 struct DataFormEditorView: View {
     @Bindable var dataFile: DataFile
 
+    /// `Form(.grouped)`, not a plain `ScrollView`: the recursive editor emits
+    /// bare rows that need a Form's label column (see `RecursiveValueEditor`).
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if dataFile.isArrayRoot {
-                    DataArrayEditor(
-                        data: Binding(
-                            get: { dataFile.dataArray ?? [] },
-                            set: { dataFile.data = $0 }
-                        ),
-                        onChanged: { markChanged() }
-                    )
-                } else if dataFile.dataDictionary != nil {
-                    DataDictionaryEditor(
-                        data: Binding(
-                            get: { dataFile.dataDictionary ?? [:] },
-                            set: { dataFile.data = $0 }
-                        ),
-                        onChanged: { markChanged() }
-                    )
-                } else {
-                    Text("Unsupported data structure")
-                        .foregroundStyle(.secondary)
-                }
+        Form {
+            if dataFile.isArrayRoot {
+                DataArrayEditor(
+                    data: Binding(
+                        get: { dataFile.dataArray ?? [] },
+                        set: { dataFile.data = $0 }
+                    ),
+                    onChanged: { markChanged() }
+                )
+            } else if dataFile.dataDictionary != nil {
+                DataDictionaryEditor(
+                    data: Binding(
+                        get: { dataFile.dataDictionary ?? [:] },
+                        set: { dataFile.data = $0 }
+                    ),
+                    onChanged: { markChanged() }
+                )
+            } else {
+                Text("Unsupported data structure")
+                    .foregroundStyle(.secondary)
             }
-            .padding()
         }
+        .formStyle(.grouped)
     }
 
     private func markChanged() {

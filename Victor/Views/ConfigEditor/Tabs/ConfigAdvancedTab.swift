@@ -105,7 +105,7 @@ struct ConfigAdvancedTab: View {
     /// `ConfigURLsTaxonomiesTab.allRenderedKeys`/`ConfigMarkupTab.allRenderedKeys`/
     /// `ConfigIntegrationsTab.allRenderedKeys` are pulled from each tab's own
     /// source rather than re-listed here, so none of the four can drift.
-    private static let renderedOnOtherTabs: Set<String> = ([
+    static let renderedOnOtherTabs: Set<String> = ([
         "baseURL", "title", "locale", "languageCode", "theme", "copyright", "timeZone",
         "buildDrafts", "buildFuture", "buildExpired", "summaryLength"
     ] as Set<String>)
@@ -144,25 +144,28 @@ struct ConfigAdvancedTab: View {
         if !warnings.isEmpty {
             Section {
                 ForEach(warnings) { warning in
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(Color.Status.warning)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(warning.key)
-                                .font(.system(.body, design: .monospaced))
+                    LabeledContent {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text(warning.message)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if let replacementKey = warning.replacementKey {
-                            Button("Use \(replacementKey)") {
-                                guard let value = config.store.value(at: warning.key) else { return }
-                                config.store.remove(at: warning.key)
-                                config.store.set(value, at: replacementKey)
-                                commit()
+                            if let replacementKey = warning.replacementKey {
+                                Button("Use \(replacementKey)") {
+                                    guard let value = config.store.value(at: warning.key) else { return }
+                                    config.store.remove(at: warning.key)
+                                    config.store.set(value, at: replacementKey)
+                                    commit()
+                                }
+                                .buttonStyle(.borderless)
                             }
-                            .buttonStyle(.borderless)
+                        }
+                    } label: {
+                        Label {
+                            Text(warning.key)
+                                .font(.system(.body, design: .monospaced))
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Color.Status.warning)
                         }
                     }
                 }
@@ -206,11 +209,7 @@ struct ConfigAdvancedTab: View {
 
     private var allSettingsSection: some View {
         Section {
-            AllSettingsListView(
-                store: config.store,
-                context: validationContext,
-                excludedKeys: Self.renderedOnOtherTabs
-            )
+            AllSettingsListView(store: config.store, context: validationContext)
         } header: {
             Text("All Settings")
         } footer: {
@@ -269,16 +268,15 @@ struct ConfigAdvancedTab: View {
         if !sections.isEmpty {
             Section {
                 ForEach(sections, id: \.key) { section in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(section.label)
+                    LabeledContent {
+                        HStack(spacing: 6) {
                             Text("\(section.count) key\(section.count == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .countBadgeStyle()
+                            Button("Edit in Raw") { switchToRaw() }
+                                .buttonStyle(.borderless)
                         }
-                        Spacer()
-                        Button("Edit in Raw") { switchToRaw() }
-                            .buttonStyle(.borderless)
+                    } label: {
+                        Text(section.label)
                     }
                     .help(section.help)
                 }
@@ -301,47 +299,81 @@ struct ConfigAdvancedTab: View {
 /// scoped to exactly the rows it filters, matching the leaf-observation
 /// pattern used throughout this tab).
 ///
-/// No explicit `LazyVStack`/`List` wrapper: `Form` on macOS is itself
-/// `List`-backed, and a `ForEach` placed directly in a `Section` gets that
-/// `List`'s per-row virtualization for free — wrapping it in a second lazy
-/// container here would nest one scrolling/virtualizing construct inside
-/// another for no benefit and fight `Form`'s own row styling.
+/// Rows are gated behind a filter or an explicit "show all" because a
+/// grouped `Form` on macOS builds every row it is handed up front — handing
+/// it all 126 cost 611 ms of the ~690 ms it took to switch to this tab
+/// (measured at 900x800). `LazyVStack` fixes the cost but loses Form's row
+/// styling entirely (no separators, multi-line rows collapse), and `List`
+/// loses the shared label column, so the row count is what gives.
 private struct AllSettingsListView: View {
     let store: ConfigValueStore
     let context: ValidationContext
-    let excludedKeys: Set<String>
 
     @State private var searchText = ""
+    @State private var showAll = false
 
     /// `.advanced`-group entries (minus `.rawOnly`-typed ones, which get
     /// their own read-only list) plus anything from another group that
-    /// isn't rendered on that group's tab yet (markup/integrations have no
-    /// tab at all pre-Phase-4/5; several essentials/contentBuild/
-    /// urlsTaxonomies entries aren't wired up on their tab yet either).
-    private var candidates: [ConfigSettingSpec] {
-        ConfigSchema.all
-            .filter { !excludedKeys.contains($0.key) }
-            .filter { spec in
-                if case .rawOnly = spec.type { return false }
-                if spec.group == .menus { return false } // no schema entries anyway
-                return true
-            }
-            .sorted { $0.label < $1.label }
-    }
+    /// isn't rendered on that group's tab yet. Computed once: it depends
+    /// only on statics, and as a computed property it re-filtered and
+    /// re-sorted all 222 specs on every keystroke in the filter field.
+    static let candidates: [ConfigSettingSpec] = ConfigSchema.all
+        .filter { !ConfigAdvancedTab.renderedOnOtherTabs.contains($0.key) }
+        .filter { spec in
+            if case .rawOnly = spec.type { return false }
+            if spec.group == .menus { return false } // no schema entries anyway
+            return true
+        }
+        .sorted { $0.label < $1.label }
 
     private var filtered: [ConfigSettingSpec] {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !trimmed.isEmpty else { return candidates }
-        return candidates.filter {
+        guard !trimmed.isEmpty else { return Self.candidates }
+        return Self.candidates.filter {
             $0.key.lowercased().contains(trimmed) || $0.label.lowercased().contains(trimmed)
         }
     }
 
-    var body: some View {
-        TextField("Search settings…", text: $searchText)
-            .textFieldStyle(.roundedBorder)
+    /// Rows to build this pass: matches while filtering, everything once
+    /// the user asks for it, nothing otherwise.
+    private var visibleRows: [ConfigSettingSpec] {
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return filtered }
+        return showAll ? Self.candidates : []
+    }
 
-        ForEach(filtered) { spec in
+    var body: some View {
+        let rows = visibleRows
+
+        LabeledContent("Filter") {
+            HStack(spacing: 6) {
+                TextField("", text: $searchText, prompt: Text("Name or key"))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: AppConstants.FormField.textWidth)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Clear Filter")
+                }
+                if !searchText.isEmpty {
+                    Text("\(rows.count) of \(Self.candidates.count)")
+                        .countBadgeStyle()
+                }
+            }
+        }
+
+        if rows.isEmpty && !showAll {
+            LabeledContent("Browse") {
+                Button("Show all \(Self.candidates.count) settings") { showAll = true }
+            }
+        }
+
+        ForEach(rows) { spec in
             ConfigFieldView(spec: spec, store: store, context: context)
         }
     }
@@ -349,41 +381,28 @@ private struct AllSettingsListView: View {
 
 // MARK: - (c) Unknown key row
 
+/// An unknown root key is a dictionary entry whose dictionary is the store
+/// root, so it reuses `DataFieldRow` rather than restating the layout.
 private struct UnknownKeyEditorRow: View {
     let rootKey: String
     let store: ConfigValueStore
     let commit: () -> Void
 
-    @State private var isExpanded = true
-
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            DataValueEditor(
-                value: Binding(
-                    get: { store.value(at: rootKey) ?? [String: Any]() },
-                    set: { store.set($0, at: rootKey) }
-                ),
-                onChanged: commit
-            )
-            .padding(.leading, 16)
-        } label: {
-            HStack {
-                Text(rootKey)
-                    .font(.system(.body, design: .monospaced))
-                Spacer()
-                Button(role: .destructive) {
-                    store.remove(at: rootKey)
+        DataFieldRow(
+            key: rootKey,
+            value: Binding(
+                get: { store.value(at: rootKey) ?? [String: Any]() },
+                set: { newValue in
+                    store.set(newValue, at: rootKey)
                     commit()
-                } label: {
-                    Image(systemName: "trash")
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Remove \(rootKey)")
+            ),
+            onDelete: {
+                store.remove(at: rootKey)
+                commit()
             }
-        }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
+        )
     }
 }
 

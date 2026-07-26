@@ -57,6 +57,15 @@ enum AppConstants {
         static let autocompleteMaxHeight: CGFloat = 250
     }
 
+    /// Control widths for `LabeledContent` form rows (config editor tabs,
+    /// recursive value editor, data files). Centralized so text and number
+    /// leaves on the same grid can't drift apart — an uncapped `TextField`
+    /// stretches to the trailing edge next to a 100pt number field.
+    enum FormField {
+        static let textWidth: CGFloat = 280
+        static let numberWidth: CGFloat = 100
+    }
+
     /// Standard spacing values
     enum Spacing {
         /// Small spacing (4pt)

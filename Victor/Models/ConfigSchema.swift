@@ -136,13 +136,6 @@ private func choiceEntry(
     entry(key, .choice(options), .value(def), label, help, group, validator: validator ?? ConfigValidators.memberOf(options))
 }
 
-private func dictionaryEntry(
-    _ key: String, _ label: String, _ help: String, _ group: ConfigGroup,
-    deprecation: ConfigDeprecation? = nil
-) -> ConfigSettingSpec {
-    entry(key, .dictionary, .none, label, help, group, deprecation: deprecation)
-}
-
 private func rawOnlyEntry(_ key: String, _ label: String, _ help: String) -> ConfigSettingSpec {
     entry(key, .rawOnly, .none, label, help, .advanced)
 }
@@ -417,8 +410,12 @@ private let directoryOverrideEntries: [ConfigSettingSpec] = [
 
 private let deprecatedEntries: [ConfigSettingSpec] = [
     deprecatedArrayEntry("ignoreFiles", [], "Ignore Files (legacy)", "Regexes of files to exclude from processing.", .advanced, since: "unspecified", message: "Superseded by module mount excludeFiles patterns; not auto-migrated.", replacement: nil),
-    dictionaryEntry("author", "Author (legacy)", "Legacy root-level author info block.", .advanced, deprecation: ConfigDeprecation(since: "unspecified", message: "Use the author taxonomy or site params instead.", replacementKey: nil)),
-    dictionaryEntry("social", "Social (legacy)", "Legacy root-level social-network handle map.", .advanced, deprecation: ConfigDeprecation(since: "unspecified", message: "Use site params instead.", replacementKey: nil)),
+    // `author` / `social` deliberately absent: both were `.dictionary`, which
+    // has no working control, so they rendered as "Deprecated" + "Coming in a
+    // later phase" — a row that says don't use this key and won't let you
+    // edit it. They now fall through to the Advanced tab's Unknown Keys
+    // section, which gives them a real recursive editor.
+    // Pinned by `ConfigSchemaPlaceholderTests`.
     deprecatedStringEntry("markup.goldmark.parser.autoHeadingIDType", "github", "Heading ID Style (legacy key)", "Legacy name for the heading-ID slug algorithm setting.", .advanced, since: "0.144.0", message: "Renamed to markup.goldmark.parser.autoIDType.", replacement: "markup.goldmark.parser.autoIDType"),
     deprecatedBoolEntry("markup.goldmark.renderHooks.image.enableDefault", true, "Image Render Hook (legacy key)", "Legacy name for opting into Hugo's embedded image render hook.", .advanced, since: "0.148.0", message: "Renamed to markup.goldmark.renderHooks.image.useEmbedded.", replacement: "markup.goldmark.renderHooks.image.useEmbedded"),
     deprecatedBoolEntry("markup.goldmark.renderHooks.link.enableDefault", true, "Link Render Hook (legacy key)", "Legacy name for opting into Hugo's embedded link render hook.", .advanced, since: "0.148.0", message: "Renamed to markup.goldmark.renderHooks.link.useEmbedded.", replacement: "markup.goldmark.renderHooks.link.useEmbedded")

@@ -684,8 +684,10 @@ private struct ConfigTextDraftRow: View {
         HStack(spacing: 6) {
             TextField("", text: $draft, prompt: Text(placeholderText))
                 .font(monospaced ? .system(.body, design: .monospaced) : .body)
-                .padding(6)
-                .background(Color(nsColor: .textBackgroundColor))
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: AppConstants.FormField.textWidth)
                 .focused($isFocused)
                 .onSubmit { commitDraft() }
                 .onChange(of: isFocused) { _, focused in
@@ -758,9 +760,10 @@ private struct ConfigIntFieldRow: View {
         VStack(alignment: .trailing, spacing: 2) {
             HStack(spacing: 6) {
                 TextField("", text: $draft, prompt: Text(placeholderText))
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .frame(width: 100)
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                    .frame(width: AppConstants.FormField.numberWidth)
                     .focused($isFocused)
                     .onSubmit { commitDraft() }
                     .onChange(of: isFocused) { _, focused in
@@ -835,9 +838,10 @@ private struct ConfigDoubleFieldRow: View {
         VStack(alignment: .trailing, spacing: 2) {
             HStack(spacing: 6) {
                 TextField("", text: $draft, prompt: Text(placeholderText))
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .frame(width: 100)
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                    .frame(width: AppConstants.FormField.numberWidth)
                     .focused($isFocused)
                     .onSubmit { commitDraft() }
                     .onChange(of: isFocused) { _, focused in
@@ -910,9 +914,9 @@ private struct ConfigStringArrayFieldRow: View {
                     }
                 }
             } else {
-                // Simple wrapping chip row; the taxonomies-tab pair editor
-                // stays the richer pattern for its own bespoke section.
-                HStack(spacing: 4) {
+                // `HStack` can't wrap, so keys with more than a few tokens
+                // used to compress their chips into slivers.
+                WrappingHStack(horizontalSpacing: 4, verticalSpacing: 4) {
                     ForEach(current, id: \.self) { token in
                         HStack(spacing: 2) {
                             Text(token).font(.caption)
@@ -931,13 +935,15 @@ private struct ConfigStringArrayFieldRow: View {
                         .clipShape(Capsule())
                     }
                 }
+                .frame(maxWidth: AppConstants.FormField.textWidth)
             }
 
             HStack(spacing: 6) {
-                TextField("add…", text: $newToken)
+                TextField("", text: $newToken, prompt: Text("add…"))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
                     .frame(width: 120)
-                    .padding(4)
-                    .background(Color(nsColor: .textBackgroundColor))
                     .onSubmit { addToken() }
                 Button("Add") { addToken() }
                     .disabled(newToken.trimmingCharacters(in: .whitespaces).isEmpty)
