@@ -1,18 +1,11 @@
 import SwiftUI
 
-/// Markup tab for Hugo configuration editor — goldmark, syntax highlighting,
-/// and table-of-contents settings (CONFIG-SCHEMA-SPEC §3.5). Every row is a
-/// `ConfigFieldView` off a schema key looked up by `ConfigSchema.spec(for:)`;
-/// this body iterates the static key lists below and reads no store values
-/// itself — store reads happen only inside the `ConfigFieldView` leaf
-/// (CLAUDE.md's per-keystroke invalidation contract), same pattern as
-/// `ConfigContentTab`.
+/// Markup tab: goldmark, syntax highlighting, table of contents (CONFIG-SCHEMA-SPEC §3.5).
+/// Every row is a `ConfigFieldView` looked up by key; this body reads no store values
+/// itself, so a keystroke invalidates one row rather than the tab.
 ///
-/// `markup.goldmark.extensions.typographer.disable`'s inverted "Smart
-/// Punctuation" label is handled generically by `ConfigFieldView`
-/// (`ConfigSettingSpec.invertedBoolLabel`, set on that schema entry) — this
-/// tab renders it via the same `row(for:)` helper as every other field, no
-/// bespoke logic here.
+/// The inverted "Smart Punctuation" label is handled generically via
+/// `ConfigSettingSpec.invertedBoolLabel` - no bespoke logic here.
 struct ConfigMarkupTab: View {
     let config: HugoConfig
 

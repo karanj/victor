@@ -1,15 +1,9 @@
 import SwiftUI
 
-/// A labeled text field with consistent styling
+/// A labeled text field with consistent styling, for use outside SwiftUI Forms. Inside
+/// a Form, prefer `LabeledContent`.
 ///
-/// Use this component outside of SwiftUI Forms for labeled text inputs.
-/// Inside Forms, prefer using SwiftUI's `LabeledContent` or `Form` sections.
-///
-/// Usage:
-/// ```swift
-/// LabeledTextField(label: "Title", text: $title, placeholder: "Enter title")
-/// LabeledTextField(label: "Email", text: $email, placeholder: "user@example.com")
-/// ```
+///     LabeledTextField(label: "Title", text: $title, placeholder: "Enter title")
 struct LabeledTextField: View {
     let label: String
     @Binding var text: String

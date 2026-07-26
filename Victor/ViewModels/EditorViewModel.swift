@@ -23,12 +23,9 @@ class EditorViewModel {
 
     /// Editable content - reads from local storage and syncs back to SiteViewModel.
     ///
-    /// The setter OWNS change handling (dirty flag + auto-save scheduling):
-    /// a keystroke is one binding write from NSTextView's textDidChange, handled
-    /// entirely here. Previously the view delivered this via
-    /// `.onChange(of: viewModel.editableContent)`, which made EditorPanelView's
-    /// body read per-keystroke state and re-evaluate on every character typed
-    /// (keystroke-lag fix, part 2 - see EditorViewModelTests).
+    /// The setter OWNS change handling (dirty flag + auto-save scheduling). Delivering this
+    /// via `.onChange` in the view instead made EditorPanelView's body read per-keystroke
+    /// state and re-evaluate on every character.
     var editableContent: String {
         get { localContent }
         set {
@@ -205,44 +202,13 @@ class EditorViewModel {
         }
     }
 
-    /// Schedule auto-save with conflict detection.
+    /// Schedule auto-save with conflict detection. The debounce lives here as a MainActor
+    /// `Task.sleep`; the full document is built once at fire time from LIVE state, which
+    /// also stops frontmatter edited mid-debounce being lost.
     ///
-    /// Redesigned (keystroke-lag perf ticket): previously this ran `buildFullContent`
-    /// (frontmatter YAML serialization + full-document concat) on EVERY keystroke,
-    /// before handing a fixed string off to AutoSaveService's actor-side debounce.
-    /// Now the debounce itself lives here, as a plain MainActor `Task.sleep` (mirroring
-    /// TextEditorViewModel's pattern) - a keystroke only cancels-and-respawns this
-    /// Task, with no content capture and no serialization. The full document is built
-    /// exactly once, at fire time, from LIVE state (`siteViewModel.getEditedContent`/
-    /// `contentFile.frontmatter`) - this is a deliberate design decision (not just a
-    /// perf win): it also fixes a real bug where frontmatter edited during the
-    /// debounce window was silently lost, since the old code's captured string was
-    /// already finalized before that edit happened (see
-    /// testFrontmatterEditedDuringDebounceWindowReachesDisk).
-    ///
-    /// CRITICAL: `nodeID`/`nodeURL`/`capturedContentFile`/`capturedSiteViewModel`/
-    /// `service` are captured as local lets and used directly in the Task body below -
-    /// NOT via `self.xxx` - so this Task does not capture `self` at all. That's what
-    /// lets a file switch mid-debounce still complete the save: `cleanup()` releases
-    /// this EditorViewModel's own reference to `autoSaveTask`, and if nothing else
-    /// retains this ViewModel, it can be deallocated while the Task is still sleeping
-    /// - the save must not depend on `self` surviving that. Only the callbacks
-    /// (onConflict/onSuccess/onError), which update UI-indicator/model state that's
-    /// meaningless once this ViewModel might be stale, use `[weak self]` - same
-    /// no-op-after-dealloc contract `cleanup()` already documents.
-    ///
-    /// Registers itself with `AutoSaveService`'s node-ID-keyed debounce registry
-    /// (victor-rnm TOCTOU hardening, post-launch review): `SiteViewModel.renameFile`/
-    /// `moveNode` call `cancelDebounce(nodeID:)` before touching disk, which cancels
-    /// AND awaits this Task, so they can't proceed while a write for this node is
-    /// still in flight. `newTask` is a self-referencing `var` (not `let`) so the Task
-    /// body can register its OWN handle as its first action - safe because
-    /// `newTask = Task { ... }` is a plain synchronous assignment with no suspension
-    /// point, so the closure cannot start running (and therefore cannot read
-    /// `newTask`) until that MainActor-serialized statement has already completed.
-    /// The registry entry is removed unconditionally as the Task's LAST action
-    /// (whether cancelled early or after a completed write) so it never grows
-    /// unbounded - see `deregisterDebounce`'s doc comment.
+    /// The Task body captures locals, never `self`, so a file switch mid-debounce still
+    /// saves. Registers with `AutoSaveService`'s node-ID registry so rename/move can
+    /// cancel-and-await before touching disk; the entry is always removed last.
     private func scheduleAutoSave() {
         let nodeID = fileNode.id
         let capturedContentFile = contentFile
@@ -260,12 +226,9 @@ class EditorViewModel {
 
             try? await Task.sleep(for: .seconds(AppSettings.currentAutoSaveDelay()))
             if !Task.isCancelled {
-                // Read the URL fresh, AFTER the sleep - NOT a value snapshotted at
-                // schedule time. SiteViewModel.renameFile mutates `contentFile.url`
-                // in place, so a rename that lands during this sleep is honored: the
-                // save targets the file's CURRENT path instead of recreating it at a
-                // path that no longer exists (victor-rnm hardening - flagged there as
-                // the highest-risk bug in that package).
+                // Read the URL fresh AFTER the sleep, not snapshotted at schedule time:
+                // `renameFile` mutates `contentFile.url` in place, so a rename landing during
+                // this sleep is honoured and the save targets the current path.
                 let nodeURL = capturedContentFile.url
 
                 // Build the full document ONCE, now, from LIVE state - not a snapshot

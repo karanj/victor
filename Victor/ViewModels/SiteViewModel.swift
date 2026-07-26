@@ -62,22 +62,12 @@ class SiteViewModel {
     /// Currently selected file node
     var selectedNode: FileNode?
 
-    /// Reentrancy suppressor held for the duration of `applySelectionChange`
-    /// (and the plain assignments `performLeadChange` makes inside it) so
-    /// those writes to `selectedNode`/`selectedFileID`/`selectedFileIDs`
-    /// don't re-trigger their own `didSet`s and recurse. Orchestrator
-    /// correction on top of Docs/SELECTION-MODEL-MEMO.md's original "plain
-    /// assignment, never through selectNode" construction - that construction
-    /// turned out to silently skip content loading (see `performLeadChange`'s
-    /// doc comment for the full story).
+    /// Held for the duration of `applySelectionChange` so its writes to
+    /// `selectedNode`/`selectedFileID`/`selectedFileIDs` don't re-enter their own `didSet`s.
     private var isApplyingSelection = false
 
-    /// Selected file ID for binding. Legacy external-write path (existing
-    /// tests, and any stragglers reading/writing this instead of
-    /// `selectedFileIDs`) - collapses into the canonical `selectedFileIDs`
-    /// write path rather than calling `selectNode` directly, so there is
-    /// exactly one place (`applySelectionChange`) that decides the lead and
-    /// runs its side effects.
+    /// Legacy single-selection write path. Collapses into `selectedFileIDs` so
+    /// `applySelectionChange` stays the only place that derives the lead.
     var selectedFileID: FileNode.ID? {
         didSet {
             guard !isApplyingSelection, selectedFileID != oldValue else { return }
@@ -85,53 +75,21 @@ class SiteViewModel {
         }
     }
 
-    /// Set of currently selected file node IDs - the source of truth for
-    /// FileListView's `List(selection:)` binding under multi-select
-    /// (victor-sel). Transition-only state, parallel to `modifiedFileIDs`
-    /// (CLAUDE.md's Per-Keystroke Invalidation Contract): mutates on
-    /// click/keyboard selection gestures, never inside a typing path.
-    /// `selectedNode`/`selectedFileID` remain the derived *lead* - the single
-    /// element used for content loading, window title, breadcrumb, etc. -
-    /// written only by `applySelectionChange` (called from this property's
-    /// `didSet`), which is the ONE canonical write path; `selectNode(_:)` is
-    /// now a thin pass-through into it. See Docs/SELECTION-MODEL-MEMO.md
-    /// sections 1-2 for the design (lead-derivation algorithm,
-    /// canonical-write-path contract).
+    /// Source of truth for FileListView's `List(selection:)` under multi-select.
+    /// Transition-only state (CLAUDE.md per-keystroke contract). `selectedNode`/
+    /// `selectedFileID` are the derived *lead*. See Docs/SELECTION-MODEL-MEMO.md.
     var selectedFileIDs: Set<FileNode.ID> = [] {
         didSet {
-            // No-op guard, mirrors markFileModified/clearFileModified - List
-            // can and does re-deliver an identical Set on some internal
-            // updates (e.g. drag-to-select-range intermediate events);
-            // without this, every re-delivery would recompute the lead and
-            // fire Observation redundantly (SELECTION-MODEL-MEMO.md section 3).
-            // `!isApplyingSelection` additionally suppresses the page-bundle
-            // redirect's own reassignment of this same property from
-            // re-entering while `applySelectionChange` is still running.
+            // List re-delivers an identical Set on some internal updates (drag-select
+            // intermediates); recomputing the lead each time fires Observation for nothing.
             guard !isApplyingSelection, selectedFileIDs != oldValue else { return }
             applySelectionChange(oldIDs: oldValue)
         }
     }
 
-    /// Derives the lead selection from a change to `selectedFileIDs` and
-    /// applies it via `performLeadChange`, the ONLY place that runs the
-    /// lead-change side effects (content loading, navigation history, recent
-    /// files, inspector auto-hide). See Docs/SELECTION-MODEL-MEMO.md section 1
-    /// for the derivation algorithm (rules 1/3/4 below; rule 2's "no-op"
-    /// is already enforced by `selectedFileIDs`'s own `didSet` guard before
-    /// this is ever called, so it isn't repeated here).
-    ///
-    /// Orchestrator correction, superseding the memo's original "plain
-    /// assignment, never through selectNode" construction in its Risks
-    /// section: that construction directly contradicted the memo's own §4
-    /// ("single-click-to-select already opens the file as a side effect of
-    /// selectNode's content loading") - `selectedFileID`'s own `didSet` still
-    /// fired and called `selectNode`, but immediately early-returned once
-    /// `selectedNode` already matched, silently skipping content loading,
-    /// navigation history, and recent-files tracking on every click through
-    /// the List's Set binding. This method (plus `isApplyingSelection` and
-    /// `performLeadChange`) is the fix: the canonical path now OWNS those
-    /// side effects instead of trying to avoid re-triggering a path that
-    /// used to own them.
+    /// Derives the lead from a `selectedFileIDs` change and applies it via
+    /// `performLeadChange`, the only place lead-change side effects run (content load,
+    /// history, recents, inspector). Derivation rules: Docs/SELECTION-MODEL-MEMO.md §1.
     private func applySelectionChange(oldIDs: Set<FileNode.ID>) {
         isApplyingSelection = true
         defer { isApplyingSelection = false }
@@ -189,15 +147,8 @@ class SiteViewModel {
         }
     }
 
-    /// Performs the lead-change side effects - content loading, navigation
-    /// history, recent files, inspector auto-hide - and the final
-    /// `selectedNode`/`selectedFileID` assignments. This is the former body
-    /// of `selectNode(_:)` (minus its page-bundle resolution and same-id
-    /// early return, both now handled by `applySelectionChange` before this
-    /// is called). Invoked ONLY from `applySelectionChange`, which holds
-    /// `isApplyingSelection = true` for the duration, so the plain
-    /// assignments below don't re-enter `selectedFileID`'s/`selectedFileIDs`'s
-    /// `didSet`s.
+    /// Lead-change side effects plus the final `selectedNode`/`selectedFileID` writes.
+    /// Called only from `applySelectionChange`, which suppresses `didSet` re-entry.
     private func performLeadChange(to node: FileNode?) {
         // OPTIMISTIC UPDATE: Update UI immediately, before any loading
         selectedNode = node
@@ -268,14 +219,8 @@ class SiteViewModel {
         // For non-editable files and folders, no content loading needed
     }
 
-    /// Flattens `filteredNodes` in display order (top-level array order, then
-    /// each directory's `children` in order - the same traversal FileListView
-    /// renders via its `DisclosureGroup`/`FileTreeRow` recursion) and returns
-    /// every member of `ids` in that order. Used both as the deterministic
-    /// lead-derivation fallback (`firstInTreeOrder`, below) and to order
-    /// Cmd+C's pasteboard providers (SELECTION-MODEL-MEMO.md sections 1, 6) so
-    /// a multi-selection result lands in a predictable, visually-adjacent
-    /// order instead of `Set`-iteration-random order.
+    /// Members of `ids` in display order (the traversal FileListView renders). Used for
+    /// deterministic lead fallback and Cmd+C ordering, instead of Set-iteration order.
     func treeOrderIndex(of ids: Set<FileNode.ID>) -> [FileNode.ID] {
         var result: [FileNode.ID] = []
         func visit(_ nodes: [FileNode]) {
@@ -297,14 +242,9 @@ class SiteViewModel {
         treeOrderIndex(of: ids).first
     }
 
-    /// Monotonic counter bumped on every edited-content write (keystroke-lag fix,
-    /// part 2). FileCacheManager is deliberately NOT @Observable, so this is the
-    /// one narrow signal views may observe to react to typing (live preview,
-    /// inspector stats - each behind its own debounce). Before this existed, those
-    /// views watched `currentEditingContent` and only updated because unrelated
-    /// per-keystroke invalidations happened to re-render them. Menu validation and
-    /// window chrome must NOT read this - use isFileModified, which only changes
-    /// on clean<->dirty transitions. Pinned by SiteViewModelTests.
+    /// Bumped on every edited-content write. The one signal views may observe to react to
+    /// typing (preview, inspector stats - each debounced); `FileCacheManager` is
+    /// deliberately not @Observable. Menu/chrome must use `isFileModified` instead.
     private(set) var editedContentVersion: Int = 0
 
     /// Current editing content (for preview sync across layout modes)
@@ -374,12 +314,8 @@ class SiteViewModel {
     /// Trigger to focus search field
     var shouldFocusSearch = false
 
-    /// W5.1 (victor-kbd): direction requested by the View menu's
-    /// Cmd+Option+Left/Right pane-traversal commands. `ContentView` observes
-    /// this (same observable-trigger pattern as `shouldFocusSearch` above,
-    /// since the commands live in `VictorApp`'s scene-level menu and
-    /// `ContentView`'s `@FocusState` isn't reachable from there) and resets
-    /// it to `nil` once consumed.
+    /// Pane-traversal direction requested by the View menu; `ContentView` observes and
+    /// resets to nil once consumed (its `@FocusState` isn't reachable from `VictorApp`).
     var paneFocusDirection: PaneFocusDirection?
 
     /// Whether global search panel is presented
@@ -479,13 +415,8 @@ class SiteViewModel {
     /// Note: This tracks loaded ContentFile/TextFile objects, separate from edited content in FileCacheManager
     private var contentCacheOrder: [UUID] = []
 
-    /// Recently opened sites, persisted to UserDefaults on every mutation.
-    /// Stored (not computed from UserDefaults on read) so SwiftUI observation
-    /// actually sees changes - a computed property reading UserDefaults
-    /// directly is invisible to @Observable, which left the File > Open
-    /// Recent submenu stale after Clear Menu (P1, phase-1 review).
-    /// All mutations go through addRecentSite/removeRecentSite/clearRecentSites,
-    /// which update this property and persist together.
+    /// Stored, not computed from UserDefaults on read - a computed property is invisible
+    /// to @Observable, which left the Open Recent submenu stale after Clear Menu.
     var recentSitePaths: [String] =
         UserDefaults.standard.stringArray(forKey: AppConstants.UserDefaultsKeys.recentSitePaths) ?? []
 
@@ -521,23 +452,12 @@ class SiteViewModel {
     /// `siteViewModel.hugoServerService` instead of `HugoServerService.shared`.
     let hugoServerService: HugoServerService
 
-    /// Auto-save service (victor-rnm): `renameFile` cancels any pending debounced
-    /// save for the node being renamed before touching disk, so a save already
-    /// in flight can't land after the move and recreate the file at the OLD
-    /// path. `private` - unlike `fileSystemService`/`hugoServerService`, nothing
-    /// outside this file needs to reach it; EditorViewModel/TextEditorViewModel
-    /// hold their own injected instances directly.
+    /// `renameFile` cancels this node's pending debounced save before touching disk, so an
+    /// in-flight save can't land after the move and recreate the file at the old path.
     private let autoSaveService: AutoSaveService
 
-    /// Window-level undo manager (victor-und), assigned by `ContentView` from
-    /// `@Environment(\.undoManager)` once the view appears/changes - SwiftUI's
-    /// undo manager is a view-layer environment value, but `renameFile`/
-    /// `moveNode`/`duplicateFile`/`moveToTrash(nodes:)` need it at operation
-    /// time to register named inverses. `weak` since the window (and its
-    /// undo manager) outlives neither this view model nor vice versa in any
-    /// guaranteed order; every registration site guards on it being non-nil
-    /// so tests constructing `SiteViewModel` bare (no window) still work -
-    /// the four ops just skip undo registration.
+    /// Assigned by `ContentView` from `@Environment(\.undoManager)`. Weak, and every
+    /// registration site nil-checks it, so tests constructing this bare still work.
     weak var undoManager: UndoManager?
 
     /// Specialized file manager (for Hugo config, data files, templates, archetypes)
@@ -563,15 +483,8 @@ class SiteViewModel {
     /// Filtered file nodes based on search (recursively searches tree)
     /// Results are cached to avoid recomputation on every SwiftUI render cycle
     var filteredNodes: [FileNode] {
-        // Empty search - return fileNodes directly (no caching needed).
-        // Guard the resets so this computed property (read directly from
-        // FileListView's body) doesn't unconditionally re-mutate @Observable
-        // state on every access - W3.1 (victor-doc) surfaced that an
-        // unconditional mutation here, when the mutated state's own view is
-        // already live and observing, can retrigger a re-render indefinitely
-        // (a busy loop) once a site is loaded after the window has already
-        // appeared, e.g. via a Dock-dropped folder. Skipping the write when
-        // there's nothing to clear keeps this a true no-op on repeat access.
+        // Guarded: unconditionally mutating @Observable state from a computed property
+        // read inside a live view body can retrigger re-render indefinitely (victor-doc).
         guard !searchQuery.isEmpty else {
             if !autoExpandedNodeIDs.isEmpty {
                 autoExpandedNodeIDs.removeAll()
@@ -705,22 +618,12 @@ class SiteViewModel {
         return filtered
     }
 
-    /// Tracks the cold-launch auto-restore of the last saved site kicked off
-    /// by `init()` below. W3.1 (victor-doc) awaits this before handling an
-    /// incoming Dock-drop / Open With / `open -a` request, so that request
-    /// doesn't race the auto-restore and call `loadSite` concurrently for a
-    /// second, potentially different URL - two overlapping `loadSite` calls
-    /// both reassign `fileNodes` and bump `_fileNodesVersion`, which can
-    /// leave `filteredNodes`' cache thrashing between versions and drive a
-    /// busy SwiftUI re-render loop.
+    /// Cold-launch auto-restore. A Dock-drop / Open With request awaits this so it can't
+    /// race `loadSite` and leave `filteredNodes`' cache thrashing between versions.
     private(set) var initialSiteRestoreTask: Task<Void, Never>?
 
-    /// `fileSystemService`/`hugoServerService` default to the process-wide singletons;
-    /// tests pass their own instances for isolation (victor-zw4) - a fresh `FileSystemService`
-    /// per test needs no isolation itself (it's stateless), but a fresh `HugoServerService`
-    /// actor means a test's server-status assertions can't be polluted by another test (or a
-    /// real subprocess) touching the same `.shared` actor. `fileOperationsService` isn't a
-    /// constructor parameter - it's derived from `fileSystemService` so both stay in sync.
+    /// Services default to the process-wide singletons; tests pass their own for isolation
+    /// (victor-zw4). `fileOperationsService` is derived from `fileSystemService`, not injected.
     init(
         fileSystemService: FileSystemService = .shared,
         hugoServerService: HugoServerService = .shared,
@@ -911,12 +814,8 @@ class SiteViewModel {
         fileNodes = []
         nodeByID.removeAll()
         invalidateFilterCache()
-        // Single write through the canonical path (victor-sel orchestrator
-        // correction) - not a plain triple assignment. selectedFileIDs = []
-        // drives applySelectionChange -> performLeadChange(nil), which clears
-        // selectedNode/selectedFileID itself; fileNodes is already empty
-        // above so there's nothing for performLeadChange's content-load
-        // branches to do even if a node were somehow still resolvable.
+        // Single write through the canonical path: this drives applySelectionChange ->
+        // performLeadChange(nil), which clears selectedNode/selectedFileID itself.
         selectedFileIDs = []
         fileCacheManager.clearAll()           // Clear all per-file markdown edits
         specializedFileManager.clearAll()     // Clear Hugo config, data files, templates, archetypes
@@ -983,17 +882,8 @@ class SiteViewModel {
 
     // MARK: - File Selection
 
-    /// Select a file node. Thin pass-through into the canonical
-    /// `selectedFileIDs` write path (orchestrator correction, victor-sel):
-    /// collapses to a singleton (or clears), and `selectedFileIDs`'s `didSet`
-    /// -> `applySelectionChange` does everything else - lead derivation,
-    /// page-bundle redirect, same-node no-op (via Set-equality: reselecting
-    /// the current singleton is a no-op reassignment, caught by
-    /// `selectedFileIDs`'s own `didSet` guard), and the side effects via
-    /// `performLeadChange`. See Docs/SELECTION-MODEL-MEMO.md section 2 - every
-    /// existing single-target call site (FileContextMenu "Open", breadcrumb,
-    /// search, post-create sheet callbacks, navigation history replay, etc.)
-    /// keeps working unchanged since they all just call this.
+    /// Thin pass-through into the canonical `selectedFileIDs` write path - its `didSet`
+    /// does lead derivation, page-bundle redirect, no-op detection and side effects.
     func selectNode(_ node: FileNode?) {
         selectedFileIDs = node.map { [$0.id] } ?? []
     }
@@ -1056,12 +946,8 @@ class SiteViewModel {
 
     // MARK: - File Status Management
 
-    /// Mark a file as having unsaved changes.
-    /// Transition-guarded (keystroke-lag fix): `handleContentChange` calls this on every
-    /// keystroke, and `modifiedFileIDs` is an `@Observable` stored property - an
-    /// unconditional `Set.insert` fires Observation even when the id is already present,
-    /// which re-renders ContentView's body (edited-dot) and rebuilds VictorApp's .commands
-    /// menu validation on every keystroke, not just on the rare present/absent transitions.
+    /// Transition-guarded: `handleContentChange` calls this per keystroke, and an
+    /// unconditional `Set.insert` fires Observation even when already present.
     func markFileModified(_ nodeID: UUID) {
         guard !modifiedFileIDs.contains(nodeID) else { return }
         modifiedFileIDs.insert(nodeID)
@@ -1149,13 +1035,8 @@ class SiteViewModel {
                     if let editedContent = fileCacheManager.getContent(for: nodeID) {
                         contentFile.markdownContent = editedContent
                     }
-                    // Extract the Sendable url/content pair AFTER the sync above and
-                    // BEFORE the await - this ordering is safety-critical (WP3.5 Cluster 1,
-                    // Risk Notes §5): saveContentFile no longer takes the ContentFile object
-                    // itself, so the extraction point is now an explicit line of code rather
-                    // than an implicit read inside the callee. Reading fullContent before the
-                    // sync above would silently drop the just-synced edit and reintroduce the
-                    // stale-content-on-Save-and-Quit bug this comment chain already fixed once.
+                    // Extract url/content AFTER the sync above and BEFORE the await -
+                    // reading fullContent earlier silently drops the just-synced edit.
                     let url = contentFile.url
                     let content = contentFile.fullContent
                     try await fileSystemService.saveContentFile(url: url, content: content)
@@ -1240,16 +1121,8 @@ class SiteViewModel {
     /// Load content for a text file node (non-markdown)
     private func loadTextFileContent(for node: FileNode) async {
         do {
-            // Extract the Sendable URL before crossing the actor boundary - the
-            // read must not capture `node` itself (a non-Sendable FileNode class),
-            // same boundary-snapshot fix as Cluster 1's ContentFile handling.
-            // `readFileContentsOffActor` (shared `nonisolated` + `@concurrent` helper)
-            // replaces `Task.detached` here (victor-tdt audit): `SiteViewModel` is
-            // `@MainActor`, so this still needs to leave the actor for the blocking
-            // read - `@concurrent` on the helper compiler-pins that, staying inside
-            // the caller's structured task. `@concurrent` can't also go on this method
-            // itself: `loadTextFileContent` stays `@MainActor` to mutate `node` after
-            // the read returns.
+            // Snapshot the Sendable URL rather than capturing the non-Sendable `node`.
+            // `@concurrent` can't go on this method: it stays @MainActor to mutate `node`.
             let url = node.url
             let content = try await readFileContentsOffActor(at: url)
 
@@ -1465,13 +1338,9 @@ class SiteViewModel {
         }
     }
 
-    /// Entry point for a file dropped onto a sidebar folder row (victor-sel
-    /// B.4, extending W3.3/victor-dnd's `importDroppedFile` below) -
-    /// dispatches to either a same-site MOVE (`moveNode`) or the existing
-    /// copy/import path (`importDroppedFile`), based on whether `sourceURL`
-    /// is already inside the current site root. `folder` may be an ephemeral
-    /// filtered-search copy (see `importDroppedFile`'s doc comment) -
-    /// resolved to its canonical instance once here, shared by both paths.
+    /// Dispatches a sidebar drop to a same-site move or a copy/import, based on whether
+    /// `sourceURL` is already inside the site root. Resolves `folder` to its canonical
+    /// instance once here (it may be an ephemeral filtered-search copy).
     func handleDroppedFile(from sourceURL: URL, into folder: FileNode) async {
         guard let canonicalFolder = findNode(url: folder.url), canonicalFolder.isDirectory else { return }
 
@@ -1482,14 +1351,8 @@ class SiteViewModel {
         }
     }
 
-    /// True if `url` is inside `siteRoot` (or is `siteRoot` itself) - the
-    /// drag-to-move vs. copy-from-outside distinction for
-    /// `handleDroppedFile`. Directory-boundary aware, same comparison shape
-    /// as `FileSystemService.validatePathWithinSite`'s private `isPath(_:within:)`
-    /// helper, but as a plain boolean predicate rather than a throwing
-    /// validator - this is a "which branch do we take" question, not a
-    /// security gate (the move/import paths each do their own validation
-    /// once a branch is chosen).
+    /// True if `url` is inside `siteRoot`. A branch predicate, not a security gate - the
+    /// move/import paths each run their own validation once a branch is chosen.
     private func isURL(_ url: URL, withinSite siteRoot: URL?) -> Bool {
         guard let siteRoot else { return false }
         let path = url.standardized.path
@@ -1499,23 +1362,9 @@ class SiteViewModel {
         return path.hasPrefix(rootWithSeparator)
     }
 
-    /// Import a file dropped onto a sidebar folder row (W3.3/victor-dnd), copying it
-    /// via `FileSystemService.importFile` and inserting a node directly - mirrors
-    /// `createMarkdownFile`'s node-insertion approach instead of a full `reloadSite()`.
-    ///
-    /// `folder` may be an ephemeral copy handed out by `filterNodesRecursively` when a
-    /// search is active: that recursive filter builds fresh `FileNode` instances (new
-    /// UUIDs) for the filtered display rather than reusing tree nodes, so `folder`
-    /// itself could be a throwaway that disappears on the next search recompute. This
-    /// resolves the canonical node by URL (stable across recomputes, unlike the copy's
-    /// fresh UUID) before attaching anything, so the import survives the next
-    /// `filteredNodes` access - and reaches `registerNode`/`invalidateFilterCache`
-    /// (both `private`, hence why this lives here rather than in FileListView).
-    ///
-    /// Called directly by tests, and by `handleDroppedFile` above for drops whose
-    /// source is outside the site - `folder` is already canonical by the time
-    /// `handleDroppedFile` calls this, but the re-resolution below is harmless
-    /// (idempotent) and keeps this method safe to call on its own too.
+    /// Copies a dropped file in and inserts a node directly, rather than a full `reloadSite()`.
+    /// Re-resolves `folder` by URL first: under an active search it may be an ephemeral
+    /// copy from `filterNodesRecursively` (fresh UUID) that dies on the next recompute.
     func importDroppedFile(from sourceURL: URL, into folder: FileNode) async {
         guard let siteRoot = site?.rootURL else { return }
         guard let canonicalFolder = findNode(url: folder.url), canonicalFolder.isDirectory else { return }
@@ -1574,53 +1423,21 @@ class SiteViewModel {
 
     // MARK: - Context Menu File Operations
 
-    /// Registers `handler` as the next undo action on `undoManager` (victor-und)
-    /// and names it for the Edit menu ("Undo Rename", "Undo Move to Trash",
-    /// etc). No-ops entirely when `undoManager` is nil (unwired in tests, or
-    /// no window yet) - callers don't need their own nil-check.
+    /// Registers `handler` as the next undo action and names it for the Edit menu. No-ops
+    /// when `undoManager` is nil (tests, or no window yet).
     ///
-    /// CRITICAL timing rule, found the hard way (first cut of victor-und had
-    /// every op re-registering its own inverse from *inside* the `Task` that
-    /// performs the async work, at the end of the op's body - that's too
-    /// late): `UndoManager` decides which stack (`undo` vs `redo`) a
-    /// `registerUndo` call lands on by checking `isUndoing`/`isRedoing` AT
-    /// THE MOMENT `registerUndo` IS CALLED, synchronously, not whenever the
-    /// work it's registered for happens to finish. `registerUndo`'s handler
-    /// itself is synchronous, but the file operations here are `async` - so
-    /// every caller of this method must register the OPPOSITE action
-    /// synchronously, inside the handler, BEFORE spawning the `Task` that
-    /// does the actual (async) work. By the time that `Task` finishes,
-    /// `isUndoing`/`isRedoing` has already reverted to `false` and a
-    /// `registerUndo` call made then lands on the wrong stack (or rather,
-    /// always the undo stack, since outside of undo()/redo() a fresh
-    /// registration always goes there) - the redo stack never gets
-    /// populated. `handler` receives `self` (held weakly by `UndoManager`,
-    /// per Apple's docs it doesn't retain the target - safe to close over
-    /// the app-lifetime view model).
+    /// Callers MUST register the opposite action synchronously, inside the handler,
+    /// before spawning any async work - `UndoManager` routes to the undo/redo stack by
+    /// checking `isUndoing`/`isRedoing` at call time. See Docs/UNDO-REDO-NOTES.md.
     private func registerFileOpUndo(_ actionName: String, _ handler: @escaping (SiteViewModel) -> Void) {
         guard let undoManager else { return }
         undoManager.registerUndo(withTarget: self, handler: handler)
         undoManager.setActionName(actionName)
     }
 
-    /// FIFO tail of every inverse-operation `Task` spawned by the four
-    /// undo/redo chains below (victor-und, program-review D.R finding).
-    ///
-    /// `UndoManager` considers an undo/redo action "complete" the instant its
-    /// (synchronous) `registerUndo` handler returns - `canUndo`/`canRedo`
-    /// and the Edit menu re-enable immediately, even though the actual file
-    /// operation is still an in-flight `async Task`. A rapid second
-    /// Cmd-Z/Cmd-Shift-Z before that `Task` finishes would, with a bare
-    /// `Task { }` per handler, spawn a SECOND concurrent `Task` mutating the
-    /// same `fileNodes`/`parent.children` - and, for the trash chain,
-    /// racing reads/writes of `TrashRecordBox.state` - the exact
-    /// unsynchronized-concurrent-mutation class `moveToTrash(nodes:)`'s own
-    /// doc comment says this codebase avoids elsewhere. Every enqueued
-    /// closure awaits `previous.value` before running its own work, so the
-    /// chain executes strictly in the order the user triggered it,
-    /// regardless of how fast they mash undo/redo. Shared across all four
-    /// op types (rename/move/duplicate/trash) rather than one queue per
-    /// chain - simpler, and correctness doesn't need per-chain parallelism.
+    /// FIFO tail of every inverse-operation Task the undo/redo chains spawn. `UndoManager`
+    /// re-enables Cmd-Z the instant a handler returns, so mashing undo would otherwise run
+    /// concurrent Tasks over the same tree state. See Docs/UNDO-REDO-NOTES.md.
     private var lastFileOpUndoTask: Task<Void, Never>?
 
     /// Enqueues `work` behind whatever's currently in flight on
@@ -1636,18 +1453,9 @@ class SiteViewModel {
         }
     }
 
-    /// Registers the "Rename" undo/redo action pair for the node identified
-    /// by `nodeID` (victor-und). `oldName`/`newName` are a fixed pair
-    /// determined once, at the very first rename - every subsequent
-    /// undo/redo just swaps between them (no re-derivation from the node's
-    /// live state needed, unlike the Move/Trash chains, since a rename's
-    /// two states don't change generation to generation).
-    ///
-    /// The registered action renames the node to `oldName` when it fires,
-    /// and - synchronously, BEFORE spawning the `Task` that does that rename
-    /// - re-registers the opposite pair (`from: newName, to: oldName`) so it
-    /// lands on the correct stack. See `registerFileOpUndo`'s doc comment
-    /// for why that ordering is mandatory.
+    /// Registers the Rename undo/redo pair. `oldName`/`newName` are fixed at the first
+    /// rename; each firing re-registers the swapped pair before spawning its Task
+    /// (see `registerFileOpUndo` for why that ordering is mandatory).
     private func registerRenameUndo(nodeID: UUID, from oldName: String, to newName: String) {
         registerFileOpUndo("Rename") { target in
             target.registerRenameUndo(nodeID: nodeID, from: newName, to: oldName)
@@ -1678,19 +1486,9 @@ class SiteViewModel {
             // exactly the form `renameFile`'s `to:` parameter expects.
             let oldName = node.name
 
-            // Cancel any pending debounced auto-save for this node - and, for a
-            // directory rename, every descendant file - BEFORE touching disk.
-            // Otherwise a save already in flight can fire after the rename and
-            // recreate the file at the OLD path (the highest-risk bug flagged in
-            // victor-rnm, and found still-open by the post-launch program review:
-            // the original `autoSaveService.cancelAutoSave(for: url)` here was
-            // dead - nothing in production registers into that URL-keyed
-            // dictionary). `cancelDebounce(nodeID:)` cancels AND AWAITS the real
-            // local debounce Task EditorViewModel/TextEditorViewModel register
-            // for this node (see AutoSaveService's node-keyed registry section),
-            // so this `await` doesn't return until any in-flight write for the
-            // node has either been stopped or has fully landed - there is no
-            // remaining window for a write to land after the rename below.
+            // Cancel pending debounced saves for this node (and descendants, for a directory)
+            // BEFORE touching disk, else an in-flight save recreates the file at the old path.
+            // `cancelDebounce` also awaits, so no write can still be mid-flight after this.
             for nodeID in [node.id] + allDescendantNodeIDs(of: node) {
                 await autoSaveService.cancelDebounce(nodeID: nodeID)
             }
@@ -1726,13 +1524,8 @@ class SiteViewModel {
             // of where the node lived (matches duplicateFile/moveToTrash).
             invalidateFilterCache()
 
-            // No selection force-poke needed: `node` is an `@Observable` class
-            // and `url` is a `var` mutated in place above, so Swift's
-            // Observation already invalidates every view that reads
-            // `selectedNode?.url`/`.name` (window title, breadcrumb, sidebar
-            // row) - `selectedNode` (when it's this node) is the same object
-            // instance throughout, not swapped for a copy. The old
-            // `selectedNode = nil; selectedNode = node` pair was redundant.
+            // No selection force-poke: `node` is the same @Observable instance throughout,
+            // so mutating `url` in place already invalidates every view reading it.
 
             if registerUndo {
                 registerRenameUndo(nodeID: node.id, from: oldName, to: newName)
@@ -1768,22 +1561,13 @@ class SiteViewModel {
         }
     }
 
-    /// Move a node (file or folder) to a different folder within the site
-    /// tree - the drag-to-move counterpart of `handleDroppedFile`'s
-    /// copy/import path (victor-sel B.4). Mirrors `renameFile`'s
-    /// coordination pattern: cancels pending auto-saves before touching
-    /// disk, moves via `FileOperationsService.moveFile`, updates the node's
-    /// (and every descendant's) URL/contentFile/textFile, reparents in the
-    /// in-memory tree, and invalidates the filter cache.
+    /// Moves a node within the site tree - the drag-to-move counterpart of the copy/import
+    /// path. Cancels pending auto-saves, moves on disk, updates the node's (and every
+    /// descendant's) URL, reparents in the tree, invalidates the filter cache.
     /// - Parameters:
-    ///   - node: the file or folder being moved - must already be the
-    ///     canonical tree instance (callers resolve via `findNode`, same
-    ///     requirement as `renameFile`/`moveToTrash`)
+    ///   - node: must already be the canonical tree instance (resolve via `findNode`)
     ///   - targetFolder: the destination folder node
-    ///   - registerUndo: false when this call IS the inverse of a previous
-    ///     move (see `registerMoveUndo`) - the inverse registration already
-    ///     happened synchronously before this async call started, so
-    ///     registering again here would be a duplicate.
+    ///   - registerUndo: false when this call is itself the inverse of a previous move
     func moveNode(from node: FileNode, to targetFolder: FileNode, registerUndo: Bool = true) async {
         guard targetFolder.isDirectory else { return }
         guard let siteRoot = site?.rootURL else { return }
@@ -1841,15 +1625,8 @@ class SiteViewModel {
 
             invalidateFilterCache()
 
-            // No selection force-poke needed, same rationale as renameFile:
-            // `node` is the same object instance throughout (never swapped
-            // for a copy), so selectedNode/selectedFileID/selectedFileIDs
-            // (all keyed by the unchanged `id`) stay correct without
-            // touching them - Observation already propagates the `url`
-            // mutation above to any view reading selectedNode?.url/.name.
-            // fileCacheManager's cached edited content is keyed by node
-            // `id` (also unchanged by a move), so it survives automatically
-            // too - no re-keying needed.
+            // No selection or cache fixup needed: both are keyed by `id`, which a move
+            // doesn't change, and `node` is the same instance throughout.
 
             // victor-und: `oldParentID` being nil means `node` was top-level
             // (no FileNode represents "the site root" for `moveNode` to
@@ -1865,20 +1642,9 @@ class SiteViewModel {
         }
     }
 
-    /// Registers the "Move" undo/redo action pair for the node identified by
-    /// `nodeID` (victor-und): `oldParentID`/`newParentID` are a fixed pair of
-    /// folder IDs determined once, at the very first move - every subsequent
-    /// undo/redo just swaps between them (both folders are stable FileNode
-    /// identities; only re-resolved by ID at fire time in case either has
-    /// meanwhile been renamed/moved/trashed - SELECTION-MODEL-MEMO.md's C.1
-    /// note - which degrades to `errorMessage` rather than operating on a
-    /// stale reference).
-    ///
-    /// The registered action moves the node into `oldParentID` when it
-    /// fires, and - synchronously, BEFORE spawning the `Task` that does that
-    /// move - re-registers the opposite pair so it lands on the correct
-    /// stack. See `registerFileOpUndo`'s doc comment for why that ordering
-    /// is mandatory.
+    /// Registers the Move undo/redo pair. Parent IDs are fixed at the first move but
+    /// re-resolved at fire time, so a since-deleted folder degrades to `errorMessage`.
+    /// Each firing re-registers the swapped pair before spawning its Task.
     private func registerMoveUndo(nodeID: UUID, from oldParentID: UUID, to newParentID: UUID) {
         registerFileOpUndo("Move") { target in
             target.registerMoveUndo(nodeID: nodeID, from: newParentID, to: oldParentID)
@@ -1911,12 +1677,8 @@ class SiteViewModel {
         return false
     }
 
-    /// Duplicate a file node. `registerUndo` is false when this call IS the
-    /// inverse of a previous trash-of-a-duplicate (see
-    /// `registerTrashChainUndo` - it isn't, in practice, since undoing a
-    /// duplicate trashes the copy rather than re-duplicating, but the
-    /// parameter is kept for signature symmetry with the other three ops
-    /// and future-proofing).
+    /// Duplicate a file node. `registerUndo: false` exists for signature symmetry with the
+    /// other three ops - undoing a duplicate trashes the copy rather than re-duplicating.
     func duplicateFile(node: FileNode, registerUndo: Bool = true) async {
         do {
             let newURL = try await fileOperationsService.duplicateFile(at: node.url)
@@ -1945,17 +1707,8 @@ class SiteViewModel {
             // Select the new file
             selectNode(newNode)
 
-            // victor-und: inverse is trashing the duplicate (recoverable via
-            // the Trash, not a hard delete) - shares the same trash<->restore
-            // chain machinery as the real "Move to Trash" feature
-            // (`registerTrashChainUndo`/`TrashRecordBox`/`performTrash`/
-            // `performRestore`), just with its own box (so it doesn't
-            // interleave with any unrelated trash chain) and its own action
-            // name ("Duplicate" throughout, not "Move to Trash" - see
-            // `registerTrashChainUndo`'s doc comment for why naming the pair
-            // once here, rather than letting `performTrash`/`performRestore`
-            // name themselves, is what keeps the redo action reading "Redo
-            // Duplicate" instead of leaking "Move to Trash").
+            // Inverse is trashing the duplicate (recoverable), reusing the trash<->restore
+            // chain machinery with its own box and its own action name.
             if registerUndo {
                 let box = TrashRecordBox(state: .inTree([newNode]))
                 registerTrashChainUndo(box: box, actionName: "Duplicate")
@@ -1966,23 +1719,11 @@ class SiteViewModel {
         }
     }
 
-    /// Move multiple file/folder nodes to the trash in one user gesture
-    /// (Delete key, multi-selection "Move N Items to Trash" context menu item
-    /// - victor-sel). Ancestor-descendant pruning: if the selection contains a
-    /// folder AND one of its own descendants, only the ancestor is trashed -
-    /// trashing it already removes the descendant from disk, so a second
-    /// `moveToTrash` call for the descendant would either error on a
-    /// now-missing path or silently no-op racing the first call. Trashes
-    /// sequentially (not concurrently) since `unregisterNode`/`fileNodes`
-    /// mutation is shared `@Observable` state. One failure doesn't abort the
-    /// rest of the batch - matches Finder's move-to-trash-with-one-locked-file
-    /// behavior. See Docs/SELECTION-MODEL-MEMO.md section 5.
-    ///
-    /// `registerUndo` is false when this call IS a re-trash step inside a
-    /// trash<->restore undo/redo chain (see `registerTrashChainUndo`) - that
-    /// chain registers its own next step synchronously before spawning this
-    /// call, so registering again here would be a duplicate (and would try
-    /// to build a second, redundant chain on top of the first).
+    /// Move nodes to the trash in one gesture. Prunes descendants whose ancestor is also
+    /// selected (trashing the ancestor already removes them). Sequential, since tree
+    /// mutation is shared @Observable state; one failure doesn't abort the batch,
+    /// matching Finder. `registerUndo: false` when this is a re-trash step inside a chain.
+    /// See Docs/SELECTION-MODEL-MEMO.md §5.
     func moveToTrash(nodes: [FileNode], registerUndo: Bool = true) async {
         let pruned = pruneDescendants(of: nodes)
         guard !pruned.isEmpty else { return }
@@ -2025,20 +1766,9 @@ class SiteViewModel {
         await moveToTrash(nodes: [node], registerUndo: registerUndo)
     }
 
-    /// Snapshot of a trashed node (victor-und), captured once a trash has
-    /// actually happened - `originalURL`/`originalParentID` are re-resolved
-    /// fresh by `performTrash` every time (from the node's live state right
-    /// before it's trashed), and `trashedURL` is only known after
-    /// `FileManager.trashItem` returns, so this type only exists once both
-    /// are available (see `TrashChainState.inTree` for the "not yet
-    /// trashed" state, which needs neither). `node` is retained directly:
-    /// nothing else mutates or replaces this FileNode instance between
-    /// trash and restore, so reinserting the exact same object (with its
-    /// children/contentFile/textFile intact) is safe and cheaper than
-    /// reconstructing one. `originalParentID` (not the possibly-stale
-    /// `node.parent` reference) is what `performRestore` re-resolves via
-    /// `findNode(id:)` - the parent may itself have been
-    /// renamed/moved/trashed since (SELECTION-MODEL-MEMO.md's C.1 note).
+    /// Snapshot of a trashed node, capturable only once `FileManager.trashItem` has returned
+    /// its `trashedURL`. Retains the `FileNode` directly - nothing replaces it between
+    /// trash and restore. `originalParentID` is re-resolved on restore, not `node.parent`.
     private struct TrashRecord {
         let node: FileNode
         let originalURL: URL
@@ -2046,56 +1776,28 @@ class SiteViewModel {
         let trashedURL: URL
     }
 
-    /// Which side of a trash<->restore undo/redo chain a `TrashRecordBox` is
-    /// currently holding (victor-und): `.inTree` when the nodes are back in
-    /// the sidebar (so the chain's next step must trash them - no
-    /// `TrashRecord` needed yet, `performTrash` reads what it needs live off
-    /// each `FileNode`); `.trashed` when they're in the Trash (so the next
-    /// step must restore them, using each record's captured `trashedURL`).
+    /// Which side of a trash<->restore chain a `TrashRecordBox` currently holds: `.inTree`
+    /// means the next step trashes, `.trashed` means it restores.
     private enum TrashChainState {
         case inTree([FileNode])
         case trashed([TrashRecord])
     }
 
-    /// Mutable holder threading state through one trash<->restore undo/redo
-    /// chain (victor-und, both the real "Move to Trash" feature and
-    /// `duplicateFile`'s "trash the copy" inverse use this). A `class`
-    /// (reference type) so every synchronously-registered handler in the
-    /// chain closes over the SAME box: each re-trash produces a NEW trashed
-    /// URL per node (macOS uniquifies Trash filenames on collision), so the
-    /// state the NEXT chain step needs is only known once the CURRENT
-    /// step's async work finishes - but per `registerFileOpUndo`'s doc
-    /// comment, the next step has to be *registered* synchronously, before
-    /// that work even starts.
+    /// Threads state through one trash<->restore chain. A class so every handler in the
+    /// chain shares one box: each re-trash produces new trashed URLs, so the next step's
+    /// state is only known after the current step's async work finishes - yet the next
+    /// step must be *registered* before that work starts.
     ///
-    /// Read-time invariant (victor-und, program-review D.R finding):
-    /// `box.state` must be read INSIDE the closure passed to
-    /// `enqueueFileOpUndoWork` in `registerTrashChainUndo` - i.e. when the
-    /// FIFO queue actually RUNS this step - never synchronously at
-    /// handler-fire time. A rapid Cmd-Z/Cmd-Shift-Z ping-pong fires the next
-    /// handler before the previous step's enqueued work has necessarily
-    /// finished (`UndoManager` re-enables canUndo/canRedo the instant the
-    /// synchronous handler returns, not when the async work completes), so
-    /// a handler-time read of `box.state` can observe a stale generation.
-    /// The FIFO ordering from `enqueueFileOpUndoWork` is what makes a
-    /// run-time read correct: this step's enqueued closure never starts
-    /// until every previously-queued closure - including the one that last
-    /// wrote `box.state` - has fully finished, so by the time this closure's
-    /// `switch box.state` actually runs, it's reading the true current
-    /// generation, however fast the user mashed undo/redo to get here.
+    /// `state` must be read inside the closure given to `enqueueFileOpUndoWork`, never
+    /// synchronously at handler-fire time. See Docs/UNDO-REDO-NOTES.md.
     private final class TrashRecordBox {
         var state: TrashChainState
         init(state: TrashChainState) { self.state = state }
     }
 
-    /// Trashes each of `nodes` (already pruned/deduplicated by the caller)
-    /// and returns the records for whichever ones both succeeded AND got
-    /// back a usable trashed URL from `FileManager` (undo-capable subset -
-    /// `trashedURL` can come back nil on volumes that don't support
-    /// `resultingItemURL`, and a record without one can't be restored later).
-    /// Pure tree/disk mutation - no undo registration, no selection fixup;
-    /// both the public `moveToTrash(nodes:)` and the re-trash step of
-    /// `registerTrashChainUndo`'s chain call this.
+    /// Trashes `nodes` (already pruned by the caller) and returns records for those that
+    /// both succeeded and got a usable `trashedURL` back - the undo-capable subset.
+    /// Pure tree/disk mutation: no undo registration, no selection fixup.
     private func performTrash(nodes: [FileNode]) async -> (records: [TrashRecord], successCount: Int, errors: [Error]) {
         var successCount = 0
         var records: [TrashRecord] = []
@@ -2144,20 +1846,9 @@ class SiteViewModel {
         }
     }
 
-    /// Moves each record's item back from the Trash to its original path via
-    /// `FileManager`, then re-inserts its `FileNode` into its original
-    /// parent (`addChild` re-sorts) or back into top-level `fileNodes`.
-    /// Deliberately does NOT touch selection - if the item was selected
-    /// before being trashed, it stays unselected after being restored,
-    /// matching Finder (undoing a trash doesn't re-select the item in the
-    /// Finder window either). Pure tree/disk mutation - no undo
-    /// registration; the restore step of `registerTrashChainUndo`'s chain
-    /// calls this.
-    ///
-    /// The parent is re-resolved by ID (see `TrashRecord`'s doc comment): if
-    /// it's gone, that record's restore is skipped and reported via
-    /// `errorMessage`, but the rest of the batch still proceeds - same
-    /// one-failure-doesn't-abort-the-batch shape as `performTrash`.
+    /// Moves each record back from the Trash and re-inserts its node under its original
+    /// parent, re-resolved by ID (a missing parent skips that record and reports via
+    /// `errorMessage`). Deliberately doesn't touch selection, matching Finder.
     private func performRestore(records: [TrashRecord]) async -> (restored: [FileNode], errors: [Error]) {
         var restored: [FileNode] = []
         var errors: [Error] = []
@@ -2203,34 +1894,12 @@ class SiteViewModel {
         return (restored, errors)
     }
 
-    /// Registers the undo/redo action pair for one trash<->restore chain
-    /// held in `box` (victor-und), named `actionName` on BOTH sides of the
-    /// chain for as long as it lives - this is what keeps a chain built for
-    /// the batch "Move to Trash" feature reading "Move to Trash" throughout,
-    /// and one built for `duplicateFile`'s inverse reading "Duplicate"
-    /// throughout, rather than the name flip-flopping to whatever the
-    /// underlying trash/restore operation would have called itself.
+    /// Registers the undo/redo pair for one trash<->restore chain, named `actionName` on
+    /// both sides so a chain built for Duplicate keeps reading "Duplicate".
     ///
-    /// Self-recursive rather than two separate "trash direction"/"restore
-    /// direction" functions: `box.state` IS the single source of truth for
-    /// which direction this firing should go. Registration (the
-    /// synchronous, stack-routing half) happens at handler-fire time, as it
-    /// must; but READING `box.state` to decide trash-vs-restore happens
-    /// inside the closure handed to `enqueueFileOpUndoWork`, i.e. only once
-    /// this step reaches the front of the FIFO queue - not synchronously in
-    /// the handler. See `TrashRecordBox`'s "Read-time invariant" doc comment
-    /// for why that distinction is load-bearing under rapid undo/redo
-    /// re-entrancy (program-review D.R finding), and
-    /// `enqueueFileOpUndoWork`'s doc comment for the queue itself.
-    ///
-    /// Each firing, synchronously, BEFORE enqueueing the work that does the
-    /// actual (async) trash-or-restore: re-registers this SAME function
-    /// against the SAME box. That re-registration is what lands on the
-    /// correct undo/redo stack (see `registerFileOpUndo`'s doc comment for
-    /// why it must happen synchronously) - and the next time IT fires, its
-    /// own enqueued closure will read `box.state` fresh again, by then
-    /// updated by this step's enqueued work (guaranteed complete first by
-    /// FIFO ordering, however fast the re-registration itself happened).
+    /// Self-recursive: `box.state` is the single source of truth for direction. Each
+    /// firing re-registers this function against the same box synchronously, before
+    /// enqueueing the async work. See Docs/UNDO-REDO-NOTES.md.
     private func registerTrashChainUndo(box: TrashRecordBox, actionName: String) {
         registerFileOpUndo(actionName) { target in
             target.registerTrashChainUndo(box: box, actionName: actionName)
@@ -2288,12 +1957,8 @@ class SiteViewModel {
         fileOperationsService.revealInFinder(url: node.url)
     }
 
-    /// Copy one or more file paths to the pasteboard, newline-joined - the
-    /// multi-selection sibling of `copyPath(node:)` (SELECTION-MODEL-MEMO.md
-    /// section 6, Cmd+C and the multi-select "Copy Path" context menu item).
-    /// victor-sel B.4: now that FileOperationsService/FileSystemService are
-    /// in scope, this routes through them (single real implementation at the
-    /// service layer) instead of writing to NSPasteboard directly here.
+    /// Copy one or more paths to the pasteboard, newline-joined. Routes through the
+    /// service layer rather than touching NSPasteboard here.
     func copyPathsToClipboard(urls: [URL]) {
         fileOperationsService.copyPathsToClipboard(urls: urls)
     }
@@ -2375,17 +2040,10 @@ class SiteViewModel {
 
     // MARK: - Go Menu Navigation History
     //
-    // Back/Forward (Go menu, W2.2) need an ordered history with a cursor,
-    // distinct from `recentFiles` (a most-recent-first MRU list with no
-    // concept of "current position"). Node IDs are stored rather than
-    // FileNode references so a stale entry (e.g. a node deleted/moved out
-    // of the tree) just fails `findNode(id:)`; navigateBack()/navigateForward()
-    // actively prune such dead entries and continue in the same direction
-    // to the next live one, rather than silently consuming a Back/Forward
-    // press with no visible effect. A full site reload invalidates every
-    // entry at once (all FileNode UUIDs regenerate on rescan), so
-    // `reloadSite()` resets the history outright instead of relying on
-    // one-at-a-time pruning.
+    // Ordered history with a cursor, unlike `recentFiles` (an MRU with no position).
+    // Stores node IDs, so a dead entry just fails `findNode(id:)`; back/forward prune
+    // those and continue rather than consuming the keypress. A reload resets outright,
+    // since every FileNode UUID regenerates on rescan.
 
     /// Ordered navigation history of selected node IDs.
     private var navigationHistory: [UUID] = []
@@ -2481,34 +2139,21 @@ class SiteViewModel {
 
     // MARK: - Hugo Server Control
 
-    /// Owned observation tasks for the two `HugoServerService` streams this
-    /// view model consumes (WP3.5 Cluster 9 / M2). `SiteViewModel` lives for
-    /// the app's lifetime (owned by `VictorApp`'s `@State`), so these tasks run
-    /// until app termination; no explicit teardown call is required, but the
-    /// handles are stored anyway (testability, and in case a future "close
-    /// site without quitting" path wants to cancel them).
+    /// Observation tasks for the two `HugoServerService` streams. This view model lives for
+    /// the app's lifetime, so they run until termination; stored for testability.
     private var statusObservationTask: Task<Void, Never>?
     private var buildErrorsObservationTask: Task<Void, Never>?
 
-    /// Whether a status change should auto-enable the Hugo-server live preview.
-    /// Only a genuine (re)start transition qualifies: the status stream replays
-    /// the current value to every new subscriber, and treating that replay as
-    /// "server started" would force `useLivePreview` back on every time this
-    /// observer is (re)installed - overriding a user who deliberately switched
-    /// to markdown preview while the server kept running. `previous == nil`
-    /// means "first value seen by this subscription", i.e. the replay.
-    /// Pinned by SiteViewModelTests.
+    /// Only a genuine (re)start qualifies. The status stream replays its current value to
+    /// every new subscriber, and treating the replay as "started" would force live preview
+    /// back on whenever this observer is reinstalled. `previous == nil` means that replay.
     static func shouldAutoEnableLivePreview(previous: HugoServerStatus?, new: HugoServerStatus) -> Bool {
         guard let previous else { return false }
         return !previous.isRunning && new.isRunning
     }
 
-    /// Set up observers for Hugo server state changes.
-    /// Idempotent: cancels any observers from a previous call first. This is
-    /// called from ContentView's .onAppear, which can fire more than once per
-    /// app lifetime - without the cancellation, each call would stack another
-    /// pair of live `for await` consumers onto the actor's continuation
-    /// registries (duplicate work, and duplicate auto-enable writes).
+    /// Idempotent: cancels observers from a previous call first. `ContentView`'s `.onAppear`
+    /// can fire more than once, which would otherwise stack duplicate stream consumers.
     func setupHugoServerObservers() {
         statusObservationTask?.cancel()
         buildErrorsObservationTask?.cancel()

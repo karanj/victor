@@ -219,15 +219,11 @@ final class HugoServerTests: XCTestCase {
         )
     }
 
-    // MARK: - AsyncStream Observation Tests (WP3.5 Cluster 9 / M2)
+    // MARK: - AsyncStream Observation Tests
     //
-    // These exercise `HugoServerService`'s stream factories directly, without
-    // starting a real Hugo subprocess (CI has no guarantee Hugo is installed,
-    // and the manual test checklist in Docs/SC6-BURNDOWN-MEMO.md §5 covers
-    // the full start/stop/crash lifecycle against a live server). What's
-    // covered here is the part that's new behavior and fully unit-testable in
-    // isolation: replay-on-subscribe, and that each subscriber gets an
-    // independent stream rather than splitting elements between consumers.
+    // Exercise the stream factories without a real Hugo subprocess (CI has no guarantee
+    // Hugo is installed; the full lifecycle is in the manual checklist). Covered here:
+    // replay-on-subscribe, and that each subscriber gets an independent stream.
 
     /// A freshly-created status stream must immediately replay the current
     /// status as its first element - a late subscriber (e.g. the Server Logs
@@ -260,13 +256,9 @@ final class HugoServerTests: XCTestCase {
         XCTAssertNotNil(firstElement, "outputUpdates() must yield at least one element (the replayed current output) immediately on subscribe")
     }
 
-    /// `AsyncStream` is single-consumer: two `for await` loops over the *same*
-    /// stream split elements between them rather than both seeing every
-    /// element. The whole point of the stream-factory design (WP3.5 Cluster 9)
-    /// is that each call to `statusUpdates()` returns an *independent*
-    /// stream+continuation pair, so two independent subscribers (e.g.
-    /// SiteViewModel and ServerControlView, both observing at once) each get
-    /// their own replayed value rather than racing over one shared stream.
+    /// `AsyncStream` is single-consumer - two loops over the *same* stream split elements.
+    /// The point of the factory design is that each `statusUpdates()` call returns an
+    /// independent pair, so two subscribers each get their own replayed value.
     func testMultipleStatusSubscribersEachReplayIndependently() async throws {
         let streamA = await HugoServerService.shared.statusUpdates()
         let streamB = await HugoServerService.shared.statusUpdates()
@@ -303,15 +295,10 @@ final class HugoServerTests: XCTestCase {
 
     // MARK: - Output-Pump Line Bridge (server stuck-on-starting fix)
     //
-    // WP3.5b's `FileHandle.bytes.lines` pumps wedged in production: AsyncBytes
-    // funnels its BLOCKING reads through a shared per-process IO executor, so
-    // with stdout and stderr iterated concurrently, the pipe with no data
-    // (hugo writes little to stderr) parks a blocking read that starves the
-    // other pipe's reader. Hugo's "Web Server is available" line was never
-    // consumed -> status stuck at .starting forever while the real server
-    // served requests fine. `HugoServerService.lines(from:)` bridges
-    // readabilityHandler (GCD: callback only when data exists, no blocking
-    // reads) into an AsyncStream so the for-await consumption shape survives.
+    // `FileHandle.bytes.lines` wedged in production: AsyncBytes funnels blocking reads
+    // through a shared per-process IO executor, so the silent pipe starved the other's
+    // reader and status stuck at .starting. `lines(from:)` bridges readabilityHandler
+    // (callback only when data exists) into an AsyncStream instead.
 
     /// The exact production failure, reduced: two pipes consumed concurrently,
     /// one stays silent. The active pipe's line MUST still arrive. Under the

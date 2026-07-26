@@ -28,15 +28,10 @@ enum FindPanelHelper {
 
 // MARK: - Edit Menu Helper
 
-/// Generalizes `FindPanelHelper`'s responder-chain dispatch for the system
-/// Edit-menu submenus (Spelling and Grammar, Substitutions, Transformations,
-/// Speech) re-added by victor-spl after `CommandGroup(replacing: .textEditing)`
-/// dropped them. String-selector form deliberately used at call sites instead
-/// of `#selector` - these are AppKit responder-chain actions (`showGuessPanel:`,
-/// `uppercaseWord:`, etc.) implemented across NSText/NSTextView/NSResponder,
-/// not methods this target declares, so there's no single owning type to
-/// anchor a `#selector` expression to.
-/// `@MainActor`: calls `NSApp.sendAction` (WP3.5 Cluster 11).
+/// Responder-chain dispatch for the system Edit-menu submenus (Spelling, Substitutions,
+/// Transformations, Speech) that `CommandGroup(replacing: .textEditing)` dropped.
+/// String selectors rather than `#selector`: these are AppKit responder actions with
+/// no owning type in this target to anchor a `#selector` expression to.
 @MainActor
 enum EditMenuHelper {
     static func send(_ selector: Selector) {
@@ -50,14 +45,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Reference to check for unsaved changes
     weak var siteViewModel: SiteViewModel?
 
-    /// W3.1 (victor-doc): set by `VictorApp.onAppear` so folders dropped on
-    /// the Dock icon, opened via Finder "Open With", or passed to
-    /// `open -a Victor <folder>` route through the single existing window
-    /// instead of AppKit's default document-window handling. This is the
-    /// path that actually fires for Dock-icon drops (confirmed empirically -
-    /// see victor-doc report); `onOpenURL` on the WindowGroup is kept as a
-    /// defensive second path but is not reached once this delegate method is
-    /// implemented, since AppKit only calls one open-URL handler per launch.
+    /// Set by `VictorApp.onAppear` so Dock drops, Finder "Open With" and `open -a` route
+    /// through the single existing window. This is the path that actually fires;
+    /// `onOpenURL` is kept as a defensive second path but isn't reached.
     var onOpenSiteFolders: (([URL]) -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -181,28 +171,13 @@ enum SharingHelper {
 
 // MARK: - Focused Values for Editor Commands
 
-/// Actions the currently focused editor panel exposes to the menu bar.
+/// Actions the focused editor panel exposes to the menu bar. `formatting` and
+/// `showShortcodePicker` are optional because not every editor supports them.
 ///
-/// Replaces the earlier two-key focused-value pattern (`editorFormatting`,
-/// `showShortcodePicker`) so that adding menu-driven editor actions (Save,
-/// Revert) doesn't mean growing more ad-hoc `FocusedValueKey`s (W2.3).
-///
-/// `formatting` and `showShortcodePicker` are optional because not every
-/// editor supports Markdown formatting or shortcodes (e.g. TextEditorPanel
-/// for plain-text files) - the Format menu simply disables those items when
-/// the focused editor doesn't provide them.
-///
-/// Equatable, keyed on `editorID` ONLY (keystroke-lag fix, part 2): this value
-/// is published from editor-panel `body`s that re-evaluate on every keystroke,
-/// constructing a fresh instance each time. Closures can't be compared, so
-/// without Equatable SwiftUI must treat every publish as a change - invalidating
-/// VictorApp's body (a `@FocusedValue` holder) and rebuilding the entire
-/// `.commands` NSMenu tree per character typed. Comparing by the publishing
-/// editor's identity is sound because the closures read live `@State`/
-/// `@Observable` values at call time: two instances published for the same file
-/// node are behaviorally interchangeable. Do NOT add per-keystroke state (e.g. a
-/// dirty flag) to this struct or its equality - that reintroduces the storm.
-/// Pinned by EditorActionsTests.
+/// Equatable by `editorID` ONLY. This is republished from editor bodies that
+/// re-evaluate per keystroke; closures can't be compared, so without this every
+/// publish would rebuild the whole `.commands` NSMenu tree. Never add per-keystroke
+/// state to this struct or its equality. See CLAUDE.md; pinned by EditorActionsTests.
 struct EditorActions: Equatable {
     /// Identity of the publishing editor - the file node's id. Drives Equatable.
     let editorID: UUID
@@ -258,15 +233,10 @@ struct VictorApp: App {
     // changes is already open.
     @State private var pendingOpenSiteURL: URL?
 
-    // W3.1 (victor-doc): de-dupes duplicate delivery of the same open-folder
-    // event. Empirically, `open -a Victor <folder>` can deliver through
-    // *both* `onOpenURL` and the AppDelegate path, and `onOpenURL` alone has
-    // been observed firing twice for a single invocation. Loading the same
-    // site twice concurrently corrupts SiteViewModel's filteredNodes cache
-    // (two racing `loadSite` calls thrash `_fileNodesVersion`) into a busy
-    // re-render loop, so track the in-flight URL and ignore repeats. Set
-    // synchronously (no `await` in between) so two back-to-back deliveries
-    // in the same run-loop turn can't both pass the guard.
+    // De-dupes duplicate delivery of the same open-folder event: `open -a Victor <folder>`
+    // can arrive via both `onOpenURL` and the AppDelegate, and `onOpenURL` alone has been
+    // seen firing twice. Two racing `loadSite` calls thrash the filteredNodes cache into
+    // a re-render loop. Set synchronously so same-run-loop deliveries can't both pass.
     @State private var siteURLLoadInFlight: URL?
 
     var body: some Scene {
@@ -393,12 +363,9 @@ struct VictorApp: App {
 
                 Divider()
 
-                // Spelling and Grammar / Substitutions / Transformations / Speech
-                // (victor-spl): these are the standard system submenus macOS
-                // installs in this same `.textEditing` CommandGroup slot -
-                // replacing the group for Find (above) silently dropped all
-                // four, so they're rebuilt here via responder-chain dispatch
-                // (EditMenuHelper) in standard Edit-menu order.
+                // The standard system submenus macOS installs in this same `.textEditing`
+                // slot - replacing the group for Find dropped all four, so they're
+                // rebuilt here via responder-chain dispatch.
                 Menu("Spelling and Grammar") {
                     Button("Show Spelling and Grammar") {
                         EditMenuHelper.send(Selector("showGuessPanel:"))
@@ -619,15 +586,9 @@ struct VictorApp: App {
                 Button("Search Files") {
                     siteViewModel.shouldFocusSearch = true
                 }
-                // W5.2 (victor-kbd, corrected 2026-07-04): Cmd+Option+J is
-                // Xcode's actual filter-in-navigator chord - the original
-                // decision said Cmd+Option+F, but that's the platform-standard
-                // Find and Replace binding (kept there). Cmd+P is deliberately
-                // NOT kept as a second binding here - it's reserved for Quick
-                // Open (victor-qop) once that ships. A SwiftUI Button can only
-                // own one `.keyboardShortcut`, so there's a window between
-                // this ticket and victor-qop shipping where Cmd+P does
-                // nothing; that's accepted, not a bug.
+                // Cmd+Option+J is Xcode's filter-in-navigator chord (Cmd+Option+F is the
+                // platform Find and Replace binding). Cmd+P is deliberately not a second
+                // binding - it's reserved for Quick Open (victor-qop).
                 .keyboardShortcut("j", modifiers: [.command, .option])
                 .disabled(siteViewModel.site == nil)
             }
@@ -653,13 +614,9 @@ struct VictorApp: App {
 
                 Divider()
 
-                // W5.1 (victor-kbd): Xcode-convention pane traversal (sidebar
-                // <-> editor <-> inspector). Distinct from the Go menu's
-                // Cmd+Control+Left/Right (back/forward navigation history,
-                // below) - Option vs. Control keeps the two from colliding.
-                // `paneFocusDirection` is an observable trigger consumed by
-                // `ContentView`'s `@FocusState`, since that state lives in a
-                // different view than this scene-level menu.
+                // Xcode-convention pane traversal. Option, not Control, so it doesn't collide
+                // with the Go menu's back/forward. `paneFocusDirection` is an observable
+                // trigger because `ContentView`'s `@FocusState` isn't reachable here.
                 Button("Focus Previous Pane") {
                     siteViewModel.paneFocusDirection = .previous
                 }
@@ -752,13 +709,9 @@ struct VictorApp: App {
         .defaultSize(width: 560, height: 620)
     }
 
-    /// W3.1 (victor-doc): route an incoming site-folder URL (Dock drop,
-    /// Finder "Open With", or `open -a Victor <folder>`) through the same
-    /// single-window load path as File > Open Hugo Site, reusing the Close
-    /// Site confirmation when another site is open with unsaved changes.
-    /// Never opens a second window - the confirmation dialogs above are
-    /// App-scoped state shared across the (single) window, per victor-doc's
-    /// P2 note.
+    /// Routes an incoming site-folder URL through the same single-window load path as
+    /// File > Open Hugo Site, reusing the Close Site confirmation. Never opens a second
+    /// window - the confirmation dialogs are App-scoped state.
     private func handleOpenSiteFolder(_ url: URL) {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),

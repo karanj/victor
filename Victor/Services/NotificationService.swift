@@ -1,30 +1,14 @@
 import AppKit
 import UserNotifications
 
-/// Posts a system notification when a Hugo build fails while Victor is not
-/// the active app (Docs/MAC-POLISH-DESIGN.md W3.4). In-app failures are
-/// already surfaced by `BuildErrorOverlay`/`BuildIssuesPopover` and never
-/// route through here - see `HugoServerService`'s `NSApp.isActive` gate.
+/// Posts a system notification when a Hugo build fails while Victor is inactive. In-app
+/// failures go through `BuildErrorOverlay` instead - see `HugoServerService`'s
+/// `NSApp.isActive` gate.
 ///
-/// ## Shape: `class + @MainActor`, not `actor`
-///
-/// CLAUDE.md's service-concurrency table defaults "mutable state accessed
-/// from multiple call sites" to `actor`. This service does hold mutable
-/// state (`hasRequestedAuthorization`), which would normally point there -
-/// but `UNUserNotificationCenterDelegate` conforms to `NSObjectProtocol`,
-/// and no Swift `actor` can satisfy that (actors can't subclass `NSObject`
-/// or otherwise provide `NSObjectProtocol`'s conformance machinery). The
-/// delegate requirement forces a class.
-///
-/// Given that, this follows the `FileSystemService` row instead
-/// ("class + `@MainActor` methods... needs to update UI-bound data"):
-/// `NotificationService` posts a notification and, on click, calls
-/// `NSApp.activate`, which is itself `@MainActor`-isolated. The two
-/// `UNUserNotificationCenterDelegate` methods are marked `nonisolated`
-/// because the system invokes them off the main thread; each hops to
-/// `@MainActor` only for the one line that needs it, mirroring how
-/// `HugoServerService`'s actor-to-`@MainActor` callbacks hop in the
-/// opposite direction.
+/// `class + @MainActor` rather than `actor` despite holding mutable state:
+/// `UNUserNotificationCenterDelegate` conforms to `NSObjectProtocol`, which no actor can
+/// satisfy. The two delegate methods are `nonisolated` (the system calls them off the
+/// main thread) and hop to `@MainActor` only where needed.
 @MainActor
 final class NotificationService: NSObject {
     static let shared = NotificationService()
@@ -45,12 +29,9 @@ final class NotificationService: NSObject {
         UNUserNotificationCenter.current().delegate = self
     }
 
-    /// Request provisional authorization. Provisional delivery means the
-    /// notification lands quietly in Notification Center without an upfront
-    /// system permission prompt, so this is safe to call on the very first
-    /// background build failure rather than at app launch (design risk 4 in
-    /// MAC-POLISH-DESIGN.md: prompting at launch, before the user has any
-    /// reason to want build alerts, just trains them to deny).
+    /// Provisional authorization: notifications land quietly in Notification Center with no
+    /// upfront prompt, so this is safe to call on the first background failure rather than
+    /// at launch, where prompting just trains the user to deny.
     func requestAuthorizationIfNeeded() async {
         guard !hasRequestedAuthorization else { return }
         hasRequestedAuthorization = true
@@ -66,12 +47,9 @@ final class NotificationService: NSObject {
         }
     }
 
-    /// Post (or replace) the build-failure notification. Coalescing to one
-    /// notification per build-failure burst is the caller's responsibility -
-    /// `HugoServerService` only invokes this on the empty -> non-empty
-    /// transition of its error list, not once per parsed error line. The
-    /// fixed identifier above is a second line of defense if this is ever
-    /// invoked twice for the same burst.
+    /// Post (or replace) the build-failure notification. Coalescing per burst is the caller's
+    /// job - `HugoServerService` invokes this on the empty -> non-empty transition only.
+    /// The fixed identifier is a second line of defence.
     func postBuildFailure(errorCount: Int, firstMessage: String) async {
         let content = UNMutableNotificationContent()
         content.title = errorCount == 1 ? "Hugo Build Failed" : "Hugo Build Failed (\(errorCount) errors)"
@@ -106,18 +84,9 @@ extension NotificationService: UNUserNotificationCenterDelegate {
         [.banner, .sound]
     }
 
-    /// User clicked the notification (or its default action) - bring Victor
-    /// to the front.
-    ///
-    /// Deep-linking straight into the Build Issues popover was considered:
-    /// `ServerControlView.isErrorsPopoverPresented` is the only presentation
-    /// flag that exists, and it's private `@State` local to that view - not
-    /// reachable from a Service without adding a shared observable flag
-    /// (e.g. on `SiteViewModel`) and threading it through. That's new
-    /// cross-view plumbing beyond this ticket's scope, so this activates the
-    /// app only; a follow-up ticket could add
-    /// `SiteViewModel.isBuildIssuesPopoverPresented` and have
-    /// `ServerControlView` bind its popover to it instead of local `@State`.
+    /// Bring Victor to the front. Deep-linking into the Build Issues popover would need a
+    /// shared observable flag on `SiteViewModel` - the presentation flag today is private
+    /// `@State` in `ServerControlView` - so this activates the app only.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse

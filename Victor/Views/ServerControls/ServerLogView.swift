@@ -170,19 +170,11 @@ struct ServerLogView: View {
 
     // MARK: - Actions
 
-    /// Independent stream consumer (WP3.5 Cluster 9 / M2). `ServerLogView` opens
-    /// in its own `Window` scene with no `SiteViewModel` in its environment
-    /// (`VictorApp.swift`), so it observes `HugoServerService` directly rather
-    /// than through `SiteViewModel` - same shape as the other three consumers,
-    /// just not routed through it. Replay-on-subscribe means a freshly-opened
-    /// Server Logs window (opened after the server already started) still
-    /// shows the current output, without a separate initial-fetch.
-    ///
-    /// victor-zw4: kept on `.shared` rather than injected - this view has no
-    /// `SiteViewModel` (or any other) reference to thread an instance through,
-    /// and it's constructed with zero args from a `Window` scene, so avoiding
-    /// `.shared` here would mean adding SwiftUI Environment plumbing solely for
-    /// this one view, which the design explicitly scopes out.
+    /// Independent stream consumer: this view opens in its own `Window` scene with no
+    /// `SiteViewModel` in its environment, so it observes `HugoServerService` directly.
+    /// Replay-on-subscribe means a window opened after the server started still shows
+    /// current output. Kept on `.shared` - there's no reference here to thread an
+    /// injected instance through (victor-zw4).
     private func observeServerOutput() async {
         for await newOutput in await HugoServerService.shared.outputUpdates() {
             logLines = newOutput

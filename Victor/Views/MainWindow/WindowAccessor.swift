@@ -1,17 +1,11 @@
 import SwiftUI
 import AppKit
 
-/// Bridges to the hosting `NSWindow` for the handful of window-level APIs SwiftUI
-/// doesn't expose (e.g. `isDocumentEdited`).
+/// Bridges to the hosting `NSWindow` for the window-level APIs SwiftUI doesn't expose
+/// (e.g. `isDocumentEdited`). THE single AppKit window bridge - future NSWindow needs
+/// should hang off this rather than a second `NSViewRepresentable`.
 ///
-/// This is THE single AppKit window bridge for the app. Future NSWindow needs
-/// should hang off this one accessor rather than introducing another
-/// `NSViewRepresentable` — see the "AppKit bridge inventory" in
-/// Docs/MAC-POLISH-DESIGN.md.
-///
-/// Usage: attach as an invisible view so it mounts into the same view
-/// hierarchy as the content it's tracking, e.g.
-/// `.background(WindowAccessor { window in ... })`.
+/// Attach as an invisible view: `.background(WindowAccessor { window in ... })`.
 struct WindowAccessor: NSViewRepresentable {
     let onWindow: (NSWindow) -> Void
 

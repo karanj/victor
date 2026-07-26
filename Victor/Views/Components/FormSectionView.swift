@@ -1,17 +1,9 @@
 import SwiftUI
 
-/// A reusable form section container with title, optional icon, and content
+/// A reusable form section container with title, optional icon, and content. For
+/// collapsible sections use `InspectorSection` or `DisclosureGroup` instead.
 ///
-/// Use this component for non-collapsible sections in forms and editors.
-/// For collapsible sections, use `InspectorSection` or SwiftUI's `DisclosureGroup`.
-///
-/// Usage:
-/// ```swift
-/// FormSectionView("Site Identity", icon: "globe") {
-///     TextField("Title", text: $title)
-///     TextField("URL", text: $url)
-/// }
-/// ```
+///     FormSectionView("Site Identity", icon: "globe") { TextField("Title", text: $title) }
 struct FormSectionView<Content: View>: View {
     let title: String
     let icon: String?

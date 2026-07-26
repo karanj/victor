@@ -1,18 +1,11 @@
 import Foundation
 
-/// Pure state/logic for the Integrations tab's bespoke outputs matrix
-/// (CONFIG-SCHEMA-SPEC §3.6 + §4.4). No `ConfigValueStore`/view dependency —
-/// the matrix's read shape, toggle transitions, and write-back shape are all
-/// plain-value functions so they're directly unit-testable.
+/// Pure state/logic for the Integrations tab's outputs matrix (CONFIG-SCHEMA-SPEC §3.6).
+/// No store or view dependency, so read shape, toggle transitions and write-back are
+/// directly unit-testable.
 ///
-/// **Casing decision** (CONFIG-SCHEMA-SPEC §3.6's "outputs.<kind>" row):
-/// existing entries keep whatever casing the file already used (matched
-/// case-insensitively, never rewritten just because a sibling cell toggled);
-/// a format newly checked in from an absent/default state is written using
-/// the §4.4 canonical spelling (`ConfigSchema.outputFormatNames`, all
-/// lowercase) for built-ins, or the exact case the user gave it in their own
-/// `outputFormats` section for custom formats — `columns(customFormatKeys:)`
-/// already carries that casing through untouched.
+/// Casing: existing entries keep whatever the file used (matched case-insensitively,
+/// never rewritten); newly-checked formats use the §4.4 canonical spelling.
 enum ConfigOutputsMatrix {
     /// Matrix rows (CONFIG-SCHEMA-SPEC §3.6: "rows = home/section/taxonomy/term/page").
     static let kinds: [String] = ["home", "section", "taxonomy", "term", "page"]
@@ -73,15 +66,10 @@ enum ConfigOutputsMatrix {
         return (defaultOutputs[kind] ?? [], false)
     }
 
-    /// The array `kind` should hold after toggling `format` on/off, starting
-    /// from `currentlyChecked` (the row's current checked list — present
-    /// value, or the dimmed §4.4 default when the kind was absent: toggling
-    /// any cell on an absent/default row materializes the full default set
-    /// plus the new format, matching "toggling writes the full per-kind
-    /// array"). Case-insensitive match/removal so an existing differently-cased
-    /// entry (`"HTML"`) is found and removed by its lowercase column
-    /// (`"html"`). Returns `nil` when the result would be empty — the caller
-    /// removes the kind's key entirely rather than writing `[]`.
+    /// The array `kind` should hold after toggling `format`. Toggling any cell on an
+    /// absent/default row materializes the full default set plus the new format.
+    /// Case-insensitive match/removal. Returns `nil` when the result would be empty -
+    /// the caller then removes the key rather than writing `[]`.
     static func toggling(format: String, newState isOn: Bool, currentlyChecked: [String]) -> [String]? {
         var result = currentlyChecked
         if isOn {

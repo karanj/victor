@@ -1,43 +1,23 @@
 import SwiftUI
 
-/// Generic type→control renderer for `ConfigSettingSpec` entries, backed
-/// directly by `ConfigValueStore` (CONFIG-SCHEMA-SPEC §2.6).
+/// Generic type -> control renderer for `ConfigSettingSpec` entries (CONFIG-SCHEMA-SPEC §2.6).
 ///
-/// This view is the **observation leaf** for the per-keystroke invalidation
-/// contract (CLAUDE.md): it is the only place that reads `store.version` /
-/// `store.value(at:)`. Parent tab bodies iterate the static
-/// `[ConfigSettingSpec]` array and hand each row a `spec` + the shared
-/// `store` reference — they never read a config computed accessor or a
-/// store value themselves, so a keystroke inside one field invalidates only
-/// that field's row, not the tab body, the toolbar, or `.commands`.
-///
-/// Text-like types (`string`, `duration`, `stringOrStringArray`) hold a
-/// local `@State` draft and commit to the store on blur/submit — the
-/// `PermalinkRowView` pattern (`ConfigContentTab.swift`) generalized.
-/// Toggles/Pickers commit immediately: a toggle flip or a menu pick is one
-/// discrete edit, not a keystroke stream.
+/// The observation leaf for the per-keystroke contract (CLAUDE.md): the only place that
+/// reads `store.version`/`store.value(at:)`, so a keystroke invalidates one row rather
+/// than the tab body. Text-like types keep a local draft and commit on blur/submit;
+/// toggles and pickers commit immediately.
 struct ConfigFieldView: View {
     let spec: ConfigSettingSpec
     let store: ConfigValueStore
     var context: ValidationContext? = nil
 
-    /// How a commit reaches `HugoConfig.syncRawContentFromStructuredData()`.
-    /// An environment action (set once in `ConfigEditorView`, around the
-    /// `TabView`) rather than a per-field closure parameter: every row below
-    /// needs the same one call, and threading it through every
-    /// `ConfigFieldView(...)` call site at every tab would be pure
-    /// boilerplate repeated ~20 times across the 4 tabs for no benefit —
-    /// the environment already exists for exactly this "one action, many
-    /// leaves" shape. See `configCommitAction` below.
+    /// Environment action rather than a per-field closure: every row needs the same one
+    /// call, and `ConfigEditorView` sets it once around the `TabView`.
     @Environment(\.configCommitAction) private var commit
 
     var body: some View {
-        // Establishes this row's (and only this row's) observation
-        // dependency on `store.version`. `ConfigValueStore.root` itself is
-        // `@ObservationIgnored` (CONFIG-SCHEMA-SPEC §2.2) so reading typed
-        // accessors below does NOT subscribe this view on its own; reading
-        // `.version` explicitly is what makes SwiftUI re-evaluate this row
-        // (and nothing above it) after a `set`/`remove` call.
+        // `store.root` is `@ObservationIgnored`, so reading typed accessors doesn't subscribe
+        // this view - reading `.version` explicitly is what re-evaluates this row and only it.
         let _ = store.version
 
         LabeledContent(spec.label) {
@@ -202,14 +182,9 @@ struct ConfigFieldView: View {
 
 // MARK: - Environment: commit action
 
-/// The single write-back path from a `ConfigFieldView` commit to
-/// `HugoConfig.hasUnsavedChanges` updating (CONFIG-SCHEMA-SPEC §2.8):
-/// `HugoConfig.syncRawContentFromStructuredData()` recomputes `rawContent`
-/// from the store, which is what the toolbar save button's
-/// `hasUnsavedChanges` (== `rawContent != originalContent`) observes.
-/// `ConfigEditorView` sets this once around the `TabView`; leaves never
-/// reach for `HugoConfig` directly, so `ConfigFieldView` stays testable
-/// against a bare `ConfigValueStore` with no `HugoConfig` in scope.
+/// Single write-back path from a commit to `hasUnsavedChanges` updating: it recomputes
+/// `rawContent`, which the save button observes. Leaves never touch `HugoConfig`, so
+/// `ConfigFieldView` stays testable against a bare `ConfigValueStore`.
 private struct ConfigCommitActionKey: EnvironmentKey {
     // The no-op default closure captures no state, so it's safe to share
     // across isolation domains even though `() -> Void` isn't provably
@@ -439,12 +414,8 @@ private struct ConfigMenuChoiceFieldRow: View {
     }
 }
 
-/// Filterable popover for `.choice` specs with many cases (e.g. the 74 chroma
-/// highlight styles): a button showing the current/default value opens a
-/// popover with a local-`@State` filter `TextField` over a scrollable list.
-/// The filter text never touches the store — it's pure display filtering,
-/// so it can't violate the per-keystroke invalidation contract even though
-/// it re-renders per keystroke (this view is already the observation leaf).
+/// Filterable popover for `.choice` specs with many cases (e.g. 74 chroma styles). The
+/// filter text never touches the store, so it can't violate the per-keystroke contract.
 private struct ConfigSearchableChoiceFieldRow: View {
     let spec: ConfigSettingSpec
     let options: [String]
@@ -975,12 +946,8 @@ private struct ConfigStringArrayFieldRow: View {
 
 // MARK: - Later-phase fallback
 
-/// Placeholder for `ConfigValueType`s no tab wires up yet in Phase 1d
-/// (`boolOrEnum`, `boolOrSectionMap`, `dictionary`, `stringMap`, `rawOnly`).
-/// Read-only by design — each gets its own dedicated control in a later
-/// phase (§2.6); this row exists purely so `ConfigFieldView` degrades
-/// safely rather than crashing if one of these specs is ever passed to it
-/// early.
+/// Inert fallback for `ConfigValueType`s no tab wires up. Exists so `ConfigFieldView`
+/// degrades safely rather than crashing if such a spec is ever passed to it.
 private struct ConfigComingLaterRow: View {
     let spec: ConfigSettingSpec
 

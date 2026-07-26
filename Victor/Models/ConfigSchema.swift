@@ -27,14 +27,10 @@ enum ConfigValueType: Sendable {
     case rawOnly                       // shown read-only + "Edit in Raw"
 }
 
-/// A setting's default, as three distinct cases because two Hugo defaults
-/// are sentinels whose *number* must never be shown to a user as something
-/// to copy — only their meaning (CONFIG-SCHEMA-SPEC §2.3, §2.6). `.value`/
-/// `.sentinel` carry `Any` because Hugo's own config values are dynamically
-/// typed; the enum is marked `@unchecked Sendable` for exactly that reason
-/// (the payload is always one of Bool/String/Int/Double/[String]/
-/// [String: String] here — all inherently sendable value types — so the
-/// escape hatch is safe in practice, just not provable to the compiler).
+/// A setting's default. Three cases because two Hugo defaults are sentinels whose *number*
+/// must never be shown as something to copy, only their meaning (CONFIG-SCHEMA-SPEC §2.3).
+/// `@unchecked Sendable`: the payload is always a Bool/String/Int/Double/array, but Hugo's
+/// config values are dynamically typed so it can't be proved to the compiler.
 enum ConfigDefault: @unchecked Sendable {
     case value(Any)
     case none
@@ -62,15 +58,9 @@ struct ConfigSettingSpec: Identifiable, Sendable {
     let group: ConfigGroup
     let validator: ConfigValidator?
     let deprecation: ConfigDeprecation?
-    /// `.bool` entries only: when true, `ConfigFieldView`'s toggle displays
-    /// (and writes) the logical NOT of the stored value. Exists for keys
-    /// like `markup.goldmark.extensions.typographer.disable` — Hugo's key is
-    /// phrased as "disable X", but the row reads "X" ("Smart Punctuation")
-    /// and should read ON when X is active, i.e. when the stored value is
-    /// `false`. Defaults to `false` so every other bool entry (and every
-    /// existing call site of the `entry`/`boolEntry` builders below) is
-    /// unaffected. The stored key/type never changes — only the toggle's
-    /// display+interaction direction flips (CONFIG-SCHEMA-SPEC §3.5).
+    /// `.bool` entries only: the toggle displays and writes the logical NOT of the stored
+    /// value. For keys phrased as "disable X" that should read as "X" and show ON when X
+    /// is active. The stored key and type never change - only the toggle's direction.
     var invertedBoolLabel: Bool = false
 }
 
@@ -176,12 +166,8 @@ private let essentialsEntries: [ConfigSettingSpec] = [
         deprecation: ConfigDeprecation(since: "0.158.0", message: "Use locale instead.", replacementKey: "locale")
     ),
     stringEntry("defaultContentLanguage", "en", "Default Content Language", "Language used for content with no language suffix, and the default in multilingual sites.", .essentials, validator: ConfigValidators.bcp47ish),
-    // `.choice` (not a bespoke row) deliberately: `TimeZone.knownTimeZoneIdentifiers`
-    // is >15 entries, so `ConfigFieldView`'s existing searchable-choice control
-    // (`ConfigSearchableChoiceFieldRow`) kicks in automatically — no new UI
-    // code needed for the "searchable timezone picker" requirement (Phase 5
-    // task brief item 7; see ConfigEssentialsTab's header comment for the
-    // theme-row counterpart, which *does* need a bespoke row).
+    // `.choice` rather than a bespoke row: the identifier list is >15 entries, so
+    // `ConfigFieldView`'s searchable-choice control kicks in automatically.
     entry(
         "timeZone", .choice(ConfigSchema.timeZoneIdentifiers), .value(""), "Time Zone",
         "IANA time zone identifier used to interpret dates that have no explicit offset.",
@@ -410,12 +396,9 @@ private let directoryOverrideEntries: [ConfigSettingSpec] = [
 
 private let deprecatedEntries: [ConfigSettingSpec] = [
     deprecatedArrayEntry("ignoreFiles", [], "Ignore Files (legacy)", "Regexes of files to exclude from processing.", .advanced, since: "unspecified", message: "Superseded by module mount excludeFiles patterns; not auto-migrated.", replacement: nil),
-    // `author` / `social` deliberately absent: both were `.dictionary`, which
-    // has no working control, so they rendered as "Deprecated" + "Coming in a
-    // later phase" — a row that says don't use this key and won't let you
-    // edit it. They now fall through to the Advanced tab's Unknown Keys
-    // section, which gives them a real recursive editor.
-    // Pinned by `ConfigSchemaPlaceholderTests`.
+    // `author`/`social` deliberately absent: both were `.dictionary`, which has no working
+    // control, so they rendered as "Deprecated" + "Coming in a later phase". They now fall
+    // through to Unknown Keys, which gives them a real editor. See ConfigSchemaPlaceholderTests.
     deprecatedStringEntry("markup.goldmark.parser.autoHeadingIDType", "github", "Heading ID Style (legacy key)", "Legacy name for the heading-ID slug algorithm setting.", .advanced, since: "0.144.0", message: "Renamed to markup.goldmark.parser.autoIDType.", replacement: "markup.goldmark.parser.autoIDType"),
     deprecatedBoolEntry("markup.goldmark.renderHooks.image.enableDefault", true, "Image Render Hook (legacy key)", "Legacy name for opting into Hugo's embedded image render hook.", .advanced, since: "0.148.0", message: "Renamed to markup.goldmark.renderHooks.image.useEmbedded.", replacement: "markup.goldmark.renderHooks.image.useEmbedded"),
     deprecatedBoolEntry("markup.goldmark.renderHooks.link.enableDefault", true, "Link Render Hook (legacy key)", "Legacy name for opting into Hugo's embedded link render hook.", .advanced, since: "0.148.0", message: "Renamed to markup.goldmark.renderHooks.link.useEmbedded.", replacement: "markup.goldmark.renderHooks.link.useEmbedded")

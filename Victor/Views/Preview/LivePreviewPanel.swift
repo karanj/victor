@@ -184,12 +184,9 @@ struct LivePreviewPanel: View {
             actionLabel: "Start Server",
             actionIcon: "play.fill"
         ) {
-            // Routed through SiteViewModel (not the service directly) so start
-            // failures land in siteViewModel.errorMessage, which ContentView
-            // already presents. The guard covers the race where the server came
-            // up between render and tap - toggling then would STOP it. Status
-            // flips to .starting via the stream, so this placeholder is replaced
-            // by the loading state above as soon as the tap lands.
+            // Routed through SiteViewModel so start failures land in `errorMessage`, which
+            // ContentView already presents. The guard covers the race where the server came
+            // up between render and tap - toggling then would stop it.
             Task {
                 guard !siteViewModel.isHugoServerRunning else { return }
                 await siteViewModel.toggleHugoServer()
@@ -199,21 +196,13 @@ struct LivePreviewPanel: View {
 
     // MARK: - Server State Management
 
-    /// Independent stream consumer (WP3.5 Cluster 9 / M2) - same shape as
-    /// `SiteViewModel`'s status observer, just not routed through it (this
-    /// view isn't `SiteViewModel`-owned). Replay-on-subscribe means this
-    /// picks up the current status immediately on first appearance, replacing
-    /// the old separate `refreshServerState()` initial-fetch.
+    /// Independent stream consumer - same shape as `SiteViewModel`'s observer, but this view
+    /// isn't `SiteViewModel`-owned. Replay-on-subscribe picks up the current status on
+    /// first appearance, replacing the old one-time `refreshServerState()`.
     ///
-    /// Also keeps `serverURL` in sync with `status`: the old callback-based
-    /// version only ever set `serverURL` once, from `refreshServerState()`'s
-    /// one-time snapshot at `.onAppear` - if the server was still stopped at
-    /// that point and only started later, `serverURL` stayed `nil` forever
-    /// even after the status callback reported `.running`, silently stuck on
-    /// the "Hugo Server Not Running" placeholder. Fetching `serverURL`
-    /// whenever status changes (and driving the LiveReload `.task(id:)` below
-    /// off of it) fixes that as a direct consequence of wiring the new
-    /// per-status-change source of truth correctly, not a separate change.
+    /// Also keeps `serverURL` in sync with `status`: the old version set it once at
+    /// `.onAppear`, so a server that started later left it nil forever and the panel stayed
+    /// stuck on the "not running" placeholder.
     private func observeServerStatus() async {
         // Routed through the already-available `siteViewModel` reference (not `.shared`
         // directly) so a test-injected `hugoServerService` isolates this observer too
@@ -228,12 +217,9 @@ struct LivePreviewPanel: View {
         }
     }
 
-    /// Connect/reconnect LiveReload whenever `serverURL` changes (nil when the
-    /// server isn't running, a URL once it is) and observe its event stream.
-    /// SwiftUI cancels the previous instance of this task and starts a fresh
-    /// one whenever `serverURL` changes, which is what drives
-    /// connect/disconnect here - no manual "previous status was running"
-    /// bookkeeping needed (WP3.5 Cluster 9 / M2).
+    /// Connect/reconnect LiveReload whenever `serverURL` changes. SwiftUI cancels and
+    /// restarts this task on each change, which is what drives connect/disconnect - no
+    /// manual "previous status was running" bookkeeping needed.
     private func observeLiveReloadEvents() async {
         guard let url = serverURL else {
             await LiveReloadClient.shared.disconnect()
@@ -404,13 +390,9 @@ private struct LivePreviewWebView: NSViewRepresentable {
         var canGoForwardBinding: Binding<Bool>?
         var currentURLBinding: Binding<String>?
 
-        // No deinit nil-out needed: `WKWebView.navigationDelegate` is `weak`
-        // in WebKit, so it already clears itself automatically when this
-        // Coordinator deallocates. A synchronous `deinit` can't touch
-        // `@MainActor` state anyway (WP3.5 Cluster 11, applied here per its
-        // own prose note even though this file isn't in Cluster 11's file
-        // list - the same pattern, an apparent gap in the memo's file
-        // enumeration).
+        // No deinit nil-out needed: `WKWebView.navigationDelegate` is weak, so it clears
+        // itself when this Coordinator deallocates (and a sync `deinit` can't touch
+        // `@MainActor` state anyway).
 
         // Handle navigation decision
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {

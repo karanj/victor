@@ -232,13 +232,9 @@ struct ServerControlView: View {
         openWindow(id: "server-logs")
     }
 
-    /// Independent stream consumer (WP3.5 Cluster 9 / M2) - same shape as
-    /// `SiteViewModel`'s observers, just not routed through it (`ServerControlView`
-    /// is its own `@MainActor` consumer). Using SwiftUI's `.task {}` instead of a
-    /// bare `Task {}` inside `.onAppear`-style setup means the observation task
-    /// is automatically cancelled when the view disappears - a strict
-    /// improvement over the old callback registration, which never
-    /// deregistered and leaked for the toolbar's lifetime.
+    /// Independent stream consumer - this view is its own `@MainActor` consumer rather than
+    /// going through `SiteViewModel`. `.task {}` rather than a bare `Task {}` so the
+    /// observation is cancelled on disappear; the old callback registration never was.
     private func observeServerStatus() async {
         for await newStatus in await siteViewModel.hugoServerService.statusUpdates() {
             withAnimation(reduceMotion ? nil : .default) {

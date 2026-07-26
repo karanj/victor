@@ -30,18 +30,11 @@ enum ConfigAdvancedKeyClassifier {
     static let bespokeRootKeys: Set<String> = ["params", "taxonomies", "permalinks", "menus", "menu"]
 
     /// - Parameters:
-    ///   - rootKey: a top-level key from `ConfigValueStore.orderedRootKeys`,
-    ///     in whatever case the source file used.
-    ///   - schemaKeys: every `ConfigSettingSpec.key` (dotted paths), e.g.
-    ///     `ConfigSchema.all.map(\.key)`.
-    ///   - rawOnlySectionKeys: `ConfigSchema.rawOnlySectionKeys`. Matched
-    ///     case-insensitively: the schema spells these lowercase
-    ///     ("mediatypes", "outputformats", "contenttypes", "httpcache") but
-    ///     real Hugo files use camelCase ("mediaTypes", "outputFormats",
-    ///     "httpCache"), and `ConfigValueStore` lookups are otherwise
-    ///     case-sensitive.
-    ///   - bespokeRootKeys: defaults to `Self.bespokeRootKeys`; parameterized
-    ///     for testability.
+    ///   - rootKey: a top-level key from `ConfigValueStore.orderedRootKeys`
+    ///   - schemaKeys: every `ConfigSettingSpec.key` (dotted paths)
+    ///   - rawOnlySectionKeys: matched case-insensitively - the schema spells these
+    ///     lowercase but real Hugo files use camelCase (`mediaTypes`, `outputFormats`)
+    ///   - bespokeRootKeys: parameterized for testability
     static func classify(
         rootKey: String,
         schemaKeys: [String],
@@ -60,26 +53,12 @@ enum ConfigAdvancedKeyClassifier {
     }
 }
 
-/// Advanced tab for Hugo configuration editor (CONFIG-SCHEMA-SPEC §3.7,
-/// design doc §3.2). Three sections plus a read-only raw-only list:
+/// Advanced tab (CONFIG-SCHEMA-SPEC §3.7). Site Params, All Settings, Unknown Keys, plus
+/// a read-only list of `.rawOnly` sections present in the file.
 ///
-/// (a) **Site Params** — recursive editor over `store.subtree("params")`.
-/// (b) **All Settings** — searchable flat list of every `.advanced`-group
-///     schema entry (skipping `.rawOnly`-typed ones) plus every schema entry
-///     not rendered on Essentials/Content/Taxonomies today.
-/// (c) **Unknown keys** — root keys the classifier above calls `.unknown`:
-///     recursive editor per key, same family as (a).
-/// Plus a read-only list of `.rawOnly` sections that are actually present in
-/// the file, each with an "Edit in Raw" button.
-///
-/// Typing-latency (CLAUDE.md contract, CONFIG-SCHEMA-SPEC §2.8): this body
-/// reads `config.store.version` once, at the top — an explicitly-sanctioned
-/// exception (task brief / spec §2.8) because it drives which *rows exist*
-/// (unknown-keys list, present-rawOnly list), not per-keystroke content, and
-/// only changes on a committed edit (recursive editors below commit on
-/// blur/toggle/add/remove, never per keystroke — see
-/// `Views/Components/RecursiveValueEditor.swift`). All Settings' own text
-/// filter is separate `@State` confined to that section's view.
+/// This body reads `store.version` once - a sanctioned exception to the per-keystroke
+/// contract, since it drives which *rows exist*, not their content, and only changes on
+/// a committed edit.
 struct ConfigAdvancedTab: View {
     let config: HugoConfig
 
@@ -93,18 +72,9 @@ struct ConfigAdvancedTab: View {
         ValidationContext(siteURL: nil, store: config.store)
     }
 
-    /// Schema keys already rendered by `ConfigEssentialsTab`/
-    /// `ConfigContentTab`/`ConfigURLsTaxonomiesTab`/`ConfigMarkupTab`/
-    /// `ConfigIntegrationsTab` today (read directly off those views' source,
-    /// not the design doc's aspirational full-tab lists — several
-    /// `.essentials`/`.contentBuild`-group entries aren't wired up on their
-    /// tab yet and so correctly surface in All Settings (b) below instead of
-    /// going missing). `locale`/`languageCode` are both excluded: Phase 5's
-    /// bespoke Essentials "Locale" row (`ConfigLocaleRowView`) serves both
-    /// keys, so neither has a standalone `ConfigFieldView` row anywhere.
-    /// `ConfigURLsTaxonomiesTab.allRenderedKeys`/`ConfigMarkupTab.allRenderedKeys`/
-    /// `ConfigIntegrationsTab.allRenderedKeys` are pulled from each tab's own
-    /// source rather than re-listed here, so none of the four can drift.
+    /// Keys already rendered elsewhere, read off each tab's own `allRenderedKeys` rather
+    /// than re-listed here so the two can't drift. `locale`/`languageCode` are excluded
+    /// because Essentials' bespoke Locale row serves both.
     static let renderedOnOtherTabs: Set<String> = ([
         "baseURL", "title", "locale", "languageCode", "theme", "copyright", "timeZone",
         "buildDrafts", "buildFuture", "buildExpired", "summaryLength"
@@ -128,16 +98,10 @@ struct ConfigAdvancedTab: View {
 
     // MARK: - Legacy keys (CONFIG-SCHEMA-SPEC §2.5 mechanism 2)
 
-    /// Removed-key lint findings (`ConfigLintCatalog.scan`), rendered at the
-    /// top of the tab per the task brief. Unlike mechanism 1's per-field
-    /// deprecation badge (`ConfigFieldView.deprecationRow`), these keys have
-    /// no `ConfigSettingSpec` row of their own — `paginate`/`paginatePath`
-    /// were *removed*, not deprecated-but-still-read, and the permalink
-    /// token warnings live inside a value, not a key — so they need a
-    /// dedicated section instead. Only `paginate`/`paginatePath` get a
-    /// one-click "Use <new key>" button (pure rename, §2.5); the
-    /// `googleAnalytics`/`disqusShortname` root fallbacks and the permalink
-    /// token findings are explanatory-only, per the task brief.
+    /// Removed-key lint findings. These keys have no `ConfigSettingSpec` row of their own -
+    /// `paginate`/`paginatePath` were removed rather than deprecated, and permalink token
+    /// warnings live inside a value - so they need their own section. Only the two pure
+    /// renames get a one-click fix; the rest are explanatory.
     @ViewBuilder
     private var legacyKeysSection: some View {
         let warnings = ConfigLintCatalog.scan(store: config.store)
@@ -293,18 +257,12 @@ struct ConfigAdvancedTab: View {
 
 // MARK: - (b) All Settings list
 
-/// Searchable flat list of every schema entry not shown on another tab.
-/// Isolated into its own view so its `@State searchText` doesn't sit in
-/// `ConfigAdvancedTab`'s body (keeps the per-keystroke read of `searchText`
-/// scoped to exactly the rows it filters, matching the leaf-observation
-/// pattern used throughout this tab).
+/// Searchable flat list of every schema entry not shown on another tab. Its own view so
+/// `searchText` stays scoped to the rows it filters.
 ///
-/// Rows are gated behind a filter or an explicit "show all" because a
-/// grouped `Form` on macOS builds every row it is handed up front — handing
-/// it all 126 cost 611 ms of the ~690 ms it took to switch to this tab
-/// (measured at 900x800). `LazyVStack` fixes the cost but loses Form's row
-/// styling entirely (no separators, multi-line rows collapse), and `List`
-/// loses the shared label column, so the row count is what gives.
+/// Rows are gated behind a filter or an explicit "show all": a grouped `Form` builds
+/// every row up front, and all 126 cost 611 ms of the ~690 ms tab switch. `LazyVStack`
+/// fixes the cost but loses Form's row styling; `List` loses the shared label column.
 private struct AllSettingsListView: View {
     let store: ConfigValueStore
     let context: ValidationContext

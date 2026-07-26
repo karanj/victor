@@ -35,15 +35,9 @@ final class HugoConfigParser: @unchecked Sendable {
 
     // MARK: - Parsing
 
-    /// Parse a Hugo config file from disk
-    /// `parseConfig` carries no actor annotation (`HugoConfigParser` is a plain
-    /// `@unchecked Sendable` class), so `Task.detached` here was redundant - removed
-    /// rather than converted to a helper (victor-tdt audit). `@concurrent` (SE-0461,
-    /// verified to compile in this project's Swift 6.0 language mode with no
-    /// upcoming-feature flag) compiler-pins the blocking `String(contentsOf:)` read off
-    /// the concurrent executor regardless of the `NonisolatedNonsendingByDefault`
-    /// setting, rather than relying on today's default the way a bare `nonisolated
-    /// async` function would.
+    /// Parse a Hugo config file from disk. `@concurrent` pins the blocking
+    /// `String(contentsOf:)` read to the concurrent executor rather than relying on the
+    /// current `NonisolatedNonsendingByDefault` value.
     @concurrent
     func parseConfig(at url: URL) async throws -> HugoConfig {
         let content = try String(contentsOf: url, encoding: .utf8)
@@ -68,15 +62,11 @@ final class HugoConfigParser: @unchecked Sendable {
                           orderedRootKeys: rootKeyOrder(of: content, format: format))
     }
 
-    /// Document order of the root-level keys (CONFIG-SCHEMA-SPEC §2.7).
-    /// Captured BEFORE the config collapses into an unordered Swift
-    /// dictionary. YAML: Yams.compose, whose mapping nodes are ordered.
-    /// TOML: a line scan — TOMLKit wraps toml++, whose tables are std::map
-    /// (alphabetical), so document order is unrecoverable through the parser
-    /// and must come from the text. JSON returns nil (that writer sorts keys,
-    /// so order is moot); the store then falls back to sorted. Best-effort by
-    /// spec: ConfigValueStore reconciles this list against the actual parsed
-    /// keys, so scan misses degrade to sorted placement, never data loss.
+    /// Document order of the root-level keys (CONFIG-SCHEMA-SPEC §2.7), captured before the
+    /// config collapses into an unordered dictionary. YAML uses `Yams.compose` (ordered
+    /// mapping nodes); TOML needs a line scan, since TOMLKit wraps toml++ whose tables are
+    /// alphabetical `std::map`; JSON returns nil (its writer sorts anyway). Best-effort:
+    /// `ConfigValueStore` reconciles the list, so a scan miss degrades to sorted.
     private func rootKeyOrder(of content: String, format: ConfigFormat) -> [String]? {
         switch format {
         case .toml:
@@ -177,13 +167,9 @@ final class HugoConfigParser: @unchecked Sendable {
 
     // MARK: - Serialization
 
-    /// Serialize a HugoConfig back to string.
-    /// Sparse by design: a key is written iff it's present in `config.store`
-    /// — never injected just because HugoConfig has a computed accessor for
-    /// it (design-doc issues #1/#2). Presence is now structural: every
-    /// computed accessor's setter is the only thing that puts a key in the
-    /// store, so this function no longer needs field-by-field presence
-    /// checks (CONFIG-SCHEMA-SPEC §2.9 item 7) — it just snapshots the store.
+    /// Serialize a HugoConfig back to string. Sparse by design: a key is written iff it's
+    /// present in `config.store`, never injected just because a computed accessor exists.
+    /// Presence is structural, so no field-by-field checks are needed - it snapshots.
     func serialize(_ config: HugoConfig) throws -> String {
         // Menus are the one typed materialization outside the store; commit
         // them before snapshotting so a form-mode save reflects the latest

@@ -29,13 +29,10 @@ enum RenameValidationError: Equatable {
 enum RenameValidator {
     /// - Parameters:
     ///   - newName: the candidate name, as typed (untrimmed).
-    ///   - currentName: the node's existing name - a case-insensitive match
-    ///     against this is not a collision, since it targets the same node
-    ///     (e.g. correcting the casing of "post.MD" to "post.md").
-    ///   - existingSiblingNames: names of every OTHER node in the same parent
-    ///     (or every other top-level node, for a root item), for the
-    ///     case-insensitive collision check - APFS default-formats
-    ///     case-insensitive, so "Post.md" and "post.md" collide.
+    ///   - currentName: a case-insensitive match against this isn't a collision - it's the
+    ///     same node (e.g. correcting "post.MD" to "post.md").
+    ///   - existingSiblingNames: every OTHER node in the same parent. Matched
+    ///     case-insensitively, since APFS default-formats case-insensitive.
     static func validate(
         newName: String,
         currentName: String,

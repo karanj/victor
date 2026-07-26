@@ -1,13 +1,10 @@
 import XCTest
 @testable import Victor
 
-/// A schema entry earns its row by giving the user something to do. An entry
-/// that is *both* deprecated and has no working control renders as
-/// "Deprecated" + "Coming in a later phase — edit in Raw for now" on the
-/// Advanced tab: a row that tells you not to use the key and won't let you
-/// edit it either. Keys like that belong in the file, not in the schema —
-/// `ConfigValueStore` round-trips them regardless, and the Advanced tab's
-/// Unknown Keys section gives them a real recursive editor.
+/// A schema entry earns its row by giving the user something to do. One that is both
+/// deprecated and has no working control renders as "Deprecated" + "Coming in a later
+/// phase" - telling you not to use the key and refusing to edit it. Such keys belong in
+/// the file, not the schema: the store round-trips them and Unknown Keys edits them.
 final class ConfigSchemaPlaceholderTests: XCTestCase {
 
     /// Types `ConfigFieldView` renders as `ConfigComingLaterRow` rather than

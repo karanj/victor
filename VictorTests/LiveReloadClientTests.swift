@@ -199,28 +199,16 @@ final class LiveReloadClientTests: XCTestCase {
         XCTAssertFalse(isConnected, "Client should not be connected initially")
     }
 
-    // MARK: - Event Stream Tests (WP3.5 Cluster 9 / M2)
+    // MARK: - Event Stream Tests
     //
-    // `connect(to:)` dropped its `onNavigate`/`onReload` callback parameters in
-    // favor of an `events()` stream (see `LiveReloadEvent`). Actually driving a
-    // `.navigate`/`.reload` event end to end requires a live WebSocket
-    // connection to a real Hugo server - that's covered by the manual test
-    // checklist in Docs/SC6-BURNDOWN-MEMO.md §5, not here. What's covered here
-    // is what's testable without a live server: the stream factory itself
-    // multicasts independently per subscriber, same guarantee as
-    // HugoServerService's streams (see HugoServerTests).
+    // Driving a real `.navigate`/`.reload` needs a live WebSocket to a Hugo server -
+    // that's in the manual checklist. Covered here: the stream factory multicasts
+    // independently per subscriber, same guarantee as HugoServerService's streams.
 
-    /// `events()` is single-consumer per call - two independent subscribers
-    /// must each get their own stream, not split a single shared stream's
-    /// elements between them (WP3.5 Cluster 9).
-    /// Confirms actual multicast, not just that two `AsyncStream`s can coexist:
-    /// drives one event through the actor's real `broadcast(_:)` path (via the
-    /// `broadcastForTesting` test seam - `broadcast(_:)` itself is `private`,
-    /// exercised identically by `handleReload`) and asserts BOTH
-    /// independently-obtained subscribers receive it. The previous version of
-    /// this test never triggered a broadcast at all, so it didn't actually back
-    /// up its own "independent streams" doc comment - only that two streams
-    /// could be created and torn down without crashing.
+    /// `events()` is single-consumer per call - two subscribers must each get their own
+    /// stream rather than splitting one. Drives a real event through `broadcast(_:)` (via
+    /// the test seam) and asserts both receive it; the previous version never triggered a
+    /// broadcast at all, so it didn't actually back up its own claim.
     func testEventsReturnsIndependentStreamsPerSubscriber() async throws {
         let streamA = await LiveReloadClient.shared.events()
         let streamB = await LiveReloadClient.shared.events()

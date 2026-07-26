@@ -1,17 +1,12 @@
 import Foundation
 
-/// Sparse key-path store backing Config Editor v2.
+/// Sparse key-path store backing Config Editor v2. Wraps a Hugo config's parsed
+/// dictionary with dot-joined access. Presence is structural - a key is present iff it
+/// exists in the dictionary - so sparse serialization falls out of the model rather
+/// than being policed by convention.
 ///
-/// Wraps a Hugo config's parsed dictionary and exposes dot-joined key-path
-/// access (`"markup.goldmark.renderer.unsafe"`). Presence is structural:
-/// a key is "present" iff it exists in the underlying dictionary — there is
-/// no separate "user touched this" bit, so sparse serialization falls out
-/// of the model instead of being policed by convention (CONFIG-SCHEMA-SPEC
-/// §2.2).
-///
-/// Per the Per-Keystroke Invalidation Contract (CLAUDE.md) / FileCacheManager
-/// precedent: the raw blob (`root`) must never be an observation dependency.
-/// `version` is the only observable signal, bumped by every mutating call.
+/// Per the per-keystroke contract (CLAUDE.md), the raw blob (`root`) must never be an
+/// observation dependency; `version` is the only observable signal.
 @Observable
 final class ConfigValueStore {
 
@@ -33,16 +28,11 @@ final class ConfigValueStore {
     private(set) var orderedRootKeys: [String]
 
     /// - Parameters:
-    ///   - root: the parsed config dictionary. Normalized recursively at this
-    ///     boundary: Yams hands back `[AnyHashable: Any]` for nested mappings,
-    ///     which can't serialize back to TOML/YAML/JSON, so every nested
-    ///     dictionary is converted to `[String: Any]` here, once, per
-    ///     CLAUDE.md's "Yams Type Normalization" note.
-    ///   - orderedRootKeys: document order of the root keys, captured by the
-    ///     parser before the ordered source collapsed into an unordered Swift
-    ///     dictionary. Without it the fallback is sorted — a Swift
-    ///     dictionary's iteration order varies per process launch, and
-    ///     seeding from it made "order preserved" tests flake.
+    ///   - root: the parsed config dictionary. Normalized recursively here, since Yams
+    ///     returns `[AnyHashable: Any]` for nested mappings, which can't serialize back.
+    ///   - orderedRootKeys: document order, captured by the parser before the ordered
+    ///     source collapsed into an unordered dictionary. The sorted fallback exists
+    ///     because dictionary iteration order varies per launch and made tests flake.
     init(root: [String: Any], orderedRootKeys: [String]? = nil) {
         let normalized = SerializationHelper.normalizeForSerialization(root) as? [String: Any] ?? root
         self.root = normalized
@@ -179,11 +169,9 @@ final class ConfigValueStore {
 
     // MARK: - Lenient typed reads
     //
-    // "Lenient reads, strict writes" (CONFIG-SCHEMA-SPEC §2.2): Hugo
-    // weak-decodes config values, so reads accept the shapes Hugo would
-    // also accept. Writes (via `set`) always store the canonical Swift
-    // type the caller passes in — normalizing sloppy types is the caller's
-    // job (ConfigSettingSpec / ConfigFieldView), not the store's.
+    // "Lenient reads, strict writes": Hugo weak-decodes config values, so reads accept
+    // the shapes Hugo would. Writes store the canonical type the caller passes in -
+    // normalizing sloppy types is the caller's job, not the store's.
 
     /// Accepts `Bool`, `"true"`/`"false"` (case-insensitive), or `0`/`1` `Int`.
     func boolValue(_ path: String) -> Bool? {

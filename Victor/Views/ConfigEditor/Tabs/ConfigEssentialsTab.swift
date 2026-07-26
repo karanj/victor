@@ -1,27 +1,14 @@
 import SwiftUI
 
-/// Essentials tab for Hugo configuration editor
-/// Handles basic site identity, theme, and copyright settings
+/// Essentials tab: site identity, theme, copyright.
 ///
-/// Phase 1d (CONFIG-SCHEMA-SPEC §2.6/§2.8): fields render via
-/// `ConfigFieldView`, driven off `config.store` directly. This body reads
-/// `config.store` (a plain `let`, not observed) and never a computed
-/// accessor (`config.baseURL` etc.) or `store.version` — that's
-/// `ConfigFieldView`'s job as the sole observation leaf, so a keystroke in
-/// one field invalidates only that field's row, not this tab body.
+/// Fields render via `ConfigFieldView` off `config.store`. This body never reads a
+/// computed accessor or `store.version` - that's the leaf's job, so a keystroke in one
+/// field doesn't invalidate the tab.
 ///
-/// Phase 5: `timeZone` is wired through `ConfigFieldView` unchanged — its
-/// schema entry became `.choice(ConfigSchema.timeZoneIdentifiers)`, and
-/// `ConfigFieldView` already switches to a searchable popover past 15
-/// options, so the "searchable time zone picker" requirement needed no new
-/// view code, just a schema-type change. `theme`, by contrast, gets a
-/// bespoke row (`ConfigThemeRowView` below): it needs a *runtime* directory
-/// listing (`themes/` on disk) plus free-text/array-shape preservation for
-/// module themes that aren't on disk, neither of which fits `.choice`'s
-/// static-option-list shape. `locale`/`languageCode` also get a bespoke row
-/// (`ConfigLocaleRowView`) per CONFIG-SCHEMA-SPEC §7.1 — one field observes
-/// and writes to either of two keys depending on file state, which no
-/// `ConfigValueType` case models.
+/// `theme` and `locale`/`languageCode` get bespoke rows: the first needs a runtime
+/// `themes/` listing plus shape preservation for module themes, the second writes to
+/// either of two keys depending on file state. Neither fits a `ConfigValueType` case.
 struct ConfigEssentialsTab: View {
     let config: HugoConfig
     /// Site root, for the `theme` field's `themeExists` validator (checks
@@ -59,12 +46,9 @@ struct ConfigEssentialsTab: View {
 
 // MARK: - Locale row (CONFIG-SCHEMA-SPEC §7.1)
 
-/// One row serving both `locale` and the deprecated `languageCode`: displays
-/// `locale` if present, else `languageCode` (badged "from languageCode
-/// (deprecated)" + one-click rename); edits write back to whichever key the
-/// file has; neither present writes `locale`; both present shows an inline
-/// lint suggesting removal of `languageCode` (`locale` wins either way — see
-/// `ConfigLocaleResolver`, the pure logic this row is a thin view over).
+/// One row serving both `locale` and the deprecated `languageCode`: shows whichever the
+/// file has, writes back to that same key, and lints when both are present (`locale`
+/// wins). Thin view over `ConfigLocaleResolver`, which holds the logic.
 private struct ConfigLocaleRowView: View {
     let store: ConfigValueStore
     let commit: () -> Void

@@ -1,16 +1,11 @@
 import SwiftUI
 
-/// Integrations tab for Hugo configuration editor (CONFIG-SCHEMA-SPEC §3.6,
-/// Phase 5) — analytics/comments/social-embed services, their paired privacy
-/// toggles, RSS/sitemap settings, and the bespoke output-formats matrix.
+/// Integrations tab (CONFIG-SCHEMA-SPEC §3.6): analytics/comments/social-embed services,
+/// their paired privacy toggles, RSS/sitemap settings, and the outputs matrix.
 ///
-/// Every row except the matrix is a `ConfigFieldView` off a schema key
-/// looked up by `ConfigSchema.spec(for:)`, same pattern as `ConfigMarkupTab`.
-/// The matrix (`ConfigOutputsMatrixSection`) is bespoke because its shape —
-/// a stringArray-per-kind row toggled cell-by-cell across a dynamic column
-/// set (built-ins ∪ the user's own `outputFormats` keys) — doesn't fit any
-/// existing `ConfigValueType`; its read/toggle/write-back logic is extracted
-/// into the pure, store-free `ConfigOutputsMatrix` type for direct testing.
+/// Every row but the matrix is a `ConfigFieldView`. The matrix is bespoke because a
+/// stringArray-per-kind toggled cell-by-cell across a dynamic column set fits no
+/// `ConfigValueType`; its logic lives in the pure `ConfigOutputsMatrix`.
 struct ConfigIntegrationsTab: View {
     let config: HugoConfig
 
@@ -107,12 +102,9 @@ struct ConfigIntegrationsTab: View {
         ConfigFieldView(spec: ConfigSchema.spec(for: key)!, store: config.store, context: validationContext)
     }
 
-    /// Every key this tab renders — the `ConfigFieldView` rows above plus the
-    /// 5 `outputs.<kind>` keys the bespoke matrix owns (they have schema
-    /// entries for the Advanced "All Settings" list's benefit, but the matrix
-    /// is their only UI; excluding them here stops them from *also* showing
-    /// as individual chip-array fields on Advanced). Feeds
-    /// `ConfigAdvancedTab`'s `renderedOnOtherTabs` exclusion set.
+    /// Every key this tab renders, including the `outputs.<kind>` keys the matrix owns -
+    /// they have schema entries for Advanced's All Settings list, but the matrix is their
+    /// only UI, so excluding them here stops them also appearing as chip fields.
     static var allRenderedKeys: Set<String> = [
         "services.googleAnalytics.ID", "privacy.googleAnalytics.disable", "privacy.googleAnalytics.respectDoNotTrack",
         "services.disqus.shortname", "privacy.disqus.disable",

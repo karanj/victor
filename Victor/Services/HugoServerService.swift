@@ -74,15 +74,11 @@ struct HugoServerConfig: Equatable {
 
 // MARK: - Line Buffer
 
-/// Accumulates raw pipe chunks and splits out complete lines for
-/// `HugoServerService.lines(from:)`. Chunk boundaries don't align with line
-/// boundaries, so a partial line is held until its newline arrives; `drain()`
-/// flushes whatever remains at EOF.
+/// Accumulates raw pipe chunks and splits out complete lines. Chunk boundaries don't align
+/// with line boundaries, so a partial line is held until its newline arrives.
 ///
-/// `@unchecked Sendable` + NSLock: the readabilityHandler that feeds `append`
-/// runs on a GCD queue while `drain` can race it at EOF/termination, and this
-/// type is captured by a `@Sendable` closure. All state access is inside the
-/// lock; the class is otherwise a leaf (no callbacks out while locked).
+/// `@unchecked Sendable` + NSLock: the readabilityHandler feeding `append` runs on a GCD
+/// queue while `drain` can race it at EOF. All state access is inside the lock.
 private final class LineBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var pending = Data()
@@ -187,22 +183,13 @@ actor HugoServerService {
     private var crashRecoveryAttempts = 0
     private let maxCrashRecoveryAttempts = 3
 
-    // MARK: - Observation (AsyncStream, WP3.5 Cluster 9 / M2)
+    // MARK: - Observation (AsyncStream)
     //
-    // `AsyncStream` is single-consumer: if two `for await` loops iterate the same
-    // stream, elements are split between them, not broadcast to both. Four
-    // independent places observe this service (SiteViewModel, LivePreviewPanel,
-    // ServerControlView, ServerLogView), and ServerLogView lives in a separate
-    // `Window` scene with no `SiteViewModel` in its environment
-    // (`VictorApp.swift`), so consolidating to one consumer that republishes
-    // isn't available. Each call to `statusUpdates()`/`buildErrorUpdates()`/
-    // `outputUpdates()` creates an independent stream+continuation pair,
-    // preserving the previous multicast-callback-registry behavior. The
-    // consuming `Task`'s cancellation is the only deregistration mechanism now:
-    // there is no `removeOnXChange(id:)`-shaped method anymore - letting the
-    // `for await` loop's task end (e.g. a SwiftUI `.task {}` tearing down when
-    // its view disappears) triggers `AsyncStream`'s `onTermination`, which
-    // removes that continuation here.
+    // `AsyncStream` is single-consumer - two `for await` loops split elements rather than
+    // both receiving them. Four places observe this service, and `ServerLogView` is in a
+    // separate Window scene with no `SiteViewModel`, so one consumer that republishes
+    // isn't available. Each `…Updates()` call makes its own stream+continuation pair;
+    // the consuming Task's cancellation is the only deregistration mechanism.
     private var statusContinuations: [UUID: AsyncStream<HugoServerStatus>.Continuation] = [:]
     private var buildErrorContinuations: [UUID: AsyncStream<[HugoBuildError]>.Continuation] = [:]
     private var outputContinuations: [UUID: AsyncStream<[String]>.Continuation] = [:]
@@ -524,17 +511,11 @@ actor HugoServerService {
 
     // MARK: - Output Handling
 
-    /// Pump stdout/stderr line-by-line via the `lines(from:)` readabilityHandler
-    /// bridge below. NOT `FileHandle.bytes.lines`: AsyncBytes funnels its
-    /// BLOCKING `read(2)` calls through a shared per-process IO executor, so
-    /// two pipes iterated concurrently starve each other - the pipe with no
-    /// data (hugo writes little to stderr) parks a blocking read that stops the
-    /// stdout reader from ever being serviced again. In production that meant
-    /// hugo's "Web Server is available" line was never consumed and status
-    /// stuck at `.starting` forever while the real server served fine
-    /// (stuck-on-starting fix, 2026-07-06; pinned by
-    /// testSilentSecondPipeDoesNotStarveActivePipe). EOF (the process's pipe
-    /// write end closing) finishes the stream and the loop exits normally.
+    /// Pump stdout/stderr via the `lines(from:)` readabilityHandler bridge. NOT
+    /// `FileHandle.bytes.lines`: AsyncBytes funnels blocking `read(2)` through a shared
+    /// per-process IO executor, so two concurrently-iterated pipes starve each other - the
+    /// silent one parks a blocking read and the stdout reader is never serviced again.
+    /// That left status stuck on `.starting` forever while the server ran fine.
     private func setupOutputHandlers(outputPipe: Pipe, errorPipe: Pipe) {
         stdoutTask = Task { [weak self] in
             for await line in Self.lines(from: outputPipe.fileHandleForReading) {
@@ -550,18 +531,12 @@ actor HugoServerService {
         }
     }
 
-    /// Bridge a pipe's read end into an `AsyncStream` of lines using
-    /// `readabilityHandler` - GCD invokes the handler only when data actually
-    /// exists (or at EOF), so nothing ever blocks waiting on a silent pipe.
-    /// Empty `availableData` signals EOF: flush any partial trailing line,
-    /// clear the handler, finish the stream. Cancelling the consuming task
-    /// fires `onTermination`, which also clears the handler - the same
-    /// teardown contract `stop()` relied on with the old direct
-    /// readabilityHandler code.
+    /// Bridge a pipe's read end into an `AsyncStream` of lines. GCD invokes the handler only
+    /// when data exists (or at EOF), so nothing blocks on a silent pipe. Empty
+    /// `availableData` means EOF: flush the partial line, clear the handler, finish.
     ///
-    /// `nonisolated static` (not an actor method): the handler runs on GCD's
-    /// arbitrary queue and must not hop through this actor - the whole point
-    /// is that pumping never contends with actor work.
+    /// `nonisolated static`: the handler runs on GCD's queue and must not hop through this
+    /// actor - the point is that pumping never contends with actor work.
     nonisolated static func lines(from handle: FileHandle) -> AsyncStream<String> {
         AsyncStream { continuation in
             let buffer = LineBuffer()

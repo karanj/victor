@@ -153,11 +153,8 @@ struct DataFormEditorView: View {
 
 // MARK: - Raw Editor
 //
-// The recursive `DataDictionaryEditor`/`DataArrayEditor`/`DataValueEditor`
-// family used by `DataFormEditorView` above now lives in
-// `Views/Components/RecursiveValueEditor.swift` — extracted (Config Editor
-// v2 Phase 2) so the Advanced tab's Site Params / unknown-keys sections can
-// reuse it against a `ConfigValueStore` subtree instead of `DataFile.data`.
+// The recursive editor family lives in `Views/Components/RecursiveValueEditor.swift`,
+// shared with the config editor's Advanced tab.
 
 struct DataRawEditorView: View {
     @Bindable var dataFile: DataFile

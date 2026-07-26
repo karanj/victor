@@ -1,18 +1,11 @@
 import Foundation
 
-/// Resolves where a dropped/imported image file should be copied to within a Hugo
-/// site, and how it should be referenced from markdown once it's there.
+/// Resolves where a dropped image should be copied within a Hugo site, and how markdown
+/// should reference it. Extends `Asset.markdownSyntax`'s existing static/assets convention
+/// with the page-bundle case: an image dropped while editing a file inside a page bundle
+/// is copied alongside it as a page resource and referenced by bare filename.
 ///
-/// Mirrors the convention already encoded in `Asset.markdownSyntax` for existing
-/// static/assets files (`isInAssetsDir ? relativePath : "/\(relativePath)"`), extended
-/// with the page-bundle case: an image dropped while editing a file that lives inside
-/// a Hugo page bundle (e.g. `content/posts/my-post/index.md`) is copied alongside that
-/// bundle as a Hugo "page resource" and referenced by bare filename, rather than being
-/// copied to `static/` and referenced root-relatively.
-///
-/// This is pure/deterministic path logic - no file I/O - so it's unit-testable without
-/// touching disk. `FileSystemService.importFile` performs the actual copy using the
-/// `directory` this resolves to.
+/// Pure path logic, no file I/O - `FileSystemService.importFile` performs the copy.
 enum ImageDropPathResolver {
     /// Where a dropped file should be copied, and how to build its markdown reference
     /// once the copy has produced a final (possibly de-duplicated) filename.

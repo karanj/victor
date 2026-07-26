@@ -1,18 +1,10 @@
 import SwiftUI
 
-/// Content tab for Hugo configuration editor
-/// Handles build options and content-summary settings.
+/// Content tab: build options and content-summary settings, rendered via `ConfigFieldView`
+/// off `config.store`.
 ///
-/// Phase 1d: buildDrafts/buildFuture/buildExpired/summaryLength render via
-/// `ConfigFieldView` off `config.store`.
-///
-/// Phase 5 (CONFIG-SCHEMA-SPEC §3.3): the Permalinks section and
-/// `enableRobotsTXT` moved wholesale to `ConfigURLsTaxonomiesTab` — the spec
-/// places both under "URLs & Taxonomies", not Content. This tab keeps only
-/// the build flags + summaryLength it already had (no other §3.2 fields were
-/// wired up here before this phase, so none are added now — see the task
-/// brief's "Content tab keeps build flags + summaryLength + the §3.2 fields
-/// it has").
+/// Permalinks and `enableRobotsTXT` live on `ConfigURLsTaxonomiesTab` per
+/// CONFIG-SCHEMA-SPEC §3.3, not here.
 struct ConfigContentTab: View {
     let config: HugoConfig
 

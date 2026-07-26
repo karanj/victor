@@ -606,14 +606,9 @@ final class FrontmatterParser: @unchecked Sendable {
         }
     }
 
-    /// Parse date string (supports multiple Hugo date formats)
-    /// Deliberately still `DateFormatter`, not `Date.ParseStrategy` (victor-mod item 2
-    /// exception): this is a lenient fallback *parse* cascade over untrusted, hand-edited
-    /// frontmatter content, not a fixed-format *format* call - `Date.ParseStrategy`
-    /// doesn't have a graceful "try, return nil on mismatch" API surface as clean as
-    /// `DateFormatter.date(from:)`, and re-deriving four format/locale/timezone
-    /// combinations' exact leniency (optional offsets, optional seconds) against real
-    /// Hugo content risked behavior changes for a P4 grab-bag item. Left as-is.
+    /// Parse date string (supports multiple Hugo date formats). Deliberately still
+    /// `DateFormatter`: this is a lenient fallback cascade over hand-edited frontmatter,
+    /// and `Date.ParseStrategy` has no equally clean "try, return nil on mismatch" surface.
     private func parseDate(_ dateString: String) -> Date? {
         let formatters = [
             "yyyy-MM-dd'T'HH:mm:ssZ",      // ISO 8601 with timezone

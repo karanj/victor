@@ -28,12 +28,9 @@ enum ConfigLintCatalog {
         let key: String
         let replacementKey: String
         let message: String
-        /// True for `paginate`/`paginatePath`: the value moves to the new key
-        /// unchanged, so a one-click rename is safe. False for the
-        /// `googleAnalytics`/`disqusShortname` root fallbacks: Hugo still
-        /// reads them (this is "legacy location", not "removed"), and moving
-        /// the value could collide with an already-set nested value, so no
-        /// auto-fix button is offered — explanatory text only.
+        /// True for `paginate`/`paginatePath`, where the value moves unchanged. False for
+        /// the `googleAnalytics`/`disqusShortname` fallbacks - Hugo still reads those, and
+        /// moving the value could collide with an already-set nested one.
         let renameIsPure: Bool
     }
 

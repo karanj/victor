@@ -113,15 +113,10 @@ struct EditorPanelView: View {
             viewModel.cleanup()
         }
         .navigationTitle(viewModel.navigationTitle)
-        // Publish this editor's actions to the menu bar (Format menu, File >
-        // Save/Revert). EditorActions is Equatable by editorID, so re-running
-        // this body does NOT invalidate VictorApp's @FocusedValue (and with it
-        // the whole .commands NSMenu tree) - only a file switch does. The
-        // hasUnsavedChanges closure consults isFileModified (transition-guarded
-        // modifiedFileIDs), NOT viewModel.hasUnsavedChanges, so menu validation
-        // never registers a dependency on per-keystroke content state. Both
-        // halves are load-bearing for typing latency (keystroke-lag fix, part 2;
-        // see EditorActions' doc comment and EditorActionsTests).
+        // EditorActions is Equatable by editorID, so re-running this body doesn't
+        // invalidate VictorApp's @FocusedValue (and the whole .commands tree) - only a
+        // file switch does. hasUnsavedChanges consults isFileModified, not
+        // viewModel.hasUnsavedChanges, so menu validation never depends on typing state.
         .focusedValue(\.editorActions, EditorActions(
             editorID: fileNode.id,
             formatting: { format in
@@ -165,12 +160,10 @@ struct EditorPanelView: View {
         .onChange(of: contentFile.markdownContent) { _, newValue in
             viewModel.updateContent(from: newValue)
         }
-        // NOTE deliberately absent: no .onChange(of: viewModel.editableContent).
-        // That read would re-register this whole body against per-keystroke
-        // content state. Typing is handled entirely inside the editableContent
-        // setter (dirty flag + auto-save) - keystroke-lag fix, part 2.
-        // Handle frontmatter changes using lightweight version counter
-        // This avoids expensive snapshot creation/comparison on every render cycle
+        // Deliberately no .onChange(of: viewModel.editableContent) - that read would
+        // re-register this whole body against per-keystroke state. Typing is handled in
+        // the editableContent setter. Frontmatter uses a version counter to avoid
+        // snapshot comparison on every render.
         .onChange(of: contentFile.frontmatter?.version) { _, _ in
             viewModel.handleContentChange()
         }
@@ -379,13 +372,9 @@ struct LivePreviewToggle: View {
     }
 }
 
-/// Save button with animated indicator showing save state.
-///
-/// Reads isSaving/showSavedIndicator/hasUnsavedChanges from the viewModel in its
-/// OWN body - hasUnsavedChanges reads per-keystroke content state, and taking it
-/// as a plain value would force every ancestor that constructs this view to
-/// re-evaluate per keystroke (keystroke-lag fix, part 2). This leaf re-rendering
-/// per keystroke is cheap; EditorPanelView's whole body doing so is not.
+/// Save button with animated indicator. Reads per-keystroke state in its OWN body -
+/// taking `hasUnsavedChanges` as a plain value would force every ancestor to
+/// re-evaluate per keystroke. This leaf doing so is cheap; EditorPanelView is not.
 struct SaveButton: View {
     let viewModel: EditorViewModel
     let reduceMotion: Bool

@@ -2,12 +2,9 @@ import XCTest
 import CoreGraphics
 @testable import Victor
 
-/// Tests for the two pure helpers introduced by the Advanced-tab layout
-/// unification (2026-07-27): `DataValueSummary`, which supplies the child
-/// count shown on a container row's disclosure header, and
-/// `WrappingHStackLine.breakIntoLines`, the greedy first-fit line breaker
-/// behind `WrappingHStack` (the chip row for `.stringArray` config fields,
-/// which an `HStack` could not wrap).
+/// Tests for the two pure helpers behind the Advanced-tab layout unification:
+/// `DataValueSummary` (a container row's child count) and
+/// `WrappingHStackLine.breakIntoLines` (the greedy line breaker behind `WrappingHStack`).
 final class DataValueSummaryTests: XCTestCase {
 
     // MARK: - Dictionaries

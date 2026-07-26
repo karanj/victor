@@ -1,18 +1,9 @@
 import SwiftUI
 
-/// Menus tab for Hugo configuration editor — site-level menus (`[menus]` /
-/// `[menu]` in the config file), not to be confused with the per-page
-/// frontmatter `MenusTab.swift` (unrelated data model: `Frontmatter.menus:
-/// [MenuEntry]`). Interaction patterns (draft-commit text fields, add/delete
-/// forms) are adapted from that file and from `ConfigContentTab`'s
-/// `PermalinkRowView`, but this tab is self-contained.
+/// Menus tab: site-level menus (`[menus]`/`[menu]` in the config file). Not to be confused
+/// with the per-page frontmatter `MenusTab.swift`, an unrelated data model.
 ///
-/// CONFIG-SCHEMA-SPEC §3.4. Every mutation funnels through
-/// `applyMenuMutation`, the single write path: mutate `config.menus` →
-/// `config.commitMenus()` (writes the store under the preserved
-/// `menuKeySpelling`) → the `configCommitAction` environment action
-/// (`HugoConfig.syncRawContentFromStructuredData()`, same environment key
-/// every other tab's `ConfigFieldView` commits through).
+/// CONFIG-SCHEMA-SPEC §3.4. Every mutation funnels through `applyMenuMutation`.
 struct ConfigMenusTab: View {
     @Bindable var config: HugoConfig
 
@@ -184,13 +175,9 @@ struct ConfigMenusTab: View {
 
     // MARK: - Single write path
 
-    /// The one place `config.menus` is mutated. Every call site here does:
-    /// mutate → `commitMenus()` (writes the store under `menuKeySpelling`) →
-    /// `configCommitAction` (`syncRawContentFromStructuredData`, keeping
-    /// `hasUnsavedChanges`/the toolbar save button correct) — the same
-    /// triple every other Config Editor tab's leaf rows perform through
-    /// `ConfigFieldView`, kept in one helper so menus can't drift onto a
-    /// second write path.
+    /// The one place `config.menus` is mutated: mutate -> `commitMenus()` (writes the store
+    /// under the preserved `menuKeySpelling`) -> `configCommitAction`. Kept in one helper
+    /// so menus can't drift onto a second write path.
     private func applyMenuMutation(_ mutate: (inout [String: [HugoMenuItem]]) -> Void) {
         mutate(&config.menus)
         config.commitMenus()
@@ -388,13 +375,9 @@ private struct ConfigMenuItemRow: View {
 
 // MARK: - Draft-commit text field
 
-/// Local `@State` draft, committed on blur/submit only — never per keystroke
-/// (CLAUDE.md's Per-Keystroke Invalidation Contract). Same pattern as
-/// `ConfigFieldView.swift`'s `ConfigTextDraftRow`, reimplemented here rather
-/// than shared: that type is `private` and reads/writes a `ConfigValueStore`
-/// directly, whereas `HugoMenuItem` fields flow through `onUpdate` closures
-/// over immutable struct copies — different enough plumbing that sharing
-/// would mean threading a store-shaped adapter through a model that has none.
+/// Local draft, committed on blur/submit only (CLAUDE.md per-keystroke contract).
+/// Reimplemented rather than sharing `ConfigFieldView`'s equivalent: that one reads and
+/// writes a `ConfigValueStore`, whereas `HugoMenuItem` fields flow through `onUpdate`.
 private struct DraftTextField: View {
     let label: String
     let placeholder: String

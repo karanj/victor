@@ -1,13 +1,9 @@
 import SwiftUI
 
-/// URLs & Taxonomies tab for Hugo configuration editor (CONFIG-SCHEMA-SPEC
-/// §3.3, Phase 5) — renamed/reorganized from the former "Taxonomies" tab.
+/// URLs & Taxonomies tab (CONFIG-SCHEMA-SPEC §3.3), renamed from the former Taxonomies tab.
 ///
-/// Contents, in order: the bespoke taxonomies pair editor (unchanged), the
-/// Permalinks section (moved wholesale from `ConfigContentTab` — same
-/// `PermalinkRowView`/`InsertTokenMenuButton` types, just relocated), then
-/// pagination/URL-handling/section fields wired through `ConfigFieldView`.
-/// `enableRobotsTXT` moved here from Content per §3.3's field placement.
+/// In order: the bespoke taxonomies pair editor, the Permalinks section (moved wholesale
+/// from `ConfigContentTab`), then pagination/URL/section fields via `ConfigFieldView`.
 struct ConfigURLsTaxonomiesTab: View {
     @Bindable var config: HugoConfig
     @State private var newSingular = ""

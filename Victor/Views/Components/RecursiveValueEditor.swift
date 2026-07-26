@@ -1,35 +1,18 @@
 import SwiftUI
 
-/// Recursive `[String: Any]` / `[Any]` / scalar editor family, extracted from
-/// `DataFileEditorView` (Config Editor v2 Phase 2, CONFIG-SCHEMA-SPEC §3.7) so
-/// it has two call sites: the data-file form editor (`DataFormEditorView`)
-/// and the Hugo Config Editor's Advanced tab (`ConfigAdvancedTab` — Site
-/// Params, unknown-keys sections).
+/// Recursive `[String: Any]` / `[Any]` / scalar editor family, shared by the data-file form
+/// editor and the config editor's Advanced tab (Site Params, unknown keys).
 ///
-/// Both call sites follow the same two-closure shape already established by
-/// `DataFormEditorView`: the `Binding`'s `set` performs the actual
-/// persistent write (into `DataFile.data` or a `ConfigValueStore` subtree),
-/// and `onChanged` is the caller's own "I just persisted, now sync/commit"
-/// hook (`markChanged()` for data files, `configCommitAction` for config).
-/// Neither call site needs `onChanged` to also carry the value — it's a
-/// pure "something changed" signal.
+/// The `Binding`'s `set` performs the persistent write; `onChanged` is the caller's
+/// "now sync/commit" hook - a pure signal, it doesn't carry the value.
 ///
-/// **Layout contract:** every editor emits bare rows — no wrapping
-/// `VStack`/`ScrollView`, no self-drawn card chrome. Scalars are
-/// `LabeledContent` so they inherit the host `Form`'s label column;
-/// containers are `DisclosureGroup`. Both call sites host this inside
-/// `Form { … }.formStyle(.grouped)`.
+/// **Layout contract:** every editor emits bare rows - no wrapping `VStack`/`ScrollView`,
+/// no self-drawn card chrome. Scalars are `LabeledContent` so they inherit the host
+/// `Form`'s label column; containers are `DisclosureGroup`. Both call sites host this
+/// inside `Form { … }.formStyle(.grouped)`.
 ///
-/// Typing-latency note (CLAUDE.md Per-Keystroke Invalidation Contract,
-/// CONFIG-SCHEMA-SPEC §2.8): scalar text/number leaves hold a local `@State`
-/// draft and commit to their binding on blur/submit only — the same pattern
-/// as `ConfigFieldView`'s `ConfigTextDraftRow`/`ConfigIntFieldRow`. This
-/// matters now that the family is reachable from the config editor, whose
-/// contract forbids per-keystroke writes; it's a behavior-preserving change
-/// for the data-file editor too (edits still land, just on blur instead of
-/// every keystroke — fewer redundant re-serializations of `DataFile.rawContent`).
-/// Toggles commit immediately: a checkbox flip is one discrete edit, not a
-/// keystroke stream, so no draft state is needed there.
+/// Scalar leaves keep a local draft and commit on blur/submit, never per keystroke
+/// (CLAUDE.md per-keystroke contract). Toggles commit immediately.
 
 /// Shared with `ConfigFieldView` so both land on the same widths in the
 /// Advanced tab's Form.
@@ -334,12 +317,10 @@ struct DataScalarEditor: View {
     }
 }
 
-// MARK: - Scalar draft-commit rows (typing-latency contract)
+// MARK: - Scalar draft-commit rows
 //
-// Local `@State` draft, committed to `value` on blur/submit only — never per
-// keystroke. Generalizes `ConfigFieldView.ConfigTextDraftRow`/
-// `ConfigIntFieldRow`/`ConfigDoubleFieldRow` for a plain `Binding<Any>`
-// rather than a `ConfigValueStore` key path.
+// Local `@State` draft, committed on blur/submit only. Generalizes `ConfigFieldView`'s
+// equivalents for a plain `Binding<Any>` rather than a `ConfigValueStore` key path.
 
 private struct DataScalarTextRow: View {
     @Binding var value: Any

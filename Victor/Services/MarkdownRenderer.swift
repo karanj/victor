@@ -1,12 +1,9 @@
 import Foundation
 import Down
 
-/// Service for rendering markdown content to HTML
-/// Note: Render methods are stateless and can be called from any thread.
-/// Callers should decide execution context based on their needs.
-/// `@unchecked Sendable` per Cluster 2 of WP3.5: the only stored mutable state
-/// is the `lazy var githubStyleCSS` memoization below, which is idempotent
-/// (same value regardless of which thread computes it first).
+/// Renders markdown to HTML. Render methods are stateless and callable from any thread.
+/// `@unchecked Sendable`: the only mutable state is the `lazy var githubStyleCSS`
+/// memoization, which is idempotent.
 final class MarkdownRenderer: @unchecked Sendable {
     static let shared = MarkdownRenderer()
 

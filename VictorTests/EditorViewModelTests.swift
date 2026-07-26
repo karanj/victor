@@ -615,20 +615,9 @@ final class EditorViewModelTests: XCTestCase {
 
     // MARK: - Integration Tests with Real Timing
 
-    /// Integration test: Verifies auto-save uses captured content, not current editableContent
-    /// This test uses REAL TIMING to verify the race condition fix works in practice.
-    ///
-    /// Strengthened (keystroke-lag perf ticket): the original version relied on the
-    /// default 2s debounce and a fixed 3s wait - "the flaky-but-related one" per the
-    /// redesign review, since a hardcoded absolute sleep against a hardcoded default
-    /// delay is exactly the kind of timing coupling that gets flaky under load. Now
-    /// sets `autoSaveDelay` explicitly to a short, deterministic value (like
-    /// AutoSaveServiceTests already does) and injects its own `AutoSaveService()`
-    /// instance for cross-test isolation (victor-zw4) rather than the process-wide
-    /// `.shared` actor. Same critical assertions as before, now proving the guarantee
-    /// holds under EditorViewModel's redesigned debounce (a MainActor Task in
-    /// EditorViewModel itself, building the full document once at fire time) - not
-    /// just the old design (actor-side debounce, content captured at schedule time).
+    /// Auto-save must use captured content, not the current `editableContent`. Uses real
+    /// timing, with an explicit short `autoSaveDelay` and its own AutoSaveService instance
+    /// rather than a hardcoded sleep against the default delay (which went flaky under load).
     func testAutoSaveUsesCorrectContentAfterFileSwitchDuringDebounce() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -725,16 +714,9 @@ final class EditorViewModelTests: XCTestCase {
                       "File 2 should remain unchanged")
     }
 
-    /// FIX (keystroke-lag perf ticket): frontmatter serialization now happens once, at
-    /// fire time, from LIVE state - not captured as a fixed string back when the
-    /// debounce was scheduled. This edits the frontmatter DIRECTLY on the model
-    /// (deliberately NOT calling handleContentChange() again) while the debounce from
-    /// an earlier markdown edit is still in flight, simulating any edit path that
-    /// doesn't happen to re-trigger scheduling. Under the OLD design
-    /// (`buildFullContent` captured synchronously inside `scheduleAutoSave`, before the
-    /// actor's debounce even started), this edit is silently lost - the string handed
-    /// to the actor was already finalized. RED under the pre-fix code; green once the
-    /// full document is built once, at fire time, from `contentFile.frontmatter` live.
+    /// Frontmatter is serialized once at fire time from live state, not captured when the
+    /// debounce was scheduled. Edits the model directly (deliberately not re-triggering
+    /// scheduling) mid-debounce; under the old design this edit was silently lost.
     func testFrontmatterEditedDuringDebounceWindowReachesDisk() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(0.5, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -791,17 +773,10 @@ final class EditorViewModelTests: XCTestCase {
         XCTAssertFalse(onDisk.contains("Original Title"), "Stale frontmatter must not linger on disk")
     }
 
-    /// Rapid keystrokes must coalesce into exactly one disk write, containing only the
-    /// FINAL edit's content. Each `handleContentChange()` call cancels and respawns
-    /// EditorViewModel's own debounce Task; this proves that coalescing still holds
-    /// after moving the debounce out of the actor and skipping per-keystroke
-    /// serialization. (Caveat documented where the assertions are: black-box disk
-    /// reads can't literally count write syscalls without instrumenting
-    /// AutoSaveService itself, which the DI design deliberately avoids doing via a
-    /// protocol/spy - "no behavioral fakes". What's provable, and what this test
-    /// proves, is the equivalent externally-observable contract: no premature write
-    /// lands before the debounce elapses, and exactly the final content lands once it
-    /// does, with nothing further arriving afterward.)
+    /// Rapid keystrokes must coalesce into one write containing only the final edit.
+    /// Black-box disk reads can't count write syscalls, so what's asserted is the
+    /// equivalent observable contract: nothing lands early, the final content lands once,
+    /// and nothing arrives after.
     func testRapidKeystrokesResultInExactlyOneDiskWriteAfterDelay() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -916,23 +891,11 @@ final class EditorViewModelTests: XCTestCase {
                        "ContentFile model should be updated with saved content")
     }
 
-    /// victor-rnm regression, hardened further after post-launch program review:
-    /// a debounced auto-save scheduled BEFORE a rename must not recreate the
-    /// file at the OLD (now-deleted) path once its debounce would have fired.
-    /// The FIRST fix (reading `contentFile.url` fresh at fire time) only
-    /// protected a write that was allowed to proceed; it did nothing to stop
-    /// one, so it couldn't prevent a genuinely in-flight write from racing the
-    /// rename (see AutoSaveServiceTests.testCancelDebounceAwaitsInFlightWorkBeforeReturning
-    /// for that half). The registry added on top makes cancellation REAL:
-    /// `SiteViewModel.renameFile` now cancels-and-awaits EditorViewModel's
-    /// registered debounce Task before touching disk. For a Task that's still
-    /// sleeping (this test's scenario - rename lands at 0.05s into a 0.4s
-    /// debounce), that means the debounce is genuinely interrupted and NEVER
-    /// writes - the edit stays pending in the per-file cache (survives the
-    /// rename, proven by testRenamePreservesEditedContentKeyedByUUID) rather
-    /// than landing anywhere. That's a deliberate, safe behavior change from
-    /// the first fix's draft (which let the write through, redirected to the
-    /// new path) - simpler, and the edit is never lost either way.
+    /// A debounce scheduled before a rename must not recreate the file at the old path.
+    /// Reading `contentFile.url` fresh at fire time only protects a write that proceeds;
+    /// the registry makes cancellation real. For a still-sleeping Task (the case here)
+    /// the debounce is interrupted and never writes - the edit stays pending in the
+    /// per-file cache and survives the rename.
     func testRenameCancelsStillSleepingDebounceInsteadOfLettingItWriteAnywhere() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -949,16 +912,9 @@ final class EditorViewModelTests: XCTestCase {
         let originalURL = tempDir.appendingPathComponent("original.md")
         try "original content".write(to: originalURL, atomically: true, encoding: .utf8)
 
-        // Production wiring always has SiteViewModel and EditorViewModel sharing
-        // ONE AutoSaveService instance (both default to `.shared`) - a fresh
-        // instance here is for cross-TEST isolation only, and it must be the
-        // SAME instance passed to both, or renameFile's cancelDebounce would be
-        // cancelling a registry a different actor instance never saw (that bug
-        // existed in an earlier draft of this test - it happened to still pass
-        // because of the fresh-URL-read fix below, independent of cancellation
-        // actually reaching the Task - see
-        // testRenameFileCancelsAndDeregistersEditorViewModelsRegisteredDebounce
-        // for a test that WOULD catch that class of wiring bug).
+        // Production has SiteViewModel and EditorViewModel sharing one AutoSaveService. A
+        // fresh instance here is for cross-test isolation only, and must be the SAME one
+        // passed to both, or cancelDebounce would target a registry the other never saw.
         let sharedAutoSaveService = AutoSaveService()
         let renameSiteViewModel = SiteViewModel(fileSystemService: FileSystemService(), autoSaveService: sharedAutoSaveService)
         renameSiteViewModel.site = await HugoSite.create(rootURL: tempDir)
@@ -980,14 +936,9 @@ final class EditorViewModelTests: XCTestCase {
         editorVM.editableContent = "edited content"
         editorVM.handleContentChange()
 
-        // De-flake (#51): wait for the debounce Task's actual registration
-        // signal instead of a wall-clock guess. Registration is the Task's
-        // first action, but Task scheduling can lag arbitrarily under a loaded
-        // suite - the old fixed 50ms sleep raced it, letting renameFile's
-        // cancelDebounce run against an empty registry so the test asserted a
-        // scenario it never actually set up. Polling the registry pins the
-        // intended precondition: registered AND still sleeping (the 0.4s
-        // debounce delay is far beyond this poll's resolution).
+        // Wait for the Task's actual registration signal, not a wall-clock guess (#51): Task
+        // scheduling can lag under load, and the old fixed sleep raced it, leaving
+        // cancelDebounce running against an empty registry.
         let registrationDeadline = Date().addingTimeInterval(5)
         while await sharedAutoSaveService.debounceRegistrationCount == 0 {
             guard Date() < registrationDeadline else {
@@ -1021,17 +972,10 @@ final class EditorViewModelTests: XCTestCase {
                        "the edit must survive the cancelled debounce, ready for the next auto-save or manual save")
     }
 
-    /// Direct wiring proof (post-launch review followup): the disk-content test
-    /// above passes even if `renameFile`'s cancellation never reached
-    /// EditorViewModel's Task, because the rename happens well before the
-    /// debounce fires and `scheduleAutoSave` independently reads
-    /// `contentFile.url` fresh at fire time (see its doc comment). That test
-    /// alone can't distinguish "cancellation is wired correctly" from
-    /// "cancellation is a no-op and we got lucky on timing". This test can:
-    /// it asserts AutoSaveService's registry directly, which only reflects
-    /// reality if EditorViewModel truly registers under the node's id and
-    /// SiteViewModel.renameFile truly cancels-and-awaits that exact
-    /// registration.
+    /// Wiring proof: the disk-content test above passes even if cancellation never reaches
+    /// EditorViewModel's Task, since the rename lands well before the debounce fires and
+    /// the URL is read fresh anyway. This asserts the registry directly, which only
+    /// reflects reality if registration and cancel-and-await are genuinely wired.
     func testRenameFileCancelsAndDeregistersEditorViewModelsRegisteredDebounce() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(5.0, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) // long enough to still be pending when we check

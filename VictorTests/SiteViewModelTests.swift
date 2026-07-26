@@ -8,30 +8,17 @@ final class SiteViewModelTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        // SiteViewModel.init() unconditionally kicks off a background Task that
-        // restores whatever real Hugo site is bookmarked in UserDefaults on this
-        // machine (SiteViewModel.loadSavedSite()). In synchronous tests that Task
-        // never gets a chance to run, but any test with an `await` after
-        // constructing SiteViewModel() yields control back to the scheduler and
-        // lets it interleave, silently overwriting fileNodes/selectedNode with a
-        // real site out from under the test. Clearing the bookmark key makes
-        // loadSavedSite() a guaranteed no-op regardless of what's persisted
-        // locally, so async tests are deterministic.
+        // SiteViewModel.init() kicks off a background restore of whatever site is
+        // bookmarked on this machine; clearing the key makes it a no-op so any test
+        // with an `await` can't have its fileNodes overwritten mid-run.
         UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.hugoSiteBookmark)
     }
 
     // MARK: - Selection Assertion Helpers (victor-sel)
     //
-    // Two different helpers for two different jobs (SELECTION-MODEL-MEMO.md
-    // section 8): `assertSelection` checks the selection equals a SPECIFIC
-    // expected node (or the fully-cleared state), for retrofitting existing
-    // tests that already assert a particular `selectedNode?.id`.
-    // `assertSelectionInvariant` checks INTERNAL CONSISTENCY only - that
-    // `selectedNode`/`selectedFileID`/`selectedFileIDs` never drift from each
-    // other, regardless of what's selected - for the new lead-derivation and
-    // batch-trash tests, where the point is to catch a future change that
-    // mutates `selectedNode` without going through the canonical
-    // `applySelectionChange`/`selectNode` write path.
+    // `assertSelection` checks a specific expected node; `assertSelectionInvariant`
+    // checks only that selectedNode/selectedFileID/selectedFileIDs never drift apart,
+    // catching a future change that bypasses the canonical write path.
 
     /// Asserts all three selection properties reflect `node` (or the
     /// fully-cleared state if `node` is nil) - written once so the ~12
@@ -138,16 +125,11 @@ final class SiteViewModelTests: XCTestCase {
 
     // MARK: - Observation Storm Guard Tests
     //
-    // Diagnosed keystroke-lag mechanism: EditorViewModel.handleContentChange runs on
-    // every keystroke and calls markFileModified/clearFileModified. An unconditional
-    // Set.insert/remove mutates `modifiedFileIDs` (and fires Observation) even when
-    // the member is already present/absent. Since Phase 1, two expensive listeners
-    // read `hasUnsavedChanges` (which reads `modifiedFileIDs`): ContentView's body
-    // (edited-dot) and VictorApp's .commands .disabled() validation - so an
-    // unguarded mutation re-renders the window body AND rebuilds NSMenu items on
-    // every keystroke, not just on the rare state transitions. These tests assert
-    // the guarded, no-mutation-on-repeat behavior directly via Observation itself
-    // (not just the end state), since the end state looks identical either way.
+    // markFileModified/clearFileModified run per keystroke. An unconditional
+    // Set.insert/remove fires Observation even when the member is already
+    // present/absent, re-rendering ContentView and rebuilding the .commands NSMenu.
+    // These assert the guarded behaviour via Observation itself - the end state
+    // looks identical either way.
 
     /// Sanity check for the tracking mechanism itself: a genuine state transition
     /// (not-modified -> modified) MUST still fire Observation. Without this, the
@@ -241,16 +223,11 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isFileRecentlySaved(nodeID), "recentlySavedFileIDs should still be updated")
     }
 
-    // MARK: - Edited-Content Version Tests (keystroke-lag fix, part 2)
+    // MARK: - Edited-Content Version Tests
     //
-    // The live preview and inspector must learn about typing WITHOUT piggybacking
-    // on unrelated view invalidations (the old behavior: they watched
-    // `currentEditingContent`, whose backing FileCacheManager is not @Observable,
-    // so their onChange only re-evaluated when the per-keystroke focused-value
-    // storm happened to re-render everything). `editedContentVersion` is the
-    // deliberate, narrow signal: bumped on every content edit, observed ONLY by
-    // views that genuinely need per-keystroke wake-ups (each with its own
-    // debounce). Menu validation must NOT depend on it - see the test below.
+    // `editedContentVersion` is the narrow signal for views that genuinely need
+    // per-keystroke wake-ups (preview, inspector - each debounced). Menu validation
+    // must not depend on it; see the test below.
 
     /// Every setEditedContent call must bump the version so content observers
     /// (preview, inspector stats) get a change signal.
@@ -299,12 +276,9 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(observedChange, "Preview/inspector rely on editedContentVersion firing per edit")
     }
 
-    /// The menu-validation contract: menu items' .disabled() closures consult
-    /// isFileModified (backed by transition-guarded modifiedFileIDs). Once a file
-    /// is already dirty, a subsequent keystroke - content write plus the redundant
-    /// markFileModified that handleContentChange issues - must not fire Observation
-    /// for an isFileModified reader. This is the invariant that keeps NSMenu
-    /// rebuilds off the per-keystroke path; if it regresses, typing lag returns.
+    /// Once a file is already dirty, a further keystroke must not fire Observation for
+    /// an `isFileModified` reader - that invariant is what keeps NSMenu rebuilds off
+    /// the typing path.
     func testKeystrokeOnAlreadyDirtyFileDoesNotFireMenuValidationObservation() {
         let viewModel = SiteViewModel()
         let nodeID = UUID()
@@ -333,12 +307,9 @@ final class SiteViewModelTests: XCTestCase {
 
     // MARK: - Live Preview Auto-Enable (server-status stream)
 
-    /// The status stream replays the CURRENT status to every new subscriber
-    /// (HugoServerService replay-on-subscribe). Auto-enabling live preview must
-    /// key off genuine stopped->running TRANSITIONS, not off any .running value
-    /// observed - otherwise every re-subscribe (window re-appear re-running
-    /// setupHugoServerObservers) forces the user back to live preview after
-    /// they deliberately switched to markdown preview.
+    /// The status stream replays its current value to every new subscriber, so
+    /// auto-enable must key off genuine stopped->running transitions; otherwise every
+    /// re-subscribe overrides a user who deliberately switched to markdown preview.
     func testAutoEnableLivePreviewOnlyOnActualStartTransition() {
         // Replayed current state (no previous value) is not a transition.
         XCTAssertFalse(SiteViewModel.shouldAutoEnableLivePreview(previous: nil, new: .running(port: 1313)))
@@ -584,12 +555,8 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isFileModified(node.id))
     }
 
-    /// Phase-1 review P0: TextFile-backed edits (css/js/yaml routed to
-    /// TextEditorPanel) never reached modifiedFileIDs, so this branch of
-    /// saveAllModifiedFiles was unreachable in practice and Cmd+Q / Save All
-    /// silently discarded dirty plain-text files. Now that
-    /// TextEditorViewModel reports dirty state (see TextEditorViewModelTests),
-    /// this confirms the save side actually persists once marked.
+    /// TextFile-backed edits (css/js/yaml) never reached `modifiedFileIDs`, so Cmd+Q /
+    /// Save All silently discarded dirty plain-text files. Confirms they now persist.
     func testSaveAllModifiedFilesWritesDirtyTextFileToDisk() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
@@ -812,23 +779,10 @@ final class SiteViewModelTests: XCTestCase {
                        "a folder's children must be re-sorted after a rename changes sort order")
     }
 
-    /// Highest-risk bug flagged in victor-rnm: a debounced auto-save scheduled
-    /// BEFORE the rename must not land at the OLD path once its debounce fires
-    /// AFTER the rename completes.
-    ///
-    /// Post-launch program review found the FIRST version of this test
-    /// (exercising `AutoSaveService.scheduleAutoSave` directly) was validating
-    /// a call path `renameFile` doesn't actually use in production - nothing
-    /// registers into that URL-keyed dictionary outside tests (see
-    /// `scheduleAutoSave`'s doc comment). Rewritten to drive a REAL
-    /// EditorViewModel debounce (the thing that's actually registered/
-    /// cancelled now) through the SAME AutoSaveService instance `viewModel`
-    /// uses - production always shares one instance (`.shared`) between
-    /// SiteViewModel and EditorViewModel; a mismatched instance here would let
-    /// this test pass for the wrong reason (see
-    /// EditorViewModelTests.testRenameFileCancelsAndDeregistersEditorViewModelsRegisteredDebounce,
-    /// which asserts the registry directly rather than inferring correctness
-    /// from disk content/timing).
+    /// A debounced auto-save scheduled before a rename must not land at the old path
+    /// once it fires (victor-rnm). Drives a real EditorViewModel debounce through the
+    /// SAME AutoSaveService instance the view model uses - production shares one, and
+    /// a mismatched instance here would let this pass for the wrong reason.
     func testRenameCancelsPendingAutoSaveForOldPath() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(0.3, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -1026,14 +980,9 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path), "no-op must not touch disk")
     }
 
-    /// Same rewrite/rationale as testRenameCancelsPendingAutoSaveForOldPath
-    /// (see its doc comment): the original version exercised
-    /// `AutoSaveService.scheduleAutoSave` directly, a call path `moveNode`
-    /// doesn't actually use in production. Rewritten to drive a real
-    /// EditorViewModel debounce through the SAME AutoSaveService instance
-    /// `viewModel` uses, and to assert the registry directly (not just disk
-    /// timing) so a broken nodeID/instance wiring would actually fail this
-    /// test instead of passing for the wrong reason.
+    /// Same shape and rationale as testRenameCancelsPendingAutoSaveForOldPath: drives a
+    /// real EditorViewModel debounce through the shared AutoSaveService instance and
+    /// asserts the registry, not just disk timing.
     func testMoveNodeCancelsPendingAutoSaveForOldPath() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
         UserDefaults.standard.set(0.3, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -1481,12 +1430,9 @@ final class SiteViewModelTests: XCTestCase {
     }
 
     // MARK: - Navigation History Reload/Prune Tests
-    // (Phase-1 review P0: FileNode UUIDs regenerate on every rescan, so
-    // reloadSite() must reset history outright rather than let stale IDs
-    // linger; separately, navigateBack()/navigateForward() must prune any
-    // other dead entry - e.g. a node deleted or moved out of the tree
-    // without a full reload - and continue to the next live one instead of
-    // silently consuming a Back/Forward press with no visible effect.)
+    // FileNode UUIDs regenerate on rescan, so reloadSite() resets history outright;
+    // back/forward separately prune any other dead entry and continue to the next
+    // live one rather than silently consuming the keypress.
 
     func testReloadSiteResetsNavigationHistory() async {
         let viewModel = SiteViewModel()
@@ -1529,12 +1475,9 @@ final class SiteViewModelTests: XCTestCase {
         viewModel.selectNode(nodeB)
         viewModel.selectNode(nodeC)
 
-        // Actually delete nodeB through the real removal path - this both drops
-        // it from the tree and purges SiteViewModel's node-lookup cache
-        // (nodeByID), exactly like a user deleting a file via the sidebar would.
-        // (A direct `fileNodes = [...]` reassignment isn't equivalent: findNode(id:)
-        // checks nodeByID first, and selectNode's selectedFileID didSet had
-        // already opportunistically cached nodeB there before this point.)
+        // Delete through the real removal path so nodeByID is purged too - a direct
+        // `fileNodes = [...]` reassignment isn't equivalent, since findNode(id:) checks
+        // that cache first and nodeB was already opportunistically cached there.
         await viewModel.moveToTrash(node: nodeB)
 
         viewModel.navigateBack()
@@ -1575,13 +1518,10 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canNavigateForward, "B should have been pruned, leaving only C ahead of the cursor")
     }
 
-    // MARK: - Sidebar Drop Import Tests (W3.3/victor-dnd, Phase-end review Fix A)
-    // Phase-end review P1: filterNodesRecursively hands FolderRowWithSheets an
-    // ephemeral FileNode COPY (fresh UUID) for folders with a mix of matching and
-    // non-matching children under an active search - attaching an import directly
-    // to that copy would make the file land on disk but vanish from the sidebar on
-    // the next filter recompute. importDroppedFile must resolve the canonical node
-    // by URL before attaching anything.
+    // MARK: - Sidebar Drop Import Tests (W3.3/victor-dnd)
+    // Under an active search, filterNodesRecursively hands out an ephemeral FileNode
+    // copy; attaching an import to it would land the file on disk but vanish it from
+    // the sidebar on the next recompute. The canonical node must be resolved by URL.
 
     func testImportDroppedFileDuringActiveSearchAttachesToCanonicalFolder() async throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -2011,12 +1951,10 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.selectedFileIDs.isEmpty)
     }
 
-    // MARK: - Lead Derivation Tests (victor-sel, SELECTION-MODEL-MEMO.md section 1)
+    // MARK: - Lead Derivation Tests (SELECTION-MODEL-MEMO.md §1)
     //
-    // Each test drives `selectedFileIDs = ...` directly, simulating what
-    // `List(selection:)` does on click/shift-click/cmd-click/Cmd+A, and
-    // asserts `selectedNode`/`selectedFileID` land on the exact id the
-    // algorithm in SELECTION-MODEL-MEMO.md section 1 predicts.
+    // Each drives `selectedFileIDs` directly, simulating what List(selection:) does,
+    // and asserts the lead lands where the derivation algorithm predicts.
 
     func testLeadDerivation_singleAdd_becomesLead() {
         let viewModel = SiteViewModel()
@@ -2139,22 +2077,11 @@ final class SiteViewModelTests: XCTestCase {
         assertSelectionInvariant(viewModel)
     }
 
-    // MARK: - Canonical Path Side-Effect Tests (victor-sel, orchestrator correction)
+    // MARK: - Canonical Path Side-Effect Tests (victor-sel)
     //
-    // The memo's original "applySelectionChange sets selectedNode/selectedFileID
-    // as plain assignments, never through selectNode" construction (its Risks
-    // section) directly contradicted the memo's own section 4 claim that
-    // "single-click-to-select already opens the file as a side effect of
-    // selectNode's content loading": selectedFileID's own didSet still fired
-    // and called selectNode, but immediately early-returned once selectedNode
-    // already matched - silently skipping content loading, navigation
-    // history, and recent-files tracking for every selection made through the
-    // List's Set binding (i.e. every plain click). The orchestrator's fix
-    // (isApplyingSelection + performLeadChange, both in SiteViewModel.swift)
-    // makes applySelectionChange the canonical path that OWNS those side
-    // effects. These tests prove the fix - each drives selectedFileIDs (or
-    // the legacy selectedFileID) directly, the way SwiftUI's List binding or
-    // an external caller would, and never calls selectNode(_:) itself.
+    // `applySelectionChange` owns the lead-change side effects (content load, history,
+    // recents). Each test drives `selectedFileIDs` (or legacy `selectedFileID`) the way
+    // SwiftUI's List binding would, and never calls selectNode(_:) itself.
 
     func testSelectedFileIDsDirectWrite_loadsContentLikeSelectNode() {
         let viewModel = SiteViewModel()
@@ -2238,12 +2165,8 @@ final class SiteViewModelTests: XCTestCase {
         let nodeB = FileNode(url: URL(fileURLWithPath: "/test/b.md"), isDirectory: false)
         viewModel.fileNodes = [nodeA, nodeB]
 
-        // Legacy external write path (bypasses selectNode AND selectedFileIDs
-        // directly) - must collapse into the canonical Set and run side
-        // effects exactly once per write: not zero (the pre-correction bug,
-        // where selectedFileID's didSet called selectNode but immediately
-        // early-returned) and not twice (a reentrancy bug re-entering
-        // applySelectionChange via isApplyingSelection failing to suppress it).
+        // Legacy external write path - must collapse into the canonical Set and run side
+        // effects exactly once: not zero, and not twice via reentrancy.
         viewModel.selectedFileID = nodeA.id
         XCTAssertEqual(viewModel.selectedFileIDs, [nodeA.id], "selectedFileID's didSet must collapse into the canonical Set")
         XCTAssertFalse(viewModel.canNavigateBack, "first selection: nowhere to go back to yet - proves this pushed exactly one history entry, not zero")
@@ -2259,15 +2182,10 @@ final class SiteViewModelTests: XCTestCase {
         assertSelectionInvariant(viewModel)
     }
 
-    // MARK: - Invalidation Contract Tests (victor-sel, SELECTION-MODEL-MEMO.md section 8)
+    // MARK: - Invalidation Contract Tests (SELECTION-MODEL-MEMO.md §8)
     //
-    // Mirrors testMarkFileModifiedFiresObservationOnActualTransition/
-    // testMarkFileModifiedIsNoOpWhenAlreadyModified (:104-144) for
-    // selectedFileIDs - the guarded no-op on identical-Set reassignment is
-    // the highest-risk item in the whole design (a naive unconditional
-    // didSet would turn every List-internal re-delivery of the same
-    // selection into an Observation event, the same class of bug as the two
-    // prior keystroke-lag incidents).
+    // The guarded no-op on identical-Set reassignment is the highest-risk item in the
+    // design: unguarded, every List-internal re-delivery becomes an Observation event.
 
     func testSelectedFileIDsFiresObservationOnActualTransition() {
         let viewModel = SiteViewModel()
@@ -2285,12 +2203,8 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(observedChange, "Sanity check: an actual transition must still fire Observation")
     }
 
-    /// Re-verified after the orchestrator's isApplyingSelection correction:
-    /// at the moment of this test's second (redundant) assignment,
-    /// isApplyingSelection is already back to false (reset via `defer` at the
-    /// end of the first assignment's applySelectionChange call), so the
-    /// didSet guard reduces to the original `selectedFileIDs != oldValue`
-    /// check - unaffected by the reentrancy-suppression addition.
+    /// By the second (redundant) assignment `isApplyingSelection` is already back to
+    /// false, so the didSet guard reduces to the plain `!= oldValue` check.
     func testSelectedFileIDsIsNoOpWhenReassignedSameSet() {
         let viewModel = SiteViewModel()
         let nodeID = UUID()
@@ -2312,16 +2226,11 @@ final class SiteViewModelTests: XCTestCase {
         )
     }
 
-    // MARK: - Batch Trash Tests (victor-sel, SELECTION-MODEL-MEMO.md section 5)
+    // MARK: - Batch Trash Tests (SELECTION-MODEL-MEMO.md §5)
     //
-    // No injectable spy is available for FileOperationsService/FileSystemService
-    // within this package's touchable-file scope, so these exercise real disk
-    // I/O via temp directories (mirroring the existing rename/moveToTrash tests
-    // above). "Trashed exactly once, not twice" for a pruned descendant is
-    // verified indirectly: if pruning failed and a second trashItem call ran
-    // against the descendant's now-vanished path (removed when its ancestor
-    // was trashed), FileManager.trashItem throws and populates errorMessage -
-    // that's the observable proxy for the call-count assertion the memo asks for.
+    // Real disk I/O via temp directories - no injectable spy exists here. "Trashed
+    // once, not twice" for a pruned descendant is verified indirectly: a second
+    // trashItem against its vanished path would throw and populate errorMessage.
 
     func testMoveToTrashBatch_prunesDescendantsOfSelectedFolder() async throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -2430,17 +2339,11 @@ final class SiteViewModelTests: XCTestCase {
         assertSelectionInvariant(viewModel)
     }
 
-    // MARK: - Undo/Redo Tests (victor-und, Docs/MAC-ARSED-GAP-PLAN.md Phase C.1)
+    // MARK: - Undo/Redo Tests (Docs/UNDO-REDO-NOTES.md)
     //
-    // `SiteViewModel.registerFileOpUndo` registers `UndoManager.registerUndo(withTarget:handler:)`,
-    // whose handler is synchronous - the handler spawns a `Task { @MainActor in ... }`
-    // to run the actual (async) inverse file operation. That means
-    // `undoManager.undo()`/`.redo()` return before the inverse has actually
-    // finished, so these tests poll via `waitUntilUndoSettled` rather than
-    // asserting immediately after the call - mirrors the `Task.sleep`-based
-    // polling already used elsewhere in this suite (AutoSaveServiceTests,
-    // EditorViewModelTests) instead of a single fixed sleep, so they aren't
-    // flaky under load.
+    // The UndoManager handler is synchronous and spawns a Task for the async inverse,
+    // so undo()/redo() return before the work finishes - these poll via
+    // `waitUntilUndoSettled` rather than asserting immediately.
 
     /// Polls `condition` until it returns true or `timeout` elapses. See the
     /// MARK comment above for why undo/redo tests need this instead of a
@@ -2607,12 +2510,8 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: urlA.path), "redo must re-trash the file")
     }
 
-    /// Batch of 2 (one file, one folder) - undo must restore both on disk at
-    /// their original paths, re-insert the folder's own child too (trashing
-    /// a folder unregisters/removes its whole subtree, so restoring it must
-    /// bring the subtree back), and re-insert both nodes in sorted position
-    /// (directories first, then alphabetical - `FileNode.sortChildren`'s
-    /// convention) among the untouched survivor.
+    /// Batch of 2 (file + folder): undo restores both at their original paths, brings the
+    /// folder's subtree back, and re-inserts in sorted position among the survivor.
     func testUndoTrashBatchRestoresFilesAndFolderInSortedPositionAndRedoReTrashesAll() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
@@ -2710,16 +2609,11 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertEqual(folderNode.children.map(\.id), [node.id])
     }
 
-    // MARK: - Undo/Redo Re-entrancy Tests (victor-und, program-review D.R finding)
+    // MARK: - Undo/Redo Re-entrancy Tests (Docs/UNDO-REDO-NOTES.md rule 2)
     //
-    // UndoManager treats an undo/redo action as "complete" the instant its
-    // synchronous handler returns - canUndo/canRedo and the Edit menu
-    // re-enable immediately, even though the actual file operation is still
-    // an in-flight async Task (see `SiteViewModel.lastFileOpUndoTask`'s doc
-    // comment). These tests fire undo()/redo() back-to-back with NO settle
-    // wait in between - exactly the rapid-mash window that would otherwise
-    // run two inverse operations concurrently - then settle ONCE at the end
-    // via `waitUntilUndoSettled` and assert the final state is coherent.
+    // UndoManager re-enables Cmd-Z the instant a handler returns, while the inverse is
+    // still in flight. These fire undo()/redo() back-to-back with no settle wait -
+    // the rapid-mash window - then settle once at the end and assert coherence.
 
     func testRapidUndoRedoRenameSettlesToRedoneState() async throws {
         let tempDir = FileManager.default.temporaryDirectory
@@ -2825,14 +2719,9 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(folderBNode.children.contains { $0.id == fileNode.id })
     }
 
-    /// Trash chain rapid undo→redo→undo (three ping-pong steps, no settle
-    /// wait between any of them) - this is the specific case program review
-    /// flagged: a synchronous `switch box.state` read at handler-fire time
-    /// would see a STALE generation here, since none of the three inverse
-    /// operations have had a chance to run (let alone finish and update the
-    /// box) by the time all three handlers have fired. Asserts the box
-    /// settles to a single coherent generation - exactly one node, not
-    /// duplicated or lost across the three steps.
+    /// Three ping-pong steps with no settle wait: a synchronous `switch box.state` read
+    /// at handler-fire time would see a stale generation here, since none of the three
+    /// inverses have run yet. Asserts the box settles to one coherent generation.
     func testRapidTrashChainUndoRedoUndoSettlesCoherently() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")

@@ -31,11 +31,8 @@ actor AutoSaveService {
     ///   - onSuccess: Callback when save succeeds
     ///   - onError: Callback when save fails
     ///
-    /// Callback parameters are `@Sendable @MainActor` (WP3.5 Cluster 8): `@MainActor`
-    /// alone says where the closure runs, but doesn't make the closure *value* legal
-    /// to store in this actor's isolated state - that's what `@Sendable` is for. No
-    /// call-site changes needed: callers' closures already only capture `weak self`
-    /// plus Sendable primitives (`UUID`/`URL`), which already satisfies `@Sendable`.
+    /// Callbacks are `@Sendable @MainActor`: `@MainActor` says where they run,
+    /// `@Sendable` is what makes the closure value legal to store in this actor's state.
     func scheduleAutoSave(
         fileURL: URL,
         content: String,
@@ -89,29 +86,13 @@ actor AutoSaveService {
         saveTasks.removeValue(forKey: fileURL)
     }
 
-    /// Perform a conflict-checked save immediately, without this actor's own debounce.
+    /// Conflict-checked save without this actor's own debounce - `EditorViewModel` owns a
+    /// MainActor debounce and builds the full document once at fire time, so the wait is
+    /// already over by the time it calls this. Still reuses `performSave`.
     ///
-    /// (Perf ticket, post-victor-zw4): `EditorViewModel` now owns its own MainActor
-    /// debounce Task (reading `AppSettings.currentAutoSaveDelay()` directly) and builds
-    /// the full document - frontmatter serialization + markdown concat - exactly once,
-    /// at fire time, from LIVE state, rather than on every keystroke. By the time that
-    /// Task calls this method the wait is already over, so debouncing again here would
-    /// just add a second, redundant delay. This still reuses `performSave` for the
-    /// conflict-detection/`NSFileCoordinator` write - only the debounce wrapper is
-    /// skipped.
-    ///
-    /// `scheduleAutoSave` (above) is kept rather than removed or converted: nothing
-    /// currently calls it (TextEditorViewModel was never wired to `AutoSaveService` -
-    /// it has always had its own separate hand-rolled MainActor debounce + direct
-    /// `FileSystemService.writeFile` call, with no conflict detection), so there's no
-    /// compatibility need to preserve. It's kept because it's still correct, still
-    /// covered by AutoSaveServiceTests, and deleting/rewriting working, tested code
-    /// purely to shrink the file isn't worth the churn this session - see the
-    /// implementation report for victor's keystroke-lag fix. Its URL-keyed
-    /// `saveTasks`/`cancelAutoSave(for:)` are a self-contained subsystem, separate
-    /// from the node-ID-keyed debounce registry below - SiteViewModel.renameFile/
-    /// moveNode use the latter, not this one, since nothing registers into
-    /// `saveTasks` in production (see the registry's intro comment for the story).
+    /// `scheduleAutoSave` above is unused in production but kept: it's correct, covered,
+    /// and its URL-keyed `saveTasks` are a separate subsystem from the node-ID registry
+    /// below, which is what rename/move actually use.
     func scheduleImmediateSave(
         fileURL: URL,
         content: String,
@@ -160,29 +141,14 @@ actor AutoSaveService {
 
     // MARK: - Node-Keyed Debounce Registry (victor-rnm TOCTOU hardening)
     //
-    // Program review after victor-rnm shipped found the `cancelAutoSave(for:)`
-    // calls SiteViewModel.renameFile/moveNode made were dead: nothing in
-    // production calls `scheduleAutoSave` above (see its doc comment) - only
-    // EditorViewModel/TextEditorViewModel's own LOCAL per-keystroke debounce
-    // Tasks exist in production, and those were never registered anywhere this
-    // actor could reach. That left a real TOCTOU: a rename/move landing while
-    // one of those local Tasks was already past its own cancellation check and
-    // into `scheduleImmediateSave`/`performSave` (both of which run on THIS
-    // actor's executor, not the caller's MainActor, and don't check
-    // `Task.isCancelled` themselves) could still write to the pre-rename path
-    // after the rename completed - recreating the file there with rename's
-    // node-id-preserving semantics masking the corruption (staleness guards
-    // pass, "Saved" shows, but Hugo now sees two content files).
+    // The `cancelAutoSave(for:)` calls rename/move used to make were dead - nothing in
+    // production registers into `saveTasks`. That left a real TOCTOU: a rename landing
+    // while an editor's local debounce Task was already past its own cancellation check
+    // could still write to the pre-rename path, recreating the file there.
     //
-    // This registry closes that structurally: callers register their own debounce
-    // Task under the FileNode.id it saves for (stable across rename/move, unlike
-    // a URL key), and `cancelDebounce(nodeID:)` doesn't just call `.cancel()` and
-    // hope - it AWAITS the Task's actual completion before returning, so a caller
-    // like SiteViewModel.renameFile can't proceed with the disk op until any
-    // in-flight write for that node has either been stopped (still sleeping) or
-    // has fully landed (already writing - lands at the pre-rename path, which is
-    // still valid at that moment, and the rename then carries that fresh content
-    // forward).
+    // Callers now register their debounce Task under the FileNode.id it saves for
+    // (stable across rename/move, unlike a URL), and `cancelDebounce(nodeID:)` awaits
+    // the Task's completion rather than just calling `.cancel()` and hoping.
 
     /// Debounce Tasks owned by callers (EditorViewModel/TextEditorViewModel),
     /// keyed by the FileNode.id they save for - NOT the URL-keyed `saveTasks`
@@ -224,20 +190,12 @@ actor AutoSaveService {
         debounceTokensByNodeID.removeValue(forKey: nodeID)
     }
 
-    /// Cancel the debounce Task registered for `nodeID` (if any) and WAIT for it
-    /// to actually finish before returning - not just call `.cancel()` and move
-    /// on. Cancellation is cooperative: by the time a caller reaches this, the
-    /// Task may already be past its own `Task.isCancelled` check and into a
-    /// write that doesn't itself observe cancellation (see this section's intro
-    /// comment). Awaiting `task.value` blocks until the Task is completely done
-    /// either way, so there is no window left for a write to land after this
-    /// method returns.
+    /// Cancel the debounce registered for `nodeID` and WAIT for it to finish. Cancellation
+    /// is cooperative, and the Task may already be past its own check and into a write
+    /// that doesn't observe cancellation - awaiting `task.value` leaves no window.
     ///
-    /// Loops rather than a single cancel-and-await: if a NEW debounce gets
-    /// registered for the same nodeID while we were awaiting the previous one
-    /// (e.g. a keystroke lands during the await), that new registration isn't
-    /// safe to leave pending either - re-checking the registry after each await
-    /// picks it up too, converging once nothing re-registers.
+    /// Loops rather than a single cancel-and-await: a new debounce registered for the
+    /// same node while we awaited the previous one isn't safe to leave pending either.
     func cancelDebounce(nodeID: UUID) async {
         while let task = debounceTasksByNodeID[nodeID] {
             task.cancel()
@@ -307,14 +265,9 @@ actor AutoSaveService {
         }
     }
 
-    /// Get the modification date of a file, off the actor.
-    /// `nonisolated` + `@concurrent` replaces `Task.detached` here (victor-tdt audit):
-    /// this private method was actor-isolated purely by inheriting `AutoSaveService`'s
-    /// isolation, not because it touches any actor state. `@concurrent` (SE-0461)
-    /// compiler-pins this to the concurrent executor - verified to compile in this
-    /// project's Swift 6.0 language mode with no upcoming-feature flag - so the blocking
-    /// `FileManager` call is guaranteed off the actor regardless of the
-    /// `NonisolatedNonsendingByDefault` setting, not merely under today's default.
+    /// Get the modification date of a file, off the actor. This was actor-isolated only by
+    /// inheriting the enclosing isolation; `@concurrent` pins the blocking `FileManager`
+    /// call to the concurrent executor.
     @concurrent
     private nonisolated func getFileModificationDate(url: URL) async throws -> Date {
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)

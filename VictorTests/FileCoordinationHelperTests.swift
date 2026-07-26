@@ -1,14 +1,9 @@
 import XCTest
 @testable import Victor
 
-/// Tests for `withFileCoordination`, the shared helper that replaced the hand-rolled
-/// `withCheckedThrowingContinuation` + `didResume` dance previously duplicated in
-/// `AutoSaveService.performSave`, `FileSystemService.renameFile`, and
-/// `FileSystemService.duplicateFile` (victor-mod grab-bag item 3).
-///
-/// Covers the three paths the helper's contract distinguishes: the accessor block
-/// succeeding, the accessor block failing (including a thrown error), and coordination
-/// itself failing before the accessor block ever runs.
+/// Tests for `withFileCoordination`, covering the three paths its contract distinguishes:
+/// the accessor block succeeding, the accessor block failing, and coordination itself
+/// failing before the accessor ever runs.
 final class FileCoordinationHelperTests: XCTestCase {
 
     private var tempDirectory: URL!
@@ -86,14 +81,10 @@ final class FileCoordinationHelperTests: XCTestCase {
 
     // MARK: - Coordinator-error path
 
-    /// When coordination itself fails *before* the accessor block ever runs,
-    /// `NSFileCoordinator.coordinate` sets its `error:` out-parameter and never invokes
-    /// the accessor at all - so `resume` is never called from inside the block. This is
-    /// difficult to trigger deterministically with a genuine `NSFileCoordinator` in a
-    /// unit test (it requires an actual competing file presenter/coordinator), so this
-    /// exercises the helper's own contract directly: a `body` that returns a non-nil
-    /// `NSError` without ever calling `resume` must still resolve the `async` call by
-    /// throwing that error.
+    /// When coordination fails before the accessor runs, `resume` is never called. That's
+    /// hard to trigger with a real `NSFileCoordinator` in a unit test, so this exercises
+    /// the helper's contract directly: a `body` returning an error without calling
+    /// `resume` must still resolve the `async` call by throwing.
     func testCoordinatorErrorPathThrowsWhenAccessorBlockNeverRuns() async {
         let simulatedError = NSError(domain: "FileCoordinationHelperTests", code: 42)
 

@@ -1,14 +1,9 @@
 import XCTest
 @testable import Victor
 
-/// Tests for TextEditorViewModel, focused on the dirty-state wiring added by
-/// the phase-1 review P0 fix: TextFile-backed edits (css/js/yaml/toml/json
-/// routed through TextEditorPanel) previously never reached
-/// SiteViewModel.modifiedFileIDs, so the edited-dot, Close Site confirmation,
-/// applicationShouldTerminate, and Save All all silently missed dirty
-/// plain-text files. TextEditorViewModel now reports dirty/clean state via a
-/// weak `siteViewModel` reference plus the FileNode.id it was loaded with
-/// (mirroring the pattern EditorViewModel uses for markdown files).
+/// Tests for TextEditorViewModel's dirty-state wiring. TextFile-backed edits (css/js/yaml
+/// via TextEditorPanel) previously never reached `modifiedFileIDs`, so the edited-dot,
+/// Close Site confirmation, terminate handler and Save All all missed them.
 @MainActor
 final class TextEditorViewModelTests: XCTestCase {
 
@@ -135,15 +130,10 @@ final class TextEditorViewModelTests: XCTestCase {
 
     // MARK: - Auto-Save Debounce Registry (victor-rnm TOCTOU hardening, post-launch review)
 
-    /// Mirrors EditorViewModelTests.testRenameFileCancelsAndDeregistersEditorViewModelsRegisteredDebounce:
-    /// `self.save()` writes via `fileSystemService.writeFile`, which is
-    /// `@concurrent` (runs off this ViewModel's MainActor) and doesn't observe
-    /// `Task.isCancelled`, so a plain `.cancel()` on the local debounce Task
-    /// can't stop a write already in flight - only AutoSaveService's node-ID-keyed
-    /// registry lets `SiteViewModel.renameFile` cancel-AND-AWAIT it before
-    /// touching disk. Asserts the registry directly (not just disk content/
-    /// timing) so a broken nodeID/instance wiring would fail this test instead
-    /// of passing for the wrong reason.
+    /// `save()` writes via `@concurrent` `writeFile`, which doesn't observe
+    /// `Task.isCancelled`, so a plain `.cancel()` can't stop an in-flight write - only the
+    /// node-ID registry lets rename cancel-AND-AWAIT. Asserts the registry directly so a
+    /// broken nodeID/instance wiring fails rather than passing for the wrong reason.
     func testRenameFileCancelsAndDeregistersTextEditorViewModelsRegisteredDebounce() async throws {
         let previousDelay = AppSettings.shared.autoSaveDelay
         let previousEnabled = AppSettings.shared.isAutoSaveEnabled

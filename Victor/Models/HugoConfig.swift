@@ -1,14 +1,9 @@
 import Foundation
 import SwiftUI
 
-/// Represents a Hugo site configuration.
-///
-/// Phase 1c (CONFIG-SCHEMA-SPEC §2.9): backed by `ConfigValueStore`. The 13
-/// legacy typed fields below are computed accessors over the store — getters
-/// fall back to Hugo's default when the key is absent, setters write through
-/// `store.set`/`store.remove`, which is what marks a key present or absent.
-/// Presence is now purely structural ("is this key in the store"), replacing
-/// the Phase 0 `presentRootKeys`/`loadedTypedValues` bridge.
+/// Represents a Hugo site configuration, backed by `ConfigValueStore`. The legacy typed
+/// fields below are computed accessors over the store: getters fall back to Hugo's default
+/// when the key is absent, setters write through, and presence is purely structural.
 @Observable
 class HugoConfig: EditableFile {
     // MARK: - Identification
@@ -405,14 +400,9 @@ enum ConfigParseError: LocalizedError {
 // MARK: - HugoConfig Dictionary Initializer
 
 extension HugoConfig {
-    /// - Parameter dictionary: the parsed config, seeded directly into a
-    ///   fresh `ConfigValueStore` — normalization already happened once in
-    ///   `HugoConfigParser.parse`, and the store re-normalizes defensively
-    ///   at construction (harmless double-normalize, CONFIG-SCHEMA-SPEC §2.9
-    ///   item 1). All shape preservation (theme string-vs-array, permalinks
-    ///   flat-vs-nested, menu/menus spelling) now falls out of the store
-    ///   holding the raw dictionary verbatim, rather than bespoke per-field
-    ///   parsing.
+    /// - Parameter dictionary: seeded directly into a fresh `ConfigValueStore`. Shape
+    ///   preservation (theme string-vs-array, permalinks flat-vs-nested, menu/menus
+    ///   spelling) falls out of the store holding the raw dictionary verbatim.
     convenience init(from dictionary: [String: Any], format: ConfigFormat, url: URL, rawContent: String = "", orderedRootKeys: [String]? = nil) {
         self.init(store: ConfigValueStore(root: dictionary, orderedRootKeys: orderedRootKeys))
         self.sourceURL = url
@@ -492,13 +482,9 @@ extension HugoMenuItem {
         case pageRef
     }
 
-    /// Enforces `url` XOR `pageRef`. Setting a **non-empty** value for one
-    /// field clears the other (Hugo only honors one). Setting an empty/nil
-    /// value only clears the field being edited — blanking an unused field
-    /// must never wipe out a value already set on its sibling.
-    ///
-    /// Pure: returns a new item, never mutates `item`. Used by
-    /// `ConfigMenusTab`'s per-item link editor.
+    /// Enforces `url` XOR `pageRef` - Hugo honours only one. Setting a non-empty value for
+    /// one clears the other; setting an empty value clears only the field being edited, so
+    /// blanking an unused field can't wipe its sibling. Pure: returns a new item.
     static func settingLink(_ item: HugoMenuItem, type: LinkType, value: String?) -> HugoMenuItem {
         var updated = item
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -529,13 +515,9 @@ extension HugoMenuItem {
 }
 
 private extension HugoConfig {
-    /// Establishes the observation dependency on `store.version` before
-    /// running `body`, so every computed accessor above depends on the
-    /// store's single observable signal (`store.root` itself is
-    /// `@ObservationIgnored` and must never be read directly by a getter —
-    /// CLAUDE.md's Per-Keystroke Invalidation Contract / CONFIG-SCHEMA-SPEC
-    /// §2.8). A method (not a free function) so `_ = store.version` is
-    /// spelled once and can't be forgotten on a new accessor.
+    /// Establishes the observation dependency on `store.version` before running `body`.
+    /// `store.root` is `@ObservationIgnored` and must never be read directly by a getter.
+    /// A method so `_ = store.version` is spelled once and can't be forgotten.
     func tracked<T>(_ body: () -> T) -> T {
         _ = store.version
         return body()
