@@ -10,19 +10,11 @@ enum BadgeShape {
 
 // MARK: - Badge Modifier
 
-/// A view modifier that applies consistent badge styling across the app
+/// Applies consistent badge styling across the app.
 ///
-/// Usage:
-/// ```swift
-/// Text("Draft")
-///     .badgeStyle(color: .orange)
-///
-/// Text("Block")
-///     .badgeStyle(color: .blue, shape: .capsule)
-///
-/// Text("42")
-///     .countBadgeStyle()
-/// ```
+///     Text("Draft").badgeStyle(color: .orange)
+///     Text("Block").badgeStyle(color: .blue, shape: .capsule)
+///     Text("42").countBadgeStyle()
 struct BadgeModifier: ViewModifier {
     let color: Color
     let font: Font

@@ -3,13 +3,9 @@ import XCTest
 
 /// Tests for AutoSaveService debouncing, per-file scheduling, and delay preference.
 ///
-/// victor-zw4: each test constructs its own `AutoSaveService()` instance instead of
-/// reaching `AutoSaveService.shared` - the actor's `init()` is now non-private for
-/// exactly this reason. A fresh instance per test means pending-save state (saveTasks/
-/// saveTokens) from one test can never bleed into another via the process-wide
-/// singleton, which is what made this suite need serialized UserDefaults cleanup
-/// before. The debounce interval itself is still read from `AppSettings`/UserDefaults
-/// statics (`AppSettings.currentAutoSaveDelay()`), so that setup/teardown is unchanged.
+/// Each test constructs its own `AutoSaveService()` so pending-save state can't bleed
+/// between tests via the singleton (victor-zw4). The debounce interval still comes from
+/// the `AppSettings` statics, so that setup/teardown is unchanged.
 final class AutoSaveServiceTests: XCTestCase {
 
     private var tempDir: URL!
@@ -97,12 +93,9 @@ final class AutoSaveServiceTests: XCTestCase {
         await service.cancelAutoSave()
     }
 
-    /// victor-zw4 isolation proof: two independently-constructed `AutoSaveService`
-    /// instances must not share pending-save state. Scheduling (and cancelling) a
-    /// save on instance A must have no effect on instance B's pending save for the
-    /// same file URL - if the two accidentally shared state (e.g. both still resolved
-    /// to the same `.shared` singleton), cancelling on A would also cancel B's save,
-    /// and B's file would never be written.
+    /// Isolation proof: two independently-constructed instances must not share pending-save
+    /// state. If they accidentally resolved to the same singleton, cancelling on A would
+    /// also cancel B's save and B's file would never be written.
     func testTwoInstancesHaveIndependentPendingSaves() async throws {
         UserDefaults.standard.set(0.3, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
 
@@ -142,12 +135,7 @@ final class AutoSaveServiceTests: XCTestCase {
 
     // MARK: - Node-Keyed Debounce Registry (victor-rnm TOCTOU hardening)
     //
-    // Program review found the URL-keyed `cancelAutoSave(for:)` calls
-    // SiteViewModel.renameFile/moveNode made were dead - nothing in production
-    // registers into `saveTasks` (see `scheduleAutoSave`'s doc comment; only
-    // this suite's own tests above call it directly). These tests cover the
-    // node-ID-keyed registry that replaced that call, in isolation from
-    // EditorViewModel/TextEditorViewModel/SiteViewModel - see
+    // Covers the registry in isolation from the view models. See
     // EditorViewModelTests/TextEditorViewModelTests/SiteViewModelTests for the
     // real-caller wiring proofs.
 

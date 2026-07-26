@@ -321,14 +321,9 @@ final class FileSystemService: @unchecked Sendable {
         let modificationDate: Date
     }
 
-    /// Read content file from disk
-    /// File I/O is performed on a background thread to avoid blocking the main thread.
-    /// `Task.detached` is kept deliberately: `String(contentsOf:)` and the
-    /// `FileManager` attribute read below are synchronous/blocking, and this
-    /// function has no actor isolation of its own, so without detaching, the
-    /// blocking read would run inline on whatever thread the caller is on
-    /// (typically the main actor) rather than actually moving to a background
-    /// thread.
+    /// Read content file from disk. `Task.detached` is deliberate: the reads below are
+    /// blocking and this function has no isolation of its own, so without detaching they
+    /// would run inline on the caller's thread (typically the main actor).
     func readContentFile(at url: URL) async throws -> ContentFile {
         // Perform file I/O on background thread
         let result: ContentFileReadResult = try await Task.detached {
@@ -350,14 +345,9 @@ final class FileSystemService: @unchecked Sendable {
         )
     }
 
-    /// Write content to file at URL, off the caller's actor.
-    /// `writeFile` itself carries no actor annotation (`FileSystemService` is a plain
-    /// `@unchecked Sendable` class, not `@MainActor`), so `Task.detached` here was doing
-    /// a job the function signature already did - removed rather than converted to a
-    /// helper (victor-tdt audit). `@concurrent` (SE-0461, verified to compile in this
-    /// project's Swift 6.0 language mode with no upcoming-feature flag) compiler-pins
-    /// the blocking `NSFileCoordinator`/`write(to:)` calls off the concurrent executor,
-    /// regardless of the `NonisolatedNonsendingByDefault` setting.
+    /// Write content to file, off the caller's actor. `@concurrent` (SE-0461) compiler-pins
+    /// the blocking coordinator/write calls to the concurrent executor, regardless of the
+    /// `NonisolatedNonsendingByDefault` setting.
     @concurrent
     func writeFile(to url: URL, content: String) async throws {
         let coordinator = NSFileCoordinator()
@@ -385,12 +375,9 @@ final class FileSystemService: @unchecked Sendable {
         }
     }
 
-    /// Write content file to disk.
-    /// Takes `url`/`content` rather than a `ContentFile` so the non-Sendable
-    /// model class never has to cross the `await` boundary into this call
-    /// (WP3.5 Cluster 1) — the caller extracts these two Sendable primitives
-    /// from the `ContentFile` immediately before calling, after syncing any
-    /// pending edited content into it.
+    /// Write content file to disk. Takes `url`/`content` rather than a `ContentFile` so the
+    /// non-Sendable model never crosses the `await` boundary - the caller extracts them
+    /// after syncing any pending edited content in.
     func saveContentFile(url: URL, content: String) async throws {
         try await writeFile(to: url, content: content)
     }
@@ -464,12 +451,9 @@ final class FileSystemService: @unchecked Sendable {
             throw FileError.accessDenied
         }
 
-        // Explicit isDirectory, determined by statting the SOURCE (which still
-        // exists) - the destination doesn't exist yet, so without the hint
-        // Foundation would stat it, miss, and produce a slash-less URL for a
-        // directory rename; and the source URL's own form can't be trusted
-        // either (callers may hold slash-less directory URLs). A slash-less
-        // result mismatches every URL built after the move (victor-rnm).
+        // Stat the SOURCE for isDirectory: the destination doesn't exist yet, so Foundation
+        // would miss and produce a slash-less URL, and the source URL's own form can't be
+        // trusted either. A slash-less result mismatches every URL built after the move.
         var sourceIsDirectory: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &sourceIsDirectory)
         let newURL = url.deletingLastPathComponent()
@@ -503,17 +487,9 @@ final class FileSystemService: @unchecked Sendable {
         }
     }
 
-    /// Move a file or folder to a different directory within the site
-    /// (drag-to-move, victor-sel B.4) - mirrors `renameFile`'s
-    /// coordination/validation pattern above: an explicit `isDirectory` stat
-    /// of the SOURCE (which still exists - the destination doesn't yet, so
-    /// without the hint a slash-less directory URL would result, same
-    /// victor-rnm concern `renameFile` documents), path-within-site
-    /// validation of the destination, and a collision check, all before
-    /// touching disk. Unlike `renameFile`, the filename itself doesn't
-    /// change - only the parent directory - so there's no `isSafeFilename`
-    /// check (the existing filename was already validated when the file was
-    /// created/renamed).
+    /// Move a file or folder within the site (drag-to-move). Same coordination pattern as
+    /// `renameFile`: source `isDirectory` stat, path-within-site validation, collision
+    /// check, all before touching disk. No `isSafeFilename` check - the name doesn't change.
     /// - Parameters:
     ///   - url: the file/folder's current URL
     ///   - targetDirectory: the destination folder's URL (must be inside the site)
@@ -586,28 +562,18 @@ final class FileSystemService: @unchecked Sendable {
         }
     }
 
-    /// Import an external file (e.g. dropped from Finder, the sidebar, or the editor)
-    /// into the site by copying it into `directory`, choosing a collision-free
-    /// destination name. This is the single copy path for all drag-and-drop import
-    /// flows (W3.3/victor-dnd) - the sidebar folder drop and the editor's image drop
-    /// both call this rather than each inventing their own `copyItem` logic.
+    /// Copy an external file into the site, choosing a collision-free destination name.
+    /// The single copy path for every drag-and-drop import flow.
     ///
-    /// Deliberately synchronous (unlike `duplicateFile`/`createMarkdownFile`, which wrap
-    /// the same `NSFileCoordinator` call in `withCheckedThrowingContinuation` purely for
-    /// `async` call-site sugar): `NSFileCoordinator.coordinate` itself already blocks
-    /// until the accessor completes, so there's no real asynchrony to expose. Keeping
-    /// this one synchronous lets drop handlers (SwiftUI `.dropDestination`,
-    /// `NSTextView.performDragOperation`) call it directly without an intervening
-    /// `Task { }` - which, for a plain (non-actor, non-Sendable) class like this one,
-    /// would otherwise introduce new "sending self risks causing data races" strict-
-    /// concurrency warnings at every new call site (see the identical pattern already
-    /// warned-on in FileOperationsService's `async` forwarding methods).
+    /// Deliberately synchronous: `NSFileCoordinator.coordinate` already blocks until the
+    /// accessor completes, so there's no asynchrony to expose - and staying sync lets drop
+    /// handlers call it without a `Task { }`, which for a non-Sendable class would raise
+    /// "sending self risks causing data races" at every call site.
     /// - Parameters:
-    ///   - sourceURL: the external file being imported (outside the site, e.g. from Finder)
+    ///   - sourceURL: the external file being imported
     ///   - directory: destination directory; must be inside the site
     ///   - siteRoot: site root for path traversal validation
-    /// - Returns: the URL the file was copied to (its filename may differ from
-    ///   `sourceURL`'s if a file of the same name already existed at the destination)
+    /// - Returns: the URL the file was copied to (the filename may differ on collision)
     func importFile(from sourceURL: URL, into directory: URL, siteRoot: URL) throws -> URL {
         let fileManager = FileManager.default
 
@@ -672,11 +638,9 @@ final class FileSystemService: @unchecked Sendable {
     }
 
     /// Move a file or folder to the trash
-    /// - Returns: the URL the item landed at inside the Trash, when the system
-    ///   reports one (victor-und) - `SiteViewModel.moveToTrash(nodes:)` keeps
-    ///   this per-node so undo can move the item back via `FileManager.moveItem`.
-    ///   `nil` is possible (e.g. some removable/network volumes don't support
-    ///   `resultingItemURL`) - callers must degrade gracefully, not force-unwrap.
+    /// - Returns: the URL the item landed at inside the Trash, when the system reports
+    ///   one - undo needs it to move the item back. `nil` on volumes that don't support
+    ///   `resultingItemURL`, so callers must degrade rather than force-unwrap.
     @discardableResult
     func moveToTrash(at url: URL) async throws -> URL? {
         var trashedURL: NSURL?
@@ -740,12 +704,9 @@ final class FileSystemService: @unchecked Sendable {
 
     // MARK: - Status Metadata Loading
 
-    /// Read only the frontmatter portion of a markdown file (first ~4KB)
-    /// This is much faster than reading the entire file for large content
-    /// Off the caller's actor: `readFrontmatterOnly` is on a plain (non-`@MainActor`)
-    /// class, so `Task.detached` was redundant here - removed (victor-tdt audit).
-    /// `@concurrent` (SE-0461) compiler-pins the blocking `FileHandle` read off the
-    /// concurrent executor, regardless of the `NonisolatedNonsendingByDefault` setting.
+    /// Read only the frontmatter portion of a markdown file (first ~4KB) - much faster than
+    /// reading the whole file. `@concurrent` pins the blocking `FileHandle` read off the
+    /// concurrent executor.
     @concurrent
     func readFrontmatterOnly(at url: URL) async -> FileStatusMetadata? {
         do {

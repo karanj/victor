@@ -164,17 +164,10 @@ class TextEditorViewModel {
         }
     }
 
-    /// Registers itself with `AutoSaveService`'s node-ID-keyed debounce registry,
-    /// keyed by `nodeID` (FileNode.id, set alongside `textFile` in `loadFile`) -
-    /// same rationale and self-referencing-Task pattern as
-    /// `EditorViewModel.scheduleAutoSave` (victor-rnm TOCTOU hardening, post-launch
-    /// review): `self.save()` below calls `fileSystemService.writeFile`, which is
-    /// `@concurrent` (runs off this ViewModel's MainActor, on FileSystemService's
-    /// own executor) and doesn't observe `Task.isCancelled` - so a plain `.cancel()`
-    /// on this Task can't stop a write already in flight, only registering it with
-    /// AutoSaveService lets `SiteViewModel.renameFile`/`moveNode` cancel-AND-AWAIT it
-    /// before touching disk. `nodeID` is guarded non-nil since it's only meaningful
-    /// (and only set) once a file is loaded via `loadFile`.
+    /// Registers with `AutoSaveService`'s node-ID debounce registry, same pattern as
+    /// `EditorViewModel.scheduleAutoSave`: `writeFile` is `@concurrent` and doesn't observe
+    /// `Task.isCancelled`, so a plain `.cancel()` can't stop an in-flight write - only the
+    /// registry lets rename/move cancel-AND-AWAIT it.
     private func scheduleAutoSave() {
         autoSaveTask?.cancel()
 

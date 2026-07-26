@@ -320,6 +320,115 @@ final class PermalinkResolverTests: XCTestCase {
         }
     }
 
+    // MARK: - Phase 0: New Tokens (CONFIG-SCHEMA-SPEC finding #9)
+
+    func testPermalink_contentBasenameToken() {
+        let resolver = PermalinkResolver(permalinks: ["posts": "/:contentbasename/"])
+        let url = resolver.resolveURL(
+            filePath: "content/posts/my-post.md",
+            date: makeDate(year: 2024, month: 3, day: 15),
+            slug: "custom-slug"
+        )
+        // :contentbasename always uses the filename, ignoring slug
+        XCTAssertEqual(url, "/my-post/")
+    }
+
+    func testPermalink_slugOrContentBasenameToken_withSlug() {
+        let resolver = PermalinkResolver(permalinks: ["posts": "/:slugorcontentbasename/"])
+        let url = resolver.resolveURL(
+            filePath: "content/posts/my-post.md",
+            date: makeDate(year: 2024, month: 3, day: 15),
+            slug: "custom-slug"
+        )
+        XCTAssertEqual(url, "/custom-slug/")
+    }
+
+    func testPermalink_slugOrContentBasenameToken_withoutSlug() {
+        let resolver = PermalinkResolver(permalinks: ["posts": "/:slugorcontentbasename/"])
+        let url = resolver.resolveURL(
+            filePath: "content/posts/my-post.md",
+            date: makeDate(year: 2024, month: 3, day: 15),
+            slug: nil
+        )
+        XCTAssertEqual(url, "/my-post/")
+    }
+
+    /// Deprecated since Hugo v0.144 but still recognized and expanded.
+    func testPermalink_slugOrFilenameToken() {
+        let resolver = PermalinkResolver(permalinks: ["posts": "/:slugorfilename/"])
+        let url = resolver.resolveURL(
+            filePath: "content/posts/my-post.md",
+            date: makeDate(year: 2024, month: 3, day: 15),
+            slug: "custom-slug"
+        )
+        XCTAssertEqual(url, "/custom-slug/")
+    }
+
+    func testValidate_newTokensAccepted() {
+        for pattern in [
+            "/:contentbasename/",
+            "/:slugorcontentbasename/",
+            "/:slugorfilename/"
+        ] {
+            XCTAssertNil(PermalinkResolver.validate(pattern: pattern), "Expected valid: \(pattern)")
+        }
+    }
+
+    func testDeprecatedTokensFlagged() {
+        let byToken = Dictionary(uniqueKeysWithValues: PermalinkResolver.validTokens.map { ($0.token, $0) })
+        XCTAssertEqual(byToken[":filename"]?.deprecated, true)
+        XCTAssertEqual(byToken[":slugorfilename"]?.deprecated, true)
+        XCTAssertEqual(byToken[":contentbasename"]?.deprecated, false)
+        XCTAssertEqual(byToken[":slugorcontentbasename"]?.deprecated, false)
+        XCTAssertEqual(byToken[":year"]?.deprecated, false)
+    }
+
+    /// The insert menu must not offer deprecated tokens.
+    func testInsertableTokensExcludeDeprecated() {
+        let insertable = PermalinkResolver.insertableTokens.map(\.token)
+        XCTAssertFalse(insertable.contains(":filename"))
+        XCTAssertFalse(insertable.contains(":slugorfilename"))
+        XCTAssertTrue(insertable.contains(":contentbasename"))
+        XCTAssertTrue(insertable.contains(":slugorcontentbasename"))
+        XCTAssertTrue(insertable.contains(":year"))
+    }
+
+    // MARK: - Phase 0: Token Substring-Corruption Fixes
+
+    /// `:sections` must not be corrupted by the `:section` replacement running first.
+    func testPermalink_sectionsToken() {
+        let resolver = PermalinkResolver(permalinks: ["posts": "/:sections/:title/"])
+        let url = resolver.resolveURL(
+            filePath: "content/posts/my-post.md",
+            date: makeDate(year: 2024, month: 3, day: 15),
+            slug: nil
+        )
+        XCTAssertEqual(url, "/posts/my-post/")
+    }
+
+    /// `:yearday` must not be corrupted by the `:year` replacement running first.
+    func testPermalink_yeardayToken() {
+        let resolver = PermalinkResolver(permalinks: ["posts": "/:yearday/:title/"])
+        let url = resolver.resolveURL(
+            filePath: "content/posts/my-post.md",
+            date: makeDate(year: 2024, month: 3, day: 15),
+            slug: nil
+        )
+        // March 15, 2024 (leap year) is day 75
+        XCTAssertEqual(url, "/075/my-post/")
+    }
+
+    /// `:monthname` must not be corrupted by the `:month` replacement running first.
+    func testPermalink_monthnameToken() {
+        let resolver = PermalinkResolver(permalinks: ["posts": "/:monthname/:title/"])
+        let url = resolver.resolveURL(
+            filePath: "content/posts/my-post.md",
+            date: makeDate(year: 2024, month: 3, day: 15),
+            slug: nil
+        )
+        XCTAssertEqual(url, "/march/my-post/")
+    }
+
     // MARK: - Helpers
 
     private func makeDate(year: Int, month: Int, day: Int) -> Date {

@@ -13,18 +13,11 @@ enum LogLevel: Int, Comparable {
     }
 }
 
-/// Centralized logging service for consistent error reporting and debugging.
-/// `minLevel` is assigned once via `#if DEBUG` and never reassigned elsewhere,
-/// so it's a `let` — combined with `os.Logger` itself being `Sendable`, that makes
-/// this whole type safe to hand across actor boundaries without `@unchecked`.
+/// Centralized logging facade over `os.Logger`. `minLevel` is assigned once via `#if DEBUG`
+/// and never reassigned, so it's a `let` - which, with `os.Logger` being `Sendable`, makes
+/// this type safe across actor boundaries without `@unchecked`.
 ///
-/// Engine: `os.Logger` (structured logging), not the raw `os_log`/`OSLog` API. Every
-/// call site keeps calling `Logger.shared.debug(...)`/`info`/`warning`/`error` exactly
-/// as before - this is a swap of what runs underneath the facade, not a call-site
-/// migration. `category` is new (defaults to `"general"`, the only category this app
-/// used previously) - passing one buckets a call under its own `os.Logger` subsystem
-/// category without touching the ~109 existing call sites, which all keep using the
-/// default.
+/// `category` defaults to `"general"`, so the ~109 existing call sites are unaffected.
 final class Logger: Sendable {
     static let shared = Logger()
 

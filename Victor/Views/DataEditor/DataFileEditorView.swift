@@ -115,32 +115,32 @@ struct DataFileEditorView: View {
 struct DataFormEditorView: View {
     @Bindable var dataFile: DataFile
 
+    /// `Form(.grouped)`, not a plain `ScrollView`: the recursive editor emits
+    /// bare rows that need a Form's label column (see `RecursiveValueEditor`).
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                if dataFile.isArrayRoot {
-                    DataArrayEditor(
-                        data: Binding(
-                            get: { dataFile.dataArray ?? [] },
-                            set: { dataFile.data = $0 }
-                        ),
-                        onChanged: { markChanged() }
-                    )
-                } else if dataFile.dataDictionary != nil {
-                    DataDictionaryEditor(
-                        data: Binding(
-                            get: { dataFile.dataDictionary ?? [:] },
-                            set: { dataFile.data = $0 }
-                        ),
-                        onChanged: { markChanged() }
-                    )
-                } else {
-                    Text("Unsupported data structure")
-                        .foregroundStyle(.secondary)
-                }
+        Form {
+            if dataFile.isArrayRoot {
+                DataArrayEditor(
+                    data: Binding(
+                        get: { dataFile.dataArray ?? [] },
+                        set: { dataFile.data = $0 }
+                    ),
+                    onChanged: { markChanged() }
+                )
+            } else if dataFile.dataDictionary != nil {
+                DataDictionaryEditor(
+                    data: Binding(
+                        get: { dataFile.dataDictionary ?? [:] },
+                        set: { dataFile.data = $0 }
+                    ),
+                    onChanged: { markChanged() }
+                )
+            } else {
+                Text("Unsupported data structure")
+                    .foregroundStyle(.secondary)
             }
-            .padding()
         }
+        .formStyle(.grouped)
     }
 
     private func markChanged() {
@@ -151,261 +151,10 @@ struct DataFormEditorView: View {
     }
 }
 
-// MARK: - Dictionary Editor
-
-struct DataDictionaryEditor: View {
-    @Binding var data: [String: Any]
-    let onChanged: () -> Void
-
-    @State private var newKey = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(data.keys.sorted()), id: \.self) { key in
-                DataFieldRow(
-                    key: key,
-                    value: Binding(
-                        get: { data[key] ?? "" },
-                        set: { newValue in
-                            data[key] = newValue
-                            onChanged()
-                        }
-                    ),
-                    onDelete: {
-                        data.removeValue(forKey: key)
-                        onChanged()
-                    }
-                )
-            }
-
-            // Add new field
-            HStack {
-                TextField("New field name", text: $newKey)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 200)
-
-                Button("Add Field") {
-                    if !newKey.isEmpty && data[newKey] == nil {
-                        data[newKey] = ""
-                        onChanged()
-                        newKey = ""
-                    }
-                }
-                .disabled(newKey.isEmpty)
-            }
-            .padding(.top, 8)
-        }
-    }
-}
-
-// MARK: - Array Editor
-
-struct DataArrayEditor: View {
-    @Binding var data: [Any]
-    let onChanged: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(Array(data.enumerated()), id: \.offset) { index, item in
-                DataArrayItemRow(
-                    index: index,
-                    item: Binding(
-                        get: { data[index] },
-                        set: { newValue in
-                            data[index] = newValue
-                            onChanged()
-                        }
-                    ),
-                    onDelete: {
-                        data.remove(at: index)
-                        onChanged()
-                    },
-                    onMoveUp: index > 0 ? {
-                        data.swapAt(index, index - 1)
-                        onChanged()
-                    } : nil,
-                    onMoveDown: index < data.count - 1 ? {
-                        data.swapAt(index, index + 1)
-                        onChanged()
-                    } : nil
-                )
-            }
-
-            Button {
-                data.append([:] as [String: Any])
-                onChanged()
-            } label: {
-                Label("Add Item", systemImage: "plus")
-            }
-            .padding(.top, 8)
-        }
-    }
-}
-
-// MARK: - Array Item Row
-
-struct DataArrayItemRow: View {
-    let index: Int
-    @Binding var item: Any
-    let onDelete: () -> Void
-    let onMoveUp: (() -> Void)?
-    let onMoveDown: (() -> Void)?
-
-    @State private var isExpanded = true
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            if item is [String: Any] {
-                DataDictionaryEditor(
-                    data: Binding(
-                        get: { item as? [String: Any] ?? [:] },
-                        set: { item = $0 }
-                    ),
-                    onChanged: {}
-                )
-                .padding(.leading, 16)
-            } else {
-                DataValueEditor(
-                    value: $item,
-                    onChanged: {}
-                )
-            }
-        } label: {
-            HStack {
-                Text("Item \(index + 1)")
-                    .font(.headline)
-
-                Spacer()
-
-                if let onMoveUp = onMoveUp {
-                    Button {
-                        onMoveUp()
-                    } label: {
-                        Image(systemName: "chevron.up")
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Move Up")
-                }
-
-                if let onMoveDown = onMoveDown {
-                    Button {
-                        onMoveDown()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Move Down")
-                }
-
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Delete Item \(index + 1)")
-            }
-        }
-        .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(8)
-    }
-}
-
-// MARK: - Field Row
-
-struct DataFieldRow: View {
-    let key: String
-    @Binding var value: Any
-    let onDelete: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top) {
-            Text(key)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .frame(width: 150, alignment: .trailing)
-
-            DataValueEditor(value: $value, onChanged: {})
-
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Delete \(key)")
-        }
-    }
-}
-
-// MARK: - Value Editor
-
-struct DataValueEditor: View {
-    @Binding var value: Any
-    let onChanged: () -> Void
-
-    var body: some View {
-        Group {
-            if let stringValue = value as? String {
-                TextField("", text: Binding(
-                    get: { stringValue },
-                    set: { value = $0; onChanged() }
-                ))
-                .textFieldStyle(.roundedBorder)
-            } else if let boolValue = value as? Bool {
-                Toggle("", isOn: Binding(
-                    get: { boolValue },
-                    set: { value = $0; onChanged() }
-                ))
-                .toggleStyle(.checkbox)
-            } else if let intValue = value as? Int {
-                TextField("", value: Binding(
-                    get: { intValue },
-                    set: { value = $0; onChanged() }
-                ), format: .number)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 100)
-            } else if let doubleValue = value as? Double {
-                TextField("", value: Binding(
-                    get: { doubleValue },
-                    set: { value = $0; onChanged() }
-                ), format: .number)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 100)
-            } else if let arrayValue = value as? [Any] {
-                VStack(alignment: .leading) {
-                    Text("[\(arrayValue.count) items]")
-                        .foregroundStyle(.secondary)
-                    DataArrayEditor(
-                        data: Binding(
-                            get: { value as? [Any] ?? [] },
-                            set: { value = $0; onChanged() }
-                        ),
-                        onChanged: onChanged
-                    )
-                }
-            } else if let dictValue = value as? [String: Any] {
-                VStack(alignment: .leading) {
-                    Text("{\(dictValue.count) fields}")
-                        .foregroundStyle(.secondary)
-                    DataDictionaryEditor(
-                        data: Binding(
-                            get: { value as? [String: Any] ?? [:] },
-                            set: { value = $0; onChanged() }
-                        ),
-                        onChanged: onChanged
-                    )
-                }
-            } else {
-                Text(String(describing: value))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
 // MARK: - Raw Editor
+//
+// The recursive editor family lives in `Views/Components/RecursiveValueEditor.swift`,
+// shared with the config editor's Advanced tab.
 
 struct DataRawEditorView: View {
     @Bindable var dataFile: DataFile

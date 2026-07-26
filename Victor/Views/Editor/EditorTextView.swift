@@ -45,12 +45,9 @@ final class HighlightingTextView: NSTextView {
 
     override func awakeFromNib() {
         super.awakeFromNib()
-        // NSObject.awakeFromNib is `nonisolated` in the AppKit overlay (it can
-        // fire during nib decoding before actor isolation is established), so
-        // this override stays nonisolated to match even though the class
-        // itself is @MainActor - wrap the MainActor call explicitly rather
-        // than calling it synchronously from this nonisolated context
-        // (WP3.5 Cluster 11).
+        // `awakeFromNib` is `nonisolated` in the AppKit overlay (it can fire during nib
+        // decoding before isolation is established), so this override matches - hence the
+        // explicit hop rather than a synchronous call.
         Task { @MainActor in
             self.registerForDraggedTypes([.string, .fileURL])
         }
@@ -102,17 +99,12 @@ final class HighlightingTextView: NSTextView {
             }
         }
 
-        // Try a dropped file (Finder, sidebar, or an asset dragged out then back in).
-        // Images are copied into the site and turned into a markdown reference; every
-        // other file type falls through to the default NSTextView behavior below
-        // (inserts the raw file path), unchanged from before.
+        // Dropped images are copied into the site and turned into a markdown reference;
+        // every other file type falls through to NSTextView's default path insertion.
         //
-        // `urlReadingFileURLsOnly` plus the explicit `isFileURL` check reject non-file
-        // URLs (e.g. an https://.../photo.jpg dragged from a browser tab): without
-        // both, a remote URL with an image-looking extension would be misread as a
-        // local file and passed to FileSystemService.importFile, which would then
-        // fail trying to copy a URL that isn't on disk. Non-file URLs fall through to
-        // `super.performDragOperation`, matching pre-existing text-insertion behavior.
+        // `urlReadingFileURLsOnly` plus the explicit `isFileURL` check reject remote URLs
+        // with image-looking extensions, which would otherwise be passed to `importFile`
+        // and fail trying to copy something that isn't on disk.
         if let fileURLs = pasteboard.readObjects(
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]

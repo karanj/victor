@@ -1,18 +1,13 @@
 import Foundation
 import SwiftUI
 
-/// Centralized, UserDefaults-backed application settings.
+/// Centralized, UserDefaults-backed application settings. One property per preference,
+/// each defining its key and default exactly once; `didSet` persists immediately. Views
+/// bind to `AppSettings.shared` via `@Bindable` rather than `@AppStorage`, so the File
+/// menu and Preferences observe the same state.
 ///
-/// One explicit property per preference; each property's key and default are
-/// defined exactly once here. `didSet` persists immediately to UserDefaults.
-/// Views bind to `AppSettings.shared` via `@Bindable` instead of `@AppStorage`,
-/// so the File-menu toggle and the Preferences window observe the same state
-/// (see Docs/MAC-POLISH-DESIGN.md W0).
-///
-/// Non-MainActor readers (e.g. `AutoSaveService`, an `actor`) cannot touch this
-/// MainActor-isolated instance, so a handful of `nonisolated static` accessors
-/// below read the same key/default pair directly from UserDefaults. Both access
-/// patterns route through the same private `read*` helper, so they cannot disagree.
+/// Non-MainActor readers (e.g. the `AutoSaveService` actor) use the `nonisolated static`
+/// accessors below; both paths route through the same private `read*` helper.
 @MainActor
 @Observable
 final class AppSettings {

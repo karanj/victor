@@ -44,21 +44,11 @@ final class LiveReloadSessionDelegate: NSObject, URLSessionDelegate, @unchecked 
 
 // MARK: - URLSessionDelegate
 //
-// Moved to its own extension: the SDK's declared type for this optional
-// requirement's completion handler is ambiguous between `@Sendable` and
-// `@MainActor @Sendable` depending on how the conformance is imported
-// (verified by toggling `@preconcurrency` on the conformance and rebuilding
-// both ways - each variant "nearly matches" the other, and matching one
-// breaks the other). `private` was tried too, but the compiler then reports
-// this method *does* satisfy the protocol requirement and must be as
-// accessible as the type - confirming the conformance is genuinely satisfied
-// and this "nearly matches" warning is a false positive from the
-// concurrency-attribute staging, not a real signature mismatch. Moving the
-// method to an extension (the compiler's other suggested fix, alongside
-// `private`) silences the warning without an accessibility conflict, and
-// doesn't change dispatch: this is an `@objc` optional protocol requirement,
-// so the ObjC runtime finds it by selector regardless of which extension
-// declares it (WP3.5 Cluster 10).
+// In its own extension to silence a spurious "nearly matches" warning: the SDK's
+// declared type for this optional requirement's completion handler is ambiguous between
+// `@Sendable` and `@MainActor @Sendable` depending on how the conformance is imported,
+// and matching one breaks the other. Dispatch is unaffected - it's an `@objc` optional
+// requirement, found by selector regardless of which extension declares it.
 extension LiveReloadSessionDelegate {
     func urlSession(
         _ session: URLSession,
@@ -110,13 +100,9 @@ actor LiveReloadClient {
     private var isConnected = false
     private var reconnectTask: Task<Void, Never>?
 
-    /// Independent event streams (WP3.5 Cluster 9 / M2) - replaces the stored
-    /// `onNavigate`/`onReload` `@MainActor` callbacks. `events()` is called by
-    /// `ServerControlView`'s two call sites that used to call
-    /// `connect(to:onNavigate:onReload:)`; the continuations are actor-level
-    /// state decoupled from the WebSocket session lifecycle, so a reconnect
-    /// (see `establishConnection()`) doesn't drop or duplicate a consumer's
-    /// registration.
+    /// Independent event streams, replacing the stored `onNavigate`/`onReload` callbacks.
+    /// The continuations are actor-level state decoupled from the WebSocket session, so a
+    /// reconnect doesn't drop or duplicate a consumer's registration.
     private var eventContinuations: [UUID: AsyncStream<LiveReloadEvent>.Continuation] = [:]
 
     // MARK: - Public API

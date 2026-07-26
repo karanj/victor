@@ -36,13 +36,9 @@ struct PreviewPanel: View {
                     updatePreview(content: currentContent)
                 }
             }
-            // Observes editedContentVersion, NOT currentEditingContent: the
-            // content cache (FileCacheManager) is deliberately not @Observable,
-            // so watching the string only ever fired when unrelated invalidations
-            // happened to re-render this view - pre keystroke-lag fix, that was
-            // the per-keystroke focused-value storm doing the preview's job by
-            // accident. The version counter is the explicit typing signal
-            // (keystroke-lag fix, part 2).
+            // Observes editedContentVersion, not currentEditingContent: the content cache
+            // is deliberately not @Observable, so watching the string only ever fired when
+            // unrelated invalidations happened to re-render this view.
             .onChange(of: siteViewModel.editedContentVersion) { _, _ in
                 // Only do live updates if enabled (for split view performance)
                 // In Preview-only mode, onAppear handles the update

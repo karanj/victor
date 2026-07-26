@@ -96,12 +96,9 @@ actor AssetService {
 
     // MARK: - Metadata Loading
 
-    /// Load metadata (file size, modification date, image dimensions) for a single file.
-    /// Actor-only: reads `FileManager`/`NSImage` (just for `.size`, not to draw a
-    /// thumbnail) and returns a Sendable snapshot - no `Asset` parameter, no
-    /// `MainActor.run` hop. The `!asset.isMetadataLoaded` de-dup guard that used to
-    /// live here now lives at the `@MainActor` call site, before invoking this
-    /// (WP3.5 Cluster 5 - this changes *where* duplicate-load prevention happens).
+    /// Load metadata for a single file. Actor-only: returns a Sendable snapshot with no
+    /// `Asset` parameter and no `MainActor.run` hop. The `isMetadataLoaded` de-dup guard
+    /// lives at the `@MainActor` call site instead.
     func metadataSnapshot(for url: URL) async -> AssetMetadataSnapshot? {
         let fm = FileManager.default
 

@@ -32,14 +32,9 @@ struct TabBarView: View {
                 buildIssuesPill
             }
 
-            // Preview-source switcher (preview/split mode). Not gated on the
-            // server running: with the server stopped, choosing "Live Server"
-            // routes to LivePreviewPanel's placeholder, which offers to start
-            // the server - previously this control (and with it the whole
-            // live-preview feature) was invisible until the user found Start in
-            // the window toolbar. A labelled segmented control, not a toggle
-            // pill: the pill read as a status chip, not as "click to swap the
-            // preview pane between rendered markdown and the Hugo server".
+            // Not gated on the server running: with it stopped, "Live Server" routes to
+            // LivePreviewPanel's placeholder, which offers to start it. A labelled segmented
+            // control rather than a pill, which read as a status chip.
             if settings.layoutMode != .editor {
                 previewSourcePicker
             }

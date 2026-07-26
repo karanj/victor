@@ -5,6 +5,10 @@ struct ConfigEditorView: View {
     @Bindable var config: HugoConfig
     let onSave: () async -> Void
     let onSaveRaw: () async -> Void
+    /// Site root, threaded down to `ConfigEssentialsTab` for the `theme`
+    /// field's on-disk `themes/` validator. `nil` is a valid, harmless
+    /// default (validator no-ops without a site root — e.g. previews/tests).
+    var siteRootURL: URL? = nil
 
     @State private var selectedTab: ConfigTab = .essentials
     @State private var showRawEditor = false
@@ -17,7 +21,10 @@ struct ConfigEditorView: View {
     enum ConfigTab: String, CaseIterable {
         case essentials = "Essentials"
         case content = "Content"
-        case taxonomies = "Taxonomies"
+        case urlsTaxonomies = "URLs & Taxonomies"
+        case menus = "Menus"
+        case markup = "Markup"
+        case integrations = "Integrations"
         case advanced = "Advanced"
     }
 
@@ -34,7 +41,7 @@ struct ConfigEditorView: View {
             } else {
                 // Form editor mode
                 TabView(selection: $selectedTab) {
-                    ConfigEssentialsTab(config: config)
+                    ConfigEssentialsTab(config: config, siteRootURL: siteRootURL)
                         .tabItem { Label("Essentials", systemImage: "star") }
                         .tag(ConfigTab.essentials)
 
@@ -42,15 +49,35 @@ struct ConfigEditorView: View {
                         .tabItem { Label("Content", systemImage: "doc.text") }
                         .tag(ConfigTab.content)
 
-                    ConfigTaxonomiesTab(config: config)
-                        .tabItem { Label("Taxonomies", systemImage: "tag") }
-                        .tag(ConfigTab.taxonomies)
+                    ConfigURLsTaxonomiesTab(config: config)
+                        .tabItem { Label("URLs & Taxonomies", systemImage: "tag") }
+                        .tag(ConfigTab.urlsTaxonomies)
+
+                    ConfigMenusTab(config: config)
+                        .tabItem { Label("Menus", systemImage: "list.bullet.indent") }
+                        .tag(ConfigTab.menus)
+
+                    ConfigMarkupTab(config: config)
+                        .tabItem { Label("Markup", systemImage: "textformat") }
+                        .tag(ConfigTab.markup)
+
+                    ConfigIntegrationsTab(config: config)
+                        .tabItem { Label("Integrations", systemImage: "link") }
+                        .tag(ConfigTab.integrations)
 
                     ConfigAdvancedTab(config: config)
                         .tabItem { Label("Advanced", systemImage: "gearshape.2") }
                         .tag(ConfigTab.advanced)
                 }
                 .padding()
+                // Single write-back path for every `ConfigFieldView` commit
+                // across all 4 tabs (CONFIG-SCHEMA-SPEC §2.8): each leaf row
+                // calls this instead of reaching for `HugoConfig` directly.
+                .environment(\.configCommitAction, config.syncRawContentFromStructuredData)
+                // Advanced tab's raw-only sections list ("Edit in Raw"
+                // button, §3.7) switches this view's own `showRawEditor`
+                // state without `ConfigAdvancedTab` reaching for it directly.
+                .environment(\.configSwitchToRawAction, { showRawEditor = true })
             }
         }
         .onChange(of: showRawEditor) { oldValue, newValue in

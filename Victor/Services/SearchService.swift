@@ -10,13 +10,12 @@ actor SearchService {
 
     /// Search for matches across multiple files
     /// - Parameters:
-    ///   - options: Search configuration including query, regex, case sensitivity
-    ///   - fileURLs: Pre-filtered file URLs to search in (see `searchableFileURLs(from:options:)`
-    ///     below, called by the caller on `@MainActor` before crossing into this actor -
-    ///     `FileNode` has a `weak var parent` and recursive children, so it can never be
-    ///     Sendable and must never cross this boundary as a live tree; WP3.5 Cluster 6)
-    ///   - siteRootURL: Root URL of the Hugo site (for relative paths)
-    /// - Returns: Array of file results with matches
+    ///   - options: search configuration including query, regex, case sensitivity
+    ///   - fileURLs: pre-filtered URLs from `searchableFileURLs(from:options:)`, called on
+    ///     `@MainActor` first - `FileNode` can never be Sendable, so a live tree must
+    ///     never cross this boundary
+    ///   - siteRootURL: root URL of the Hugo site (for relative paths)
+    /// - Returns: array of file results with matches
     func search(
         options: SearchOptions,
         in fileURLs: [URL],
@@ -188,12 +187,9 @@ actor SearchService {
         return matchCount
     }
 
-    /// Write content to file with coordination.
-    /// `nonisolated` + `@concurrent` replaces `Task.detached` here (victor-tdt audit):
-    /// `SearchService` is an `actor`, so this private method was actor-isolated purely
-    /// by inheriting that isolation, not because it touches actor state. `@concurrent`
-    /// (SE-0461) compiler-pins the blocking coordinated write off the actor's executor,
-    /// regardless of the `NonisolatedNonsendingByDefault` setting.
+    /// Write content to file with coordination. This private method was actor-isolated only
+    /// by inheriting the enclosing isolation; `@concurrent` pins the blocking coordinated
+    /// write off the actor's executor.
     @concurrent
     private nonisolated func writeFile(to url: URL, content: String) async throws {
         let coordinator = NSFileCoordinator()
@@ -218,14 +214,10 @@ actor SearchService {
 
     // MARK: - File Collection
 
-    /// Recursively collect all searchable file URLs from nodes.
-    ///
-    /// `nonisolated static`, not an actor-isolated instance method: `FileNode` has a
-    /// `weak var parent` and recursive children (CLAUDE.md: must stay a class, can't be
-    /// Sendable), so this walk has to happen entirely on the caller's side (`@MainActor`,
-    /// since `SiteViewModel.fileNodes` is only safe to read there) - the actor itself
-    /// never touches a `FileNode` reference (WP3.5 Cluster 6). Call this before
-    /// `search(options:in:siteRootURL:)`, passing its result as `fileURLs`.
+    /// Recursively collect all searchable file URLs from nodes. `nonisolated static` rather
+    /// than an actor method: `FileNode` can't be Sendable, so this walk happens entirely
+    /// on the caller's `@MainActor` side and the actor never touches a `FileNode`.
+    /// Call before `search(options:in:siteRootURL:)`, passing the result as `fileURLs`.
     nonisolated static func searchableFileURLs(from nodes: [FileNode], options: SearchOptions) -> [URL] {
         var files: [URL] = []
 

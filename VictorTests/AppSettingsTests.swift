@@ -2,13 +2,9 @@ import XCTest
 import SwiftUI
 @testable import Victor
 
-/// Tests for AppSettings: default values, UserDefaults round-tripping, and
-/// agreement between the MainActor-isolated instance properties and the
-/// `nonisolated static` accessors non-MainActor callers use.
-///
-/// Uses `AppSettings.makeForTesting()` (DEBUG-only factory) rather than
-/// `AppSettings.shared` so each test gets an isolated instance instead of
-/// mutating the process-wide singleton other tests may already have touched.
+/// Tests for AppSettings: defaults, UserDefaults round-tripping, and agreement between
+/// the MainActor instance properties and the `nonisolated static` accessors. Uses
+/// `makeForTesting()` so each test gets an isolated instance rather than the singleton.
 @MainActor
 final class AppSettingsTests: XCTestCase {
 

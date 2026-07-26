@@ -240,12 +240,8 @@ final class SpecializedFileManager {
         Logger.shared.info("Saved archetype: \(archetype.fileName)")
     }
 
-    /// Parse an archetype file from disk
-    /// `SpecializedFileManager` is `@MainActor`, so this read needs to leave that actor;
-    /// `readFileContentsOffActor` (shared `nonisolated` + `@concurrent` helper)
-    /// replaces `Task.detached` here (victor-tdt audit) - see
-    /// `ArchetypeManager.parseArchetype`'s identical case for why `@concurrent` lives
-    /// on the helper, not this `@MainActor` method.
+    /// Parse an archetype file from disk. `@MainActor`, so the blocking read goes through
+    /// `readFileContentsOffActor` to genuinely leave the actor.
     private func parseArchetype(at url: URL) async throws -> Archetype {
         let content = try await readFileContentsOffActor(at: url)
 

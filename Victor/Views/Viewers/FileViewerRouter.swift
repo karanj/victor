@@ -100,7 +100,7 @@ struct FileViewerRouter: View {
                 await siteViewModel.saveHugoConfig()
             }, onSaveRaw: {
                 await siteViewModel.saveHugoConfigRaw()
-            })
+            }, siteRootURL: siteViewModel.site?.rootURL)
         } else {
             // Config not loaded yet - trigger load
             LoadingStateView(message: "Loading configuration...")

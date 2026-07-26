@@ -16,18 +16,11 @@ struct ContentView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var window: NSWindow?
 
-    // W5.1 (victor-kbd): which of the three panes currently holds keyboard
-    // focus. Moved by Tab/arrow-key traversal (via `.focusSection()`/
-    // `.focusable()` below) and programmatically by the View menu's
-    // Cmd+Option+Left/Right commands, relayed through
-    // `siteViewModel.paneFocusDirection` since those commands live in
-    // `VictorApp`'s scene-level `.commands`, which can't reach a
-    // `@FocusState` declared here directly. This is the same
-    // observable-trigger pattern `shouldFocusSearch` already uses for
-    // Cmd+P/Cmd+Option+F - preferred over juggling `NSWindow.firstResponder`
-    // through `WindowAccessor` because there's no single stable NSView per
-    // pane to target (the editor pane's content varies by file type), while
-    // every pane already gets a real SwiftUI focus identity for free here.
+    // Which pane holds keyboard focus. Moved by Tab/arrow traversal and by the View menu's
+    // Cmd+Option+Left/Right, relayed via `siteViewModel.paneFocusDirection` because those
+    // commands live in `VictorApp`'s scene-level `.commands` and can't reach a
+    // `@FocusState` declared here. Preferred over driving `NSWindow.firstResponder`, since
+    // there's no stable NSView per pane (the editor's content varies by file type).
     @FocusState private var focusedPane: AppPane?
 
     // Accessibility
@@ -209,29 +202,17 @@ struct ContentView: View {
         }
         .navigationTitle(windowTitle)
         .navigationSubtitle(windowSubtitle)
-        // Customizable toolbar (W1.3). Item *identity* (the ToolbarItem/id pair) is
-        // always emitted every render; only the item's *content* is conditional
-        // (real view vs. EmptyView). This is deliberate: toggling whether a
-        // ToolbarItem with a given id is present at all (wrapping the ToolbarItem
-        // itself in `if`) is what causes toolbar(id:)'s placement persistence to
-        // reset/duplicate across launches. Keeping the id stable and only hiding
-        // content works around that. All three items are core (situational, not
-        // opt-in) so all default to visible; none is rare/destructive enough to
-        // warrant `showsByDefault: false`.
+        // Customizable toolbar. Item *identity* is always emitted; only the item's *content*
+        // is conditional. Wrapping the ToolbarItem itself in `if` is what makes
+        // `toolbar(id:)`'s placement persistence reset or duplicate across launches.
         .toolbar(id: "com.victor.mainToolbar") {
-            // Note: NavigationSplitView automatically provides a sidebar toggle button
-            // so we don't need to add our own
+            // NavigationSplitView provides the sidebar toggle, so we don't add our own.
             //
-            // CRASH FIX (2026-07-05): item CONTENT must be as stable as item
-            // identity. `if condition { View }` with no else makes AppKit
-            // remove/re-insert the underlying NSToolbarItem whenever the
-            // condition flips (twice per file switch via isLoadingFile and
-            // contentFile), which both thrashes toolbar layout and races the
-            // customization controller's item array - crashing with
-            // "index>=0 && index<[_currentItems count]". Items are therefore
-            // always present; state is expressed via .disabled/.opacity only
-            // (also the HIG-correct behavior: toolbar items grey out, they
-            // don't vanish).
+            // Item CONTENT must be as stable as item identity: `if condition { View }` with
+            // no else makes AppKit remove/re-insert the NSToolbarItem when the condition
+            // flips (twice per file switch), racing the customization controller's item
+            // array and crashing on index bounds. State is expressed via .disabled/.opacity
+            // only - also the HIG-correct behaviour.
 
             ToolbarItem(id: "serverControls", placement: .automatic, showsByDefault: true) {
                 ServerControlView(siteViewModel: siteViewModel)
@@ -329,12 +310,9 @@ struct ContentView: View {
         }
     }
 
-    /// Returns the appropriate preview panel based on the user's preview choice.
-    /// Routed on `useLivePreview` ALONE - deliberately not `&&
-    /// isHugoServerRunning`: with the server stopped, LivePreviewPanel shows its
-    /// "server not running" placeholder with a Start Server button. The old
-    /// double gate made that placeholder unreachable, so the live-preview
-    /// feature was invisible until the user found Start in the window toolbar.
+    /// Routed on `useLivePreview` ALONE, deliberately not `&& isHugoServerRunning`: with the
+    /// server stopped, LivePreviewPanel shows a placeholder with a Start Server button.
+    /// The old double gate made that placeholder unreachable.
     @ViewBuilder
     private func previewPanel(for node: FileNode) -> some View {
         if siteViewModel.useLivePreview {

@@ -1,6 +1,6 @@
 # Config Editor v2 — Coverage Review & Design
 
-**Status**: Draft for review | **Date**: 2026-07-19 | **Hugo baseline**: v0.164.0 (docs reviewed 2026-07-19)
+**Status**: Implemented — Phases 0–5 shipped 2026-07-20 (execution log in `CONFIG-SCHEMA-SPEC.md` §8); Phase 6 deferred | **Date**: 2026-07-19 | **Hugo baseline**: v0.164.0 (verified against Hugo source, not just docs)
 
 Review of Victor's Hugo config GUI (`ConfigEditorView` + 4 tabs, `HugoConfig`, `HugoConfigParser`) against Hugo's current configuration surface, plus a phased plan to close the gap.
 
@@ -60,6 +60,9 @@ These predate this feature but the redesign must fix them; they are why "just ad
 4. **YAML `menus` parsing is fragile (verify).** `HugoConfig.init(from:)` casts `dictionary["menus"] as? [String: [[String: Any]]]`; Yams produces `[AnyHashable: Any]` nesting, which the permalinks parser special-cases but menus does not. Needs a failing test to confirm.
 5. **No config-directory support.** `findConfigFile()` only handles root-level `hugo.*`/`config.*`. Sites using `config/_default/*.toml` (+ environment overlays) get no config GUI at all.
 6. **Comments and key order are destroyed on save** (full-file regenerate). Inherent to the current approach; called out in §5 as an accepted limitation with a future option.
+7. **`.yml` config files are never discovered.** Hugo accepts `hugo.yml`/`config.yml`; `findConfigFile` doesn't list them (though `ConfigFormat` already handles the extension). *(Added 2026-07-19 from source review — see spec §1.1.)*
+8. **Menu items silently drop `title`/`pre`/`post`/`params` on save.** `HugoMenuItem` round-trips only 6 of Hugo's 10+ menu entry fields. *(Added 2026-07-19 — spec §1.1.)*
+9. **Permalink token menu offers `:filename`, deprecated in Hugo v0.144** (→ `:contentbasename`; likewise `:slugorfilename` → `:slugorcontentbasename`). *(Added 2026-07-19 — spec §1.1.)*
 
 ---
 
@@ -132,8 +135,8 @@ Extract `DataDictionaryEditor` family into `Views/Components/`; wire recursive e
 
 **Phase 5 — URLs additions, Integrations tab** (pagination, services+privacy, sitemap, outputs matrix), theme/timezone pickers, deprecation lints.
 
-**Phase 6 — Deferred, separate specs when wanted**
-Config directory (`config/_default` + environments) — touches site loading, merge semantics, and "which file does a form edit write to"; multilingual `languages` editor; module imports/mounts GUI.
+**Phase 6 — Deferred, broken out in `CONFIG-EDITOR-PHASE6-DESIGN.md` (2026-07-20)**
+Config directory (`config/_default` + environments) — touches site loading, merge semantics, and "which file does a form edit write to"; multilingual `languages` editor; module imports/mounts GUI. Each needs a Hugo source-verification pass (per this doc's own research method, §1 above) before a schema/architecture doc can be written — none of the three are implementable as specced yet.
 
 Rough sizing: P0 small; P1 the big architectural lift; P2–P5 each a focused view-layer chunk once P1 exists.
 
@@ -143,4 +146,4 @@ Rough sizing: P0 small; P1 the big architectural lift; P2–P5 each a focused vi
 
 - **Comment & ordering loss on form-mode save** stays (full regenerate via Yams/TOMLKit). Sparse writing shrinks the diff but doesn't preserve comments. Future option: surgical text edits keyed off the parsed AST — out of scope; note in UI copy ("form saves rewrite the file").
 - **Schema drift vs Hugo releases**: schema is a static table pinned to a Hugo version; unknown keys still round-trip safely, so drift degrades to "shows in Advanced" not data loss. Revisit per Hugo minor.
-- **Open**: should Essentials show `locale` or keep `languageCode` primary while most themes still document the latter? Current lean: show both, deprecation note on languageCode.
+- ~~**Open**: should Essentials show `locale` or keep `languageCode` primary while most themes still document the latter?~~ **Resolved 2026-07-19** (spec §7.1): a single "Locale" row that displays whichever key the file has, writes back to that same key (no silent renames), offers a one-click "Rename key to locale" when the file uses the deprecated key, and writes `locale` for files with neither.

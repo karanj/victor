@@ -7,12 +7,8 @@ struct FileListView: View {
     @Bindable var siteViewModel: SiteViewModel
 
     @State private var quickLookURL: URL?
-    /// Which sheet (if any) is presented, and for which node - consolidates
-    /// what used to be five separate `@State` booleans on `FolderRowWithSheets`
-    /// plus one on `FileRowWithSheets` plus the Return-key rename accelerator's
-    /// own `renameTargetNode`, now that context-menu presentation moved from
-    /// per-row to List-level `.contextMenu(forSelectionType:)` (victor-sel).
-    /// See Docs/SELECTION-MODEL-MEMO.md section 4.
+    /// Which sheet is presented and for which node - consolidates the six `@State`
+    /// booleans this used to take, now that context menus are List-level (victor-sel).
     @State private var sheetTarget: SheetTarget?
     /// Nodes pending the batch-trash confirmation alert (Delete key or the
     /// multi-selection "Move N Items to Trash" context menu item) - already
@@ -49,13 +45,9 @@ struct FileListView: View {
             }
         }
         .listStyle(.sidebar)
-        // Single List-level context menu (victor-sel), replacing the former
-        // per-row `.contextMenu` on FolderRowWithSheets/FileRowWithSheets.
-        // `ids` is whatever the system hands back for this invocation - not
-        // necessarily `selectedFileIDs` (right-clicking a row outside the
-        // current selection replaces the selection with just that row, standard
-        // macOS behavior `forSelectionType` gives for free). See
-        // Docs/SELECTION-MODEL-MEMO.md section 4.
+        // Single List-level context menu. `ids` is whatever the system hands back for this
+        // invocation, not necessarily `selectedFileIDs` - right-clicking outside the
+        // selection replaces it with that row. See Docs/SELECTION-MODEL-MEMO.md §4.
         .contextMenu(forSelectionType: FileNode.ID.self) { ids in
             SelectionContextMenu(
                 ids: ids,
@@ -93,12 +85,8 @@ struct FileListView: View {
             quickLookURL = node.url
             return .handled
         }
-        // Finder-familiar Return-to-rename accelerator. Only fires when the
-        // List itself holds key focus - the sidebar's search TextField
-        // (SearchBar, a sibling of FileListView in SidebarView, not a
-        // descendant of this List) keeps its own normal Return behavior
-        // because .onKeyPress here never sees key events delivered to a
-        // separately-focused text field elsewhere in the view tree.
+        // Return-to-rename. Only fires when the List holds key focus; the sidebar's search
+        // field is a sibling, not a descendant, so it keeps normal Return behaviour.
         .onKeyPress(.return) {
             guard let node = siteViewModel.selectedNode else { return .ignored }
             sheetTarget = .rename(node)
@@ -366,20 +354,12 @@ struct FileRowViewModel: Equatable {
 // MARK: - File Row
 
 struct FileRowView: View, Equatable {
-    // `View` conformance infers @MainActor isolation onto the whole type including
-    // plain stored properties, which then blocks reading them from the
-    // `nonisolated static func ==` below (needed for the `Equatable` conformance
-    // itself, whose requirement is nonisolated by contract).
-    // `FileRowViewModel` is a plain `Sendable`-eligible struct (UUID/String/Color/
-    // Bool/etc.), so plain `nonisolated` suffices for it.
+    // `View` conformance infers @MainActor onto stored properties, which blocks the
+    // nonisolated `==` below. This one is a plain Sendable-eligible struct.
     nonisolated let viewModel: FileRowViewModel
-    /// The node is passed separately to observe contentStatus changes (loaded async).
-    /// `nonisolated(unsafe)`, not plain `nonisolated`, because `FileNode` isn't
-    /// `Sendable` (weak parent + recursive children, CLAUDE.md: must stay a class).
-    /// `(unsafe)` is safe in practice because `FileRowView` (a SwiftUI view) is only
-    /// ever constructed/compared on the main actor to begin with - the type system
-    /// just can't prove that through the `Equatable` conformance boundary (WP3.5
-    /// Cluster 7).
+    /// Passed separately to observe async `contentStatus` changes. `nonisolated(unsafe)`
+    /// because `FileNode` isn't Sendable; safe in practice since a SwiftUI view is only
+    /// constructed and compared on the main actor.
     nonisolated(unsafe) let node: FileNode
 
     // `nonisolated`: `View`'s `body` carries an implicit `@MainActor`, but
@@ -546,15 +526,9 @@ struct ContentStatusBadge: View {
 
 // MARK: - Drag Out
 
-/// Builds the drag-out payload for ONE sidebar row (victor-clk / #50).
-/// Rows use `.itemProvider`, NOT `.onDrag`: `.onDrag` installs its own drag
-/// gesture that front-runs the List's native click-to-select handling and
-/// eats left-clicks (the #50 bug). `.itemProvider` registers with the
-/// NSTableView drag-source machinery instead - standard AppKit drag
-/// threshold, clicks never contested - and on a multi-selection drag the
-/// table collects one provider per selected row, so true N-file Finder
-/// drags come free (this replaced B.4's single-provider workaround that
-/// joined the other paths into a text representation).
+/// Drag-out payload for one sidebar row. `.itemProvider`, not `.onDrag`: `.onDrag`
+/// installs its own gesture that front-runs the List's click-to-select and eats
+/// left-clicks (#50). `.itemProvider` also gives multi-row drags one provider per row.
 @MainActor
 private func dragItemProvider(for node: FileNode) -> NSItemProvider {
     FileDragItemProvider.make(for: node.url, secondaryRepresentation: node.url.path)
@@ -562,13 +536,9 @@ private func dragItemProvider(for node: FileNode) -> NSItemProvider {
 
 // MARK: - Row Wrappers
 
-/// Wrapper view for a folder row - keeps only what's specific to folder rows
-/// (drop-target overlay/`.dropDestination`, drag-out source) plus
-/// `.equatable()` row rendering. No longer owns sheet state or a
-/// `.contextMenu` (victor-sel): both moved to the List level
-/// (`FileListView.body`'s `.contextMenu(forSelectionType:)` and
-/// `.sheet(item: $sheetTarget)`) since a per-row context menu can't represent
-/// a multi-row selection. See Docs/SELECTION-MODEL-MEMO.md section 4.
+/// Folder row: drop-target overlay, drag-out source, `.equatable()` rendering. Sheet
+/// state and context menu live at the List level, since a per-row menu can't represent
+/// a multi-row selection. See Docs/SELECTION-MODEL-MEMO.md §4.
 struct FolderRowWithSheets: View {
     let node: FileNode
     let siteViewModel: SiteViewModel
@@ -589,12 +559,8 @@ struct FolderRowWithSheets: View {
             .itemProvider {
                 dragItemProvider(for: node)
             }
-            // Accept file drops onto folder rows - either a same-site MOVE or
-            // (for drops from outside the site, e.g. Finder) the existing
-            // copy/import path. `node` here can be an ephemeral
-            // filtered-search copy (see SiteViewModel.importDroppedFile's doc
-            // comment), so the move-vs-copy decision and canonical-node
-            // resolution both live in `handleDroppedFile` instead of here.
+            // `node` can be an ephemeral filtered-search copy, so the move-vs-copy decision
+            // and canonical-node resolution both live in `handleDroppedFile`.
             .dropDestination(for: URL.self) { droppedURLs, _ in
                 guard node.isDirectory, !droppedURLs.isEmpty else { return false }
                 for sourceURL in droppedURLs {
@@ -630,13 +596,9 @@ struct FileRowWithSheets: View {
 
 // MARK: - Selection Context Menu
 
-/// Single dispatcher for the sidebar's context menu, driven by
-/// `.contextMenu(forSelectionType:)` on `FileListView`'s List (victor-sel) -
-/// replaces the former per-row `FileContextMenu`/`FolderContextMenu` pair.
-/// `ids` is whatever the system hands back for this invocation - not
-/// necessarily `siteViewModel.selectedFileIDs`, since right-clicking a row
-/// outside the current selection replaces the selection with just that row
-/// (standard macOS behavior). See Docs/SELECTION-MODEL-MEMO.md section 4.
+/// Single dispatcher for the sidebar context menu. `ids` is what the system hands back
+/// for this invocation, not necessarily the current selection - right-clicking outside
+/// it replaces it with that row. See Docs/SELECTION-MODEL-MEMO.md §4.
 struct SelectionContextMenu: View {
     let ids: Set<FileNode.ID>
     let siteViewModel: SiteViewModel

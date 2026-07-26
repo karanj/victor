@@ -25,12 +25,8 @@ class HugoSite: Identifiable {
         self.configFile = configFile
     }
 
-    /// Create a HugoSite asynchronously.
-    /// Note: no `Task.detached` here — `HugoSite` is a plain (non-actor-isolated)
-    /// class and this does a handful of trivial `FileManager.fileExists` checks,
-    /// so there's no actor to hop off of; detaching only manufactured a
-    /// `Sendable` requirement on the return value for no real benefit (WP3.5
-    /// Cluster 4).
+    /// Create a HugoSite asynchronously. No `Task.detached`: this is a handful of trivial
+    /// `fileExists` checks on a non-isolated class, so there's no actor to hop off.
     static func create(rootURL: URL) async -> HugoSite {
         // Try to find Hugo config file
         let possibleConfigs = [

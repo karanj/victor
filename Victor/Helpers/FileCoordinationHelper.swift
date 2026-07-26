@@ -1,45 +1,22 @@
 import Foundation
 import os
 
-/// Dedupes the `withCheckedThrowingContinuation` + `didResume` dance that used to be
-/// hand-rolled identically in three places: `AutoSaveService.performSave`,
-/// `FileSystemService.renameFile`, and `FileSystemService.duplicateFile` (victor-mod
-/// grab-bag item 3). All three follow the same shape:
+/// Dedupes the `withCheckedThrowingContinuation` + `didResume` dance hand-rolled
+/// identically in `AutoSaveService.performSave` and `FileSystemService.renameFile`/
+/// `duplicateFile`: coordinate, let the accessor block resume, and resume with the
+/// coordinator's own error if the block never ran. Each call site still picks its own
+/// `coordinate(...)` overload.
 ///
-///   1. Call `NSFileCoordinator.coordinate(...)`, which synchronously invokes an
-///      accessor block (or fails up front and sets an `NSError` out-param).
-///   2. The accessor block does the actual file operation and must resume a
-///      continuation with success or failure.
-///   3. If coordination fails *before* the accessor block ever runs, resume with
-///      the `NSError` instead - but only if the block didn't already resume.
+/// `didResume` uses `OSAllocatedUnfairLock` rather than a captured `var` because `resume`
+/// is `@Sendable` - a bare mutable capture doesn't type-check under Swift 6.
 ///
-/// This function owns the continuation and the `didResume` guard; each call site still
-/// picks its own `coordinate(...)` overload (single vs. dual URL, reading vs. writing
-/// options), since those differ per site and aren't worth abstracting further.
+/// - Parameter body: performs the `coordinate(...)` call, given a `resume` closure, and
+///   returns the `NSError?` from `coordinate`'s `error:` out-parameter.
+/// - Returns: whatever `resume` was called with on success.
+/// - Throws: whatever `resume` was called with, or the coordinator's own error.
 ///
-/// `didResume` is guarded by `OSAllocatedUnfairLock` rather than a plain captured `var`:
-/// `resume` is `@Sendable` (it may be invoked from whatever thread `NSFileCoordinator`
-/// calls the accessor block on), so a bare mutable capture doesn't type-check under
-/// Swift 6 strict concurrency (verified - a plain `var didResume` capture is rejected
-/// with "mutation of captured var in concurrently-executing code").
-///
-/// - Parameter body: Performs the actual `NSFileCoordinator.coordinate(...)` call.
-///   It's given a `resume` closure to report the accessor block's result, and must
-///   return the `NSError?` produced by `coordinate`'s `error:` out-parameter (`nil`
-///   if coordination didn't fail up front).
-/// - Returns: Whatever `resume` was called with on success.
-/// - Throws: Whatever `resume` was called with on failure, or the coordinator's own
-///   error if the accessor block never ran.
-///
-/// `@concurrent` (SE-0461, verified to compile in this project's Swift 6.0 language
-/// mode without any upcoming-feature flag - see `OffActorFileIO.swift`'s doc comment
-/// for the full reasoning) pins this function - and, transitively, the blocking
-/// `NSFileCoordinator.coordinate(...)` call each `body` closure makes synchronously
-/// inside it - to the concurrent executor, compiler-enforced rather than
-/// default-setting-dependent. Callers (`AutoSaveService.performSave`,
-/// `FileSystemService.renameFile`/`duplicateFile`) don't need `@concurrent` themselves;
-/// awaiting this already-pinned function is what gets their blocking coordination work
-/// off the actor.
+/// `@concurrent` pins this - and transitively each `body`'s blocking `coordinate(...)` -
+/// to the concurrent executor, so callers don't need `@concurrent` themselves.
 @concurrent
 nonisolated func withFileCoordination<T: Sendable>(
     _ body: (_ resume: @escaping @Sendable (Result<T, Error>) -> Void) -> NSError?

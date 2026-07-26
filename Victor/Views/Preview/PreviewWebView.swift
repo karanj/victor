@@ -67,13 +67,9 @@ struct PreviewWebView: NSViewRepresentable {
         var currentHTML: String = ""
         weak var webView: WKWebView?
 
-        // No deinit nil-out needed: `WKWebView.navigationDelegate` is `weak`
-        // in WebKit, so it already clears itself automatically when this
-        // Coordinator deallocates. A synchronous `deinit` can't touch
-        // `@MainActor` state anyway (WP3.5 Cluster 11, applied here per its
-        // own prose note even though this file isn't in Cluster 11's file
-        // list - the same pattern, an apparent gap in the memo's file
-        // enumeration).
+        // No deinit nil-out needed: `WKWebView.navigationDelegate` is weak, so it clears
+        // itself when this Coordinator deallocates (and a sync `deinit` can't touch
+        // `@MainActor` state anyway).
 
         // Handle navigation
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
