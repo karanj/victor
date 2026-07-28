@@ -31,17 +31,10 @@ final class FileCacheManager {
 
     // MARK: - Content Access
 
-    /// Get edited content for a file by node ID
-    /// - Parameter nodeID: The file node's UUID
-    /// - Returns: The cached content, or nil if not cached
     func getContent(for nodeID: UUID) -> String? {
         return contentByFile[nodeID]
     }
 
-    /// Set edited content for a file by node ID
-    /// - Parameters:
-    ///   - content: The content to cache
-    ///   - nodeID: The file node's UUID
     func setContent(_ content: String, for nodeID: UUID) {
         contentByFile[nodeID] = content
         markAccessed(nodeID)
@@ -82,11 +75,8 @@ final class FileCacheManager {
         _cacheOrder.removeAll()
     }
 
-    /// Evict old entries if over the cache limit
-    /// - Parameters:
-    ///   - excluding: Node ID to never evict (typically the selected node)
-    ///   - modified: Set of node IDs with unsaved changes (never evict these)
-    /// - Returns: Array of evicted node IDs (for logging or cleanup)
+    /// Trim to `maxCachedFiles`, least-recently-used first. The selected node and anything
+    /// with unsaved changes are never evicted. Returns what was dropped.
     @discardableResult
     func evictIfNeeded(excluding selectedID: UUID?, modified modifiedIDs: Set<UUID>) -> [UUID] {
         var overflow = _cacheOrder.count - maxCachedFiles

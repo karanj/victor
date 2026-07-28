@@ -22,14 +22,7 @@ actor AutoSaveService {
 
     init() {}
 
-    /// Schedule an auto-save operation with debouncing
-    /// - Parameters:
-    ///   - fileURL: URL of the file to save
-    ///   - content: Content to save
-    ///   - lastModified: Last known modification date (for conflict detection)
-    ///   - onConflict: Callback when a conflict is detected
-    ///   - onSuccess: Callback when save succeeds
-    ///   - onError: Callback when save fails
+    /// Debounced auto-save. `lastModified` is the date conflict detection compares against.
     ///
     /// Callbacks are `@Sendable @MainActor`: `@MainActor` says where they run,
     /// `@Sendable` is what makes the closure value legal to store in this actor's state.

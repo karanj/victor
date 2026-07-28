@@ -1,12 +1,6 @@
 import Foundation
 
-/// Centralized SF Symbols constants for consistent iconography
-///
-/// Usage:
-/// ```swift
-/// Image(systemName: Symbols.Action.trash)
-/// Image(systemName: Symbols.Navigation.chevronRight)
-/// ```
+/// Centralized SF Symbol names, so the same icon means the same thing everywhere.
 enum Symbols {
     // MARK: - Actions
 

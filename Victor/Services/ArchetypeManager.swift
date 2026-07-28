@@ -9,9 +9,8 @@ final class ArchetypeManager: @unchecked Sendable {
 
     // MARK: - Loading
 
-    /// Load all archetypes from a Hugo site's archetypes directory
-    /// - Parameter siteURL: The root URL of the Hugo site
-    /// - Returns: Array of Archetype objects
+    /// Load all archetypes from a Hugo site's `archetypes/` directory.
+    ///
     /// `@MainActor`: reads `@MainActor`-isolated `Archetype` properties
     /// (`isDefault`, `name`) synchronously while sorting (WP3.5 Cluster 13).
     @MainActor
@@ -59,9 +58,6 @@ final class ArchetypeManager: @unchecked Sendable {
         return archetypes
     }
 
-    /// Parse a single archetype file
-    /// - Parameter url: The archetype file URL
-    /// - Returns: An Archetype instance
     /// `@MainActor`: constructs an `Archetype`, which is itself `@MainActor`-isolated
     /// (WP3.5 Cluster 13) — this method already only ever runs from `@MainActor` callers.
     @MainActor
@@ -184,13 +180,8 @@ final class ArchetypeManager: @unchecked Sendable {
 
     // MARK: - Content Creation
 
-    /// Create a new content file from an archetype
-    /// - Parameters:
-    ///   - archetype: The archetype to use
-    ///   - title: The title for the new content
-    ///   - targetDirectory: The directory to create the file in
-    ///   - filename: Optional custom filename (defaults to slugified title)
-    /// - Returns: URL of the created file
+    /// Create a new content file from an archetype. `filename` defaults to the slugified title.
+    ///
     /// `@MainActor`: calls `archetype.processTemplate(title:)`, an instance
     /// method on the `@MainActor`-isolated `Archetype` (WP3.5 Cluster 13).
     @MainActor

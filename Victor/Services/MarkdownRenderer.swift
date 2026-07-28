@@ -11,11 +11,7 @@ final class MarkdownRenderer: @unchecked Sendable {
 
     // MARK: - Rendering
 
-    /// Convert markdown string to styled HTML (strips frontmatter first)
-    /// - Parameters:
-    ///   - markdown: The markdown content (may include frontmatter)
-    ///   - title: Optional title from frontmatter to render as h1 heading
-    ///   - themeCSS: Optional CSS from Hugo theme (loaded via ThemeCSSService)
+    /// Convert markdown to styled HTML. Frontmatter is stripped first; `title` becomes an h1.
     func render(markdown: String, title: String? = nil, themeCSS: String? = nil) -> Result<String, RenderError> {
         do {
             // Strip frontmatter before rendering
@@ -44,11 +40,7 @@ final class MarkdownRenderer: @unchecked Sendable {
         return markdown
     }
 
-    /// Convert markdown to HTML and handle errors by returning error HTML
-    /// - Parameters:
-    ///   - markdown: The markdown content (may include frontmatter)
-    ///   - title: Optional title from frontmatter to render as h1 heading
-    ///   - themeCSS: Optional CSS from Hugo theme (loaded via ThemeCSSService)
+    /// `render`, with failures turned into an HTML error page rather than a `Result`.
     func renderOrError(markdown: String, title: String? = nil, themeCSS: String? = nil) -> String {
         switch render(markdown: markdown, title: title, themeCSS: themeCSS) {
         case .success(let html):
@@ -60,12 +52,7 @@ final class MarkdownRenderer: @unchecked Sendable {
 
     // MARK: - HTML Templates
 
-    /// Wrap HTML body in full document with CSS
-    /// Supports optional Hugo theme CSS which is injected after default styles (CSS cascade: later rules win)
-    /// - Parameters:
-    ///   - htmlBody: The rendered HTML body content
-    ///   - title: Optional title for the document
-    ///   - themeCSS: Optional CSS from Hugo theme (injected last to override defaults)
+    /// `themeCSS` is injected after the default styles so the theme wins the cascade.
     private func wrapInHTMLTemplate(htmlBody: String, title: String? = nil, themeCSS: String? = nil) -> String {
         // Build title heading if provided
         let titleHTML: String

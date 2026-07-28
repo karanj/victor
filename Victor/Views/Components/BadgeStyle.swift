@@ -51,16 +51,7 @@ struct BadgeModifier: ViewModifier {
 // MARK: - View Extension
 
 extension View {
-    /// Applies badge styling with customizable color and shape
-    ///
-    /// - Parameters:
-    ///   - color: The badge color (used for both text and tinted background)
-    ///   - font: The font to use (default: .caption2)
-    ///   - fontWeight: Optional font weight (default: nil)
-    ///   - backgroundOpacity: Opacity for the background (default: 0.15)
-    ///   - shape: Shape of the badge (default: roundedRectangle with 4pt radius)
-    ///   - horizontalPadding: Horizontal padding (default: 6)
-    ///   - verticalPadding: Vertical padding (default: 2)
+    /// `color` tints both the text and the background.
     func badgeStyle(
         color: Color,
         font: Font = .caption2,
@@ -81,11 +72,7 @@ extension View {
         ))
     }
 
-    /// Applies badge styling with capsule shape (for status/tag badges)
-    ///
-    /// - Parameters:
-    ///   - color: The badge color
-    ///   - backgroundOpacity: Opacity for the background (default: 0.2)
+    /// Capsule variant, for status/tag badges.
     func capsuleBadgeStyle(
         color: Color,
         backgroundOpacity: Double = 0.2
