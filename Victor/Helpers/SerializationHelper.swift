@@ -7,10 +7,7 @@ enum SerializationHelper {
 
     // MARK: - YAML
 
-    /// Parse YAML string to dictionary
-    /// - Parameter content: YAML content string
-    /// - Returns: Parsed dictionary
-    /// - Throws: Error if parsing fails
+    /// Throws if the document isn't a top-level mapping.
     static func parseYAML(_ content: String) throws -> [String: Any] {
         guard let yaml = try Yams.load(yaml: content) as? [String: Any] else {
             throw ParsingError.yamlParsingFailed("Could not parse as dictionary")
@@ -18,20 +15,14 @@ enum SerializationHelper {
         return yaml
     }
 
-    /// Serialize dictionary to YAML string
-    /// - Parameter dict: Dictionary to serialize
-    /// - Returns: YAML string
-    /// - Throws: Error if serialization fails
-    static func serializeToYAML(_ dict: [String: Any]) throws -> String {
-        return try Yams.dump(object: dict, width: -1)
+    /// Accepts a mapping or a sequence at the root - both are valid YAML documents.
+    static func serializeToYAML(_ value: Any) throws -> String {
+        return try Yams.dump(object: value, width: -1)
     }
 
     // MARK: - JSON
 
-    /// Parse JSON string to dictionary
-    /// - Parameter content: JSON content string
-    /// - Returns: Parsed dictionary
-    /// - Throws: Error if parsing fails
+    /// Throws if the document isn't a top-level object.
     static func parseJSON(_ content: String) throws -> [String: Any] {
         guard let data = content.data(using: .utf8),
               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -40,15 +31,11 @@ enum SerializationHelper {
         return json
     }
 
-    /// Serialize dictionary to JSON string
-    /// - Parameters:
-    ///   - dict: Dictionary to serialize
-    ///   - prettyPrinted: Whether to format with indentation
-    /// - Returns: JSON string
-    /// - Throws: Error if serialization fails
-    static func serializeToJSON(_ dict: [String: Any], prettyPrinted: Bool = true) throws -> String {
+    /// Accepts an object or an array at the root. Keys are always sorted, so output is
+    /// stable across runs.
+    static func serializeToJSON(_ value: Any, prettyPrinted: Bool = true) throws -> String {
         let options: JSONSerialization.WritingOptions = prettyPrinted ? [.prettyPrinted, .sortedKeys] : [.sortedKeys]
-        let data = try JSONSerialization.data(withJSONObject: dict, options: options)
+        let data = try JSONSerialization.data(withJSONObject: value, options: options)
         guard let jsonString = String(data: data, encoding: .utf8) else {
             throw ParsingError.jsonSerializationFailed("Could not encode JSON data as string")
         }
@@ -81,13 +68,9 @@ enum SerializationHelper {
 
     // MARK: - Validated Serialization
 
-    /// Serialize dictionary to YAML with round-trip validation
-    /// Ensures the output can be parsed back successfully
-    /// - Parameter dict: Dictionary to serialize
-    /// - Returns: Validated YAML string
-    /// - Throws: Error if serialization or round-trip validation fails
-    static func serializeToYAMLValidated(_ dict: [String: Any]) throws -> String {
-        let output = try serializeToYAML(dict)
+    /// Serialize to YAML, then parse it back - throwing rather than emitting YAML we can't reread.
+    static func serializeToYAMLValidated(_ value: Any) throws -> String {
+        let output = try serializeToYAML(value)
 
         // Round-trip validation: ensure output is parseable
         do {

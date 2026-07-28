@@ -1020,8 +1020,15 @@ class SiteViewModel {
         return false
     }
 
-    /// Save all files with unsaved changes
-    func saveAllModifiedFiles() async {
+    /// Save every file with unsaved changes. Returns the names that failed, empty on success.
+    ///
+    /// Callers MUST check the result before doing anything that discards state - "Save and
+    /// Quit" and "Save All and Close" both used to proceed unconditionally, which turned a
+    /// failed write into silent data loss. Failures are also posted to `errorMessage`.
+    @discardableResult
+    func saveAllModifiedFiles() async -> [String] {
+        var failed: [String] = []
+
         // Save markdown and text files tracked in modifiedFileIDs
         let modifiedIDs = modifiedFileIDs
         for nodeID in modifiedIDs {
@@ -1044,6 +1051,9 @@ class SiteViewModel {
                     Logger.shared.info("Saved: \(node.name)")
                 } catch {
                     Logger.shared.error("Failed to save \(node.name)", error: error)
+                    // Deliberately NOT clearing the modified flag - the edit is still
+                    // unsaved, and clearing it would strand it.
+                    failed.append(node.name)
                 }
             } else if let textFile = node.textFile {
                 do {
@@ -1053,12 +1063,21 @@ class SiteViewModel {
                     Logger.shared.info("Saved: \(node.name)")
                 } catch {
                     Logger.shared.error("Failed to save \(node.name)", error: error)
+                    failed.append(node.name)
                 }
             }
         }
 
         // Save specialized files (Hugo config, data files, templates, archetypes)
-        await specializedFileManager.saveAll()
+        failed.append(contentsOf: await specializedFileManager.saveAll())
+
+        if !failed.isEmpty {
+            errorMessage = failed.count == 1
+                ? "Failed to save \"\(failed[0])\". Your changes are still unsaved."
+                : "Failed to save \(failed.count) files: \(failed.joined(separator: ", ")). Your changes are still unsaved."
+        }
+
+        return failed
     }
 
     // MARK: - Status Metadata Loading (Lazy)
@@ -1215,23 +1234,28 @@ class SiteViewModel {
         }
     }
 
-    /// Save the current Hugo configuration (from form fields)
-    func saveHugoConfig() async {
+    /// Save the current Hugo configuration (from form fields). Returns false on failure,
+    /// having already posted to `errorMessage` - callers gate their saved-indicator on it.
+    func saveHugoConfig() async -> Bool {
         do {
             try await specializedFileManager.saveHugoConfig()
+            return true
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"
             Logger.shared.error("Error saving Hugo config", error: error)
+            return false
         }
     }
 
-    /// Save the current Hugo configuration directly from rawContent (for raw editor mode)
-    func saveHugoConfigRaw() async {
+    /// Save the current Hugo configuration directly from rawContent (for raw editor mode).
+    func saveHugoConfigRaw() async -> Bool {
         do {
             try await specializedFileManager.saveHugoConfigRaw()
+            return true
         } catch {
             errorMessage = "Failed to save config: \(error.localizedDescription)"
             Logger.shared.error("Error saving Hugo config", error: error)
+            return false
         }
     }
 
@@ -1246,18 +1270,20 @@ class SiteViewModel {
         }
     }
 
-    /// Save the current data file
-    func saveDataFile() async {
+    /// Save the current data file.
+    func saveDataFile() async -> Bool {
         guard let dataFile = currentDataFile else {
             errorMessage = "No data file to save"
-            return
+            return false
         }
 
         do {
             try await specializedFileManager.saveDataFile(dataFile)
+            return true
         } catch {
             errorMessage = "Failed to save data file: \(error.localizedDescription)"
             Logger.shared.error("Error saving data file", error: error)
+            return false
         }
     }
 

@@ -398,4 +398,66 @@ final class DataFileParserTests: XCTestCase {
         XCTAssertEqual(dict["title"] as? String, "日本語タイトル")
         XCTAssertEqual(dict["description"] as? String, "中文描述")
     }
+
+    // MARK: - Array-Root Serialization
+    //
+    // Hugo data files may be a sequence at the root (`- name: item`). The parser, the
+    // DataFile model (`dataArray`/`isArrayRoot`) and the editor's "Array" badge all support
+    // that shape - but serialization rejected anything that wasn't a dictionary, so an
+    // array-root YAML/JSON file could be opened and edited and then never saved.
+    // TOML is deliberately excluded: it has no array-root form (see testTOMLRejectsArrayRoot).
+
+    func testYAMLSerializesArrayRoot() throws {
+        let arrayData: [Any] = [
+            ["name": "Item 1"],
+            ["name": "Item 2"]
+        ]
+
+        let yaml = try parser.serialize(data: arrayData, format: .yaml)
+        let reparsed = try parser.parse(content: yaml, format: .yaml)
+
+        guard let array = reparsed as? [Any] else {
+            return XCTFail("array root should round-trip as an array, got \(type(of: reparsed))")
+        }
+        XCTAssertEqual(array.count, 2)
+        XCTAssertEqual((array.first as? [String: Any])?["name"] as? String, "Item 1")
+    }
+
+    func testJSONSerializesArrayRoot() throws {
+        let arrayData: [Any] = [
+            ["name": "Item 1"],
+            ["name": "Item 2"]
+        ]
+
+        let json = try parser.serialize(data: arrayData, format: .json)
+        let reparsed = try parser.parse(content: json, format: .json)
+
+        guard let array = reparsed as? [Any] else {
+            return XCTFail("array root should round-trip as an array, got \(type(of: reparsed))")
+        }
+        XCTAssertEqual(array.count, 2)
+    }
+
+    @MainActor
+    func testSaveWritesArrayRootYAMLDataFileToDisk() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("victor-arrayroot-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let url = dir.appendingPathComponent("authors.yaml")
+        let dataFile = DataFile(
+            url: url,
+            format: .yaml,
+            data: [["name": "Ada"]] as [Any],
+            rawContent: "- name: Ada"
+        )
+        dataFile.data = [["name": "Ada"], ["name": "Grace"]] as [Any]
+
+        try await DataFileParser.shared.save(dataFile)
+
+        let written = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(written.contains("Grace"), "the edit must reach disk")
+        XCTAssertFalse(dataFile.hasUnsavedChanges)
+    }
 }

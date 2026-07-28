@@ -132,9 +132,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         switch response {
         case .alertFirstButtonReturn:
-            // Save and quit
+            // Save and quit - but only quit if every save actually landed. Terminating
+            // regardless turns a failed write into silent data loss.
             Task { @MainActor in
-                await viewModel.saveAllModifiedFiles()
+                let failed = await viewModel.saveAllModifiedFiles()
+                guard failed.isEmpty else {
+                    Self.presentSaveFailedAlert(failed)
+                    return
+                }
                 NSApp.terminate(nil)
             }
             return .terminateCancel // Cancel for now, will terminate after save
@@ -147,6 +152,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Cancel
             return .terminateCancel
         }
+    }
+
+    /// Own NSAlert rather than `SiteViewModel.errorMessage`: this fires on the quit path,
+    /// where the main window may already be gone and ContentView's alert with it.
+    @MainActor
+    private static func presentSaveFailedAlert(_ failed: [String]) {
+        let alert = NSAlert()
+        alert.messageText = "Couldn't save your changes"
+        alert.informativeText = failed.count == 1
+            ? "\"\(failed[0])\" could not be saved, so Victor didn't quit. Your changes are still open."
+            : "\(failed.count) files could not be saved, so Victor didn't quit: \(failed.joined(separator: ", "))."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 
@@ -289,7 +308,9 @@ struct VictorApp: App {
                 ) {
                     Button("Save All and Close") {
                         Task {
-                            await siteViewModel.saveAllModifiedFiles()
+                            // Closing discards the in-memory edits, so only close if every
+                            // save landed; otherwise errorMessage's alert explains why not.
+                            guard await siteViewModel.saveAllModifiedFiles().isEmpty else { return }
                             siteViewModel.closeSite()
                             await openPendingSiteIfNeeded()
                         }

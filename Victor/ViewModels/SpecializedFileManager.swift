@@ -353,13 +353,17 @@ final class SpecializedFileManager {
         return false
     }
 
-    /// Save all files with unsaved changes
-    func saveAll() async {
-        if hugoConfig?.hasUnsavedChanges == true {
+    /// Save all files with unsaved changes. Returns the names that failed - the caller is
+    /// responsible for telling the user, and for not treating the batch as done.
+    func saveAll() async -> [String] {
+        var failed: [String] = []
+
+        if let config = hugoConfig, config.hasUnsavedChanges {
             do {
                 try await saveHugoConfig()
             } catch {
                 Logger.shared.error("Failed to save Hugo config", error: error)
+                failed.append(config.sourceURL?.lastPathComponent ?? "Hugo configuration")
             }
         }
 
@@ -368,6 +372,7 @@ final class SpecializedFileManager {
                 try await saveDataFile(dataFile)
             } catch {
                 Logger.shared.error("Failed to save data file \(dataFile.fileName)", error: error)
+                failed.append(dataFile.fileName)
             }
         }
 
@@ -376,6 +381,7 @@ final class SpecializedFileManager {
                 try await saveTemplate(template)
             } catch {
                 Logger.shared.error("Failed to save template \(template.fileName)", error: error)
+                failed.append(template.fileName)
             }
         }
 
@@ -384,8 +390,11 @@ final class SpecializedFileManager {
                 try await saveArchetype(archetype)
             } catch {
                 Logger.shared.error("Failed to save archetype \(archetype.fileName)", error: error)
+                failed.append(archetype.fileName)
             }
         }
+
+        return failed
     }
 
     // MARK: - Clear

@@ -3,12 +3,16 @@ import SwiftUI
 /// Main view for editing Hugo data files (YAML/JSON/TOML)
 struct DataFileEditorView: View {
     @Bindable var dataFile: DataFile
-    let onSave: () async -> Void
+    /// Returns false if the save failed - the caller has already surfaced the error.
+    let onSave: () async -> Bool
 
     @State private var showRawEditor = false
     @State private var isSaving = false
     @State private var showSavedIndicator = false
     @State private var parseError: String?
+    /// Set while `onChange` puts `showRawEditor` back after a failed conversion, so the
+    /// resulting second `onChange` doesn't run the opposite (stale) conversion.
+    @State private var isRevertingMode = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -24,16 +28,22 @@ struct DataFileEditorView: View {
             }
         }
         .onChange(of: showRawEditor) { oldValue, newValue in
-            if oldValue == false && newValue == true {
-                FormRawToggleHandler.handleFormToRaw(
+            guard !isRevertingMode else {
+                isRevertingMode = false
+                return
+            }
+
+            let converted: Bool
+            if newValue {
+                converted = FormRawToggleHandler.handleFormToRaw(
                     serializeToRaw: {
                         let serialized = try DataFileParser.shared.serialize(dataFile)
                         dataFile.updateRawContent(serialized)
                     },
                     parseError: &parseError
                 )
-            } else if oldValue == true && newValue == false {
-                FormRawToggleHandler.handleRawToForm(
+            } else {
+                converted = FormRawToggleHandler.handleRawToForm(
                     parseFromRaw: {
                         let parsed = try DataFileParser.shared.parse(
                             content: dataFile.rawContent,
@@ -43,6 +53,11 @@ struct DataFileEditorView: View {
                     },
                     parseError: &parseError
                 )
+            }
+
+            if !converted {
+                isRevertingMode = true
+                showRawEditor = oldValue
             }
         }
         .parseErrorAlert($parseError)
@@ -95,16 +110,13 @@ struct DataFileEditorView: View {
 
     private func save() async {
         let helper = EditorSaveHelper()
-        // Using a dummy error message since this editor doesn't display save errors
-        var errorMessage: String?
         await helper.performSave(
-            operation: { await onSave() },
-            isSaving: { isSaving },
+            operation: {
+                guard await onSave() else { throw EditorSaveFailure.alreadyReported }
+            },
             setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
             setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setErrorMessage: { _ in },  // SiteViewModel's alert already reported it
             afterSave: {}
         )
     }
@@ -218,7 +230,7 @@ struct DataRawEditorView: View {
         bio: A software engineer passionate about SwiftUI.
         """
     )
-    return DataFileEditorView(dataFile: dataFile, onSave: {})
+    return DataFileEditorView(dataFile: dataFile, onSave: { true })
         .frame(width: 600, height: 400)
 }
 
@@ -239,7 +251,7 @@ struct DataRawEditorView: View {
         ]
         """
     )
-    return DataFileEditorView(dataFile: dataFile, onSave: {})
+    return DataFileEditorView(dataFile: dataFile, onSave: { true })
         .frame(width: 600, height: 500)
 }
 
@@ -250,6 +262,6 @@ struct DataRawEditorView: View {
         data: [:] as [String: Any],
         rawContent: ""
     )
-    return DataFileEditorView(dataFile: dataFile, onSave: {})
+    return DataFileEditorView(dataFile: dataFile, onSave: { true })
         .frame(width: 600, height: 400)
 }

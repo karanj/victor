@@ -87,13 +87,7 @@ struct ArchetypeEditorView: View {
 
             Spacer()
 
-            // Error message
-            if let error = errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(Color.Status.error)
-                    .accessibilityLabel("Error: \(error)")
-            }
+            EditorErrorLabel(message: errorMessage)
 
             EditorToolbarDivider()
 
@@ -137,11 +131,8 @@ struct ArchetypeEditorView: View {
         await helper.performSave(
             to: archetype.url,
             content: { archetype.rawContent },
-            isSaving: { isSaving },
             setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
             setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: { archetype.markAsSaved() },
             afterSave: { await onSave() }
@@ -153,7 +144,6 @@ struct ArchetypeEditorView: View {
         await helper.performReload(
             from: archetype.url,
             updateContent: { archetype.rawContent = $0 },
-            errorMessage: { errorMessage },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: { archetype.markAsSaved() }
         )

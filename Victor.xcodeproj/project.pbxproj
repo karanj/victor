@@ -177,6 +177,7 @@
 		EC1BD4CC341FA9A3BEB90C1A /* HugoServerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C0108DFAD1F31F18931BF56 /* HugoServerService.swift */; };
 		ED43D85DDC635D16CB2366E5 /* preview-styles.css in Resources */ = {isa = PBXBuildFile; fileRef = D03696993E969C4B2AEFF0AC /* preview-styles.css */; };
 		EDB40E79FEFDAFC7CC96ABAD /* Asset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5016D6DF893CC0A0982B13DE /* Asset.swift */; };
+		F1ED9E879396C990A40E6AF0 /* FormRawToggleHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7D3BA1E57B70F5D715E12C0 /* FormRawToggleHandlerTests.swift */; };
 		F448B39AFE94C0925E390D30 /* RenameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA68BE193A73BFA40E4F5EE4 /* RenameSheet.swift */; };
 		F8715F970102DFD2187857D7 /* ConfigEssentialsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EA038693246237236E4D9DE /* ConfigEssentialsTab.swift */; };
 		F966E817EFAA14C6B9DBA440 /* EditableEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C818F251294236FA7BAA7BD3 /* EditableEditorTests.swift */; };
@@ -365,6 +366,7 @@
 		E6DB0C77D4AEF9E89097B93B /* TOMLHelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOMLHelperTests.swift; sourceTree = "<group>"; };
 		E71FA51E291417520E104548 /* AssetDetailPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetDetailPanel.swift; sourceTree = "<group>"; };
 		E77E7BEA998F133DD83D5A5B /* SearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchService.swift; sourceTree = "<group>"; };
+		E7D3BA1E57B70F5D715E12C0 /* FormRawToggleHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormRawToggleHandlerTests.swift; sourceTree = "<group>"; };
 		EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoConfigParserTests.swift; sourceTree = "<group>"; };
 		EB0191EA6609B4F78FBF6109 /* FileOperationsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileOperationsService.swift; sourceTree = "<group>"; };
 		EB877B8BC545773B34D16EF8 /* ConfigIntegrationsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigIntegrationsTab.swift; sourceTree = "<group>"; };
@@ -619,6 +621,7 @@
 				E19393812899A4E521FF3E54 /* FileCoordinationHelperTests.swift */,
 				BBAF53EA579BD168CDA8C0EC /* FileOperationsServiceTests.swift */,
 				827E1E006B609681AC20B551 /* FileStatusMetadataTests.swift */,
+				E7D3BA1E57B70F5D715E12C0 /* FormRawToggleHandlerTests.swift */,
 				99D96FF3A1D4FD70C02BD8E9 /* FrontmatterParserTests.swift */,
 				EA3592166B92E75352FEC81A /* HugoConfigParserTests.swift */,
 				139E6B5015CEF9DB195E964B /* HugoServerTests.swift */,
@@ -1127,6 +1130,7 @@
 				10297D95C2674B1910AA130B /* FileCoordinationHelperTests.swift in Sources */,
 				673F552157CBE90392E50FC3 /* FileOperationsServiceTests.swift in Sources */,
 				5CCCC09802CFB3E38A4C362A /* FileStatusMetadataTests.swift in Sources */,
+				F1ED9E879396C990A40E6AF0 /* FormRawToggleHandlerTests.swift in Sources */,
 				2FCC48CCD498DB32C3C792AE /* FrontmatterParserTests.swift in Sources */,
 				17D178CDEC82395F7D3F980C /* HugoConfigParserTests.swift in Sources */,
 				C7726362C3CC1F82E929931F /* HugoServerTests.swift in Sources */,

@@ -30,6 +30,9 @@ targets:
       - path: Victor
         excludes:
           - "**/.DS_Store"
+          # Scoped CLAUDE.md files are documentation, not app content. Left in, xcodegen
+          # bundles each as a resource and they collide on Resources/CLAUDE.md.
+          - "**/CLAUDE.md"
     resources:
       - path: Victor/Assets.xcassets
       - path: Victor/Resources

@@ -23,7 +23,8 @@ struct TranslationEntry: Identifiable {
 /// Main view for editing Hugo i18n translation files
 struct TranslationEditorView: View {
     @Bindable var dataFile: DataFile
-    let onSave: () async -> Void
+    /// Returns false if the save failed - the caller has already surfaced the error.
+    let onSave: () async -> Bool
 
     @State private var entries: [TranslationEntry] = []
     @State private var searchQuery = ""
@@ -302,18 +303,14 @@ struct TranslationEditorView: View {
 
     private func save() async {
         let helper = EditorSaveHelper()
-        var errorMessage: String?
         await helper.performSave(
             operation: {
                 syncEntriesToDataFile()
-                await onSave()
+                guard await onSave() else { throw EditorSaveFailure.alreadyReported }
             },
-            isSaving: { isSaving },
             setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
             setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setErrorMessage: { _ in },  // SiteViewModel's alert already reported it
             afterSave: {}
         )
     }

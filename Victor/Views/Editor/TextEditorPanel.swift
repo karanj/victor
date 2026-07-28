@@ -100,12 +100,7 @@ private struct TextEditorToolbar: View {
 
             Spacer()
 
-            // Error message
-            if let error = viewModel.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(Color.Status.error)
-            }
+            EditorErrorLabel(message: viewModel.errorMessage)
 
             // Saving indicator
             if viewModel.isSaving {
