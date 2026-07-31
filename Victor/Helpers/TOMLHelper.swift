@@ -7,9 +7,6 @@ enum TOMLHelper {
 
     // MARK: - Conversion
 
-    /// Convert TOMLTable to dictionary
-    /// - Parameter table: The TOML table to convert
-    /// - Returns: Dictionary with converted values
     static func convertTOMLToDict(_ table: TOMLTable) -> [String: Any] {
         var result: [String: Any] = [:]
         for key in table.keys {
@@ -20,10 +17,7 @@ enum TOMLHelper {
         return result
     }
 
-    /// Convert TOML value to native Swift type
-    /// Handles TOMLValue wrappers, nested tables, and arrays recursively
-    /// - Parameter value: The TOML value to convert
-    /// - Returns: Converted Swift value (String, Bool, Int, Double, Array, Dictionary, etc.)
+    /// Unwraps TOMLValue, recursing through nested tables and arrays.
     static func convertTOMLValue(_ value: Any?) -> Any? {
         guard let value = value else { return nil }
 
@@ -91,27 +85,18 @@ enum TOMLHelper {
 
     // MARK: - Text Serialization
 
-    /// Serialize a dictionary to TOML text format
-    /// - Parameters:
-    ///   - dictionary: The dictionary to serialize
-    ///   - rootKeyOrder: Optional root-level key order (e.g.
-    ///     `ConfigValueStore.orderedRootKeys`) — honored only at the root
-    ///     table (CONFIG-SCHEMA-SPEC §2.7). Nested tables always sort
-    ///     alphabetically, same as before; `nil` keeps the old
-    ///     alphabetical-root behavior.
-    /// - Returns: TOML-formatted string with trailing newline
+    /// Serialize to TOML text, trailing newline included.
+    ///
+    /// `rootKeyOrder` (e.g. `ConfigValueStore.orderedRootKeys`) is honored only at the root
+    /// table, per CONFIG-SCHEMA-SPEC §2.7; nested tables and the `nil` case sort alphabetically.
     static func serializeToTOML(_ dictionary: [String: Any], rootKeyOrder: [String]? = nil) -> String {
         var lines: [String] = []
         serializeTOMLTable(dictionary, path: [], lines: &lines, rootKeyOrder: rootKeyOrder)
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// Recursively serialize a TOML table
-    /// - Parameters:
-    ///   - dict: The dictionary to serialize
-    ///   - path: The current key path (e.g., ["menu", "main"] for [menu.main])
-    ///   - lines: The output lines array
-    ///   - rootKeyOrder: Root-level key order, applied only when `path` is empty.
+    /// `path` is the current key path - `["menu", "main"]` emits `[menu.main]`.
+    /// `rootKeyOrder` applies only when `path` is empty.
     static func serializeTOMLTable(_ dict: [String: Any], path: [String], lines: inout [String], rootKeyOrder: [String]? = nil) {
         var simpleValues: [(String, Any)] = []
         var nestedTables: [(String, [String: Any])] = []
@@ -235,12 +220,7 @@ enum TOMLHelper {
 
     // MARK: - Table Serialization
 
-    /// Add a value to a TOML table
-    /// Handles conversion of Swift types to TOML values
-    /// - Parameters:
-    ///   - key: The key for the value
-    ///   - value: The value to add
-    ///   - table: The TOML table to add to
+    /// Converts the Swift value to its TOML counterpart on the way in.
     static func addToTOMLTable(key: String, value: Any, table: TOMLTable) {
         if let stringValue = value as? String {
             table[key] = stringValue

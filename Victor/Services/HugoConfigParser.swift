@@ -49,11 +49,7 @@ final class HugoConfigParser: @unchecked Sendable {
                           orderedRootKeys: rootKeyOrder(of: content, format: format))
     }
 
-    /// Parse a Hugo config from a string
-    /// - Parameters:
-    ///   - content: The config file content as a string
-    ///   - format: The format of the config (TOML, YAML, or JSON)
-    /// - Returns: A HugoConfig object
+    /// Parse from a string rather than a file - the resulting config gets a placeholder URL.
     func parseConfig(content: String, format: ConfigFormat) throws -> HugoConfig {
         let dictionary = try parse(content: content, format: format)
         // Use a placeholder URL for string-based parsing (not associated with a file)

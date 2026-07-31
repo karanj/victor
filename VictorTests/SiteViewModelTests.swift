@@ -2755,4 +2755,170 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(undoManager.canRedo, "net three steps from one undo action land on redo (re-trash) being next")
         XCTAssertFalse(undoManager.canUndo)
     }
+
+    // MARK: - Save Result Reporting
+    //
+    // saveDataFile/saveHugoConfig/saveHugoConfigRaw catch their own errors and post to
+    // `errorMessage` (ContentView shows the alert). They must ALSO report failure to the
+    // caller: the editor views gate their "Saved" indicator on the returned flag, and a
+    // Void return left them flashing "Saved" on top of the error alert.
+
+    func testSaveDataFileReturnsFalseAndReportsErrorWhenWriteFails() async {
+        let viewModel = SiteViewModel()
+        // A path under a directory that doesn't exist - the write throws.
+        let url = URL(fileURLWithPath: "/nonexistent-\(UUID().uuidString)/data.yaml")
+        let node = FileNode(url: url, isDirectory: false)
+        viewModel.selectedNode = node
+        viewModel.currentDataFile = DataFile(
+            url: url,
+            format: .yaml,
+            data: ["title": "test"],
+            rawContent: "title: test"
+        )
+
+        let succeeded = await viewModel.saveDataFile()
+
+        XCTAssertFalse(succeeded, "a failed write must be reported to the caller, not just to errorMessage")
+        XCTAssertNotNil(viewModel.errorMessage, "the user-facing alert must still fire")
+    }
+
+    func testSaveDataFileReturnsTrueOnSuccess() async throws {
+        let viewModel = SiteViewModel()
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("victor-save-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let url = dir.appendingPathComponent("data.yaml")
+        let node = FileNode(url: url, isDirectory: false)
+        viewModel.selectedNode = node
+        viewModel.currentDataFile = DataFile(
+            url: url,
+            format: .yaml,
+            data: ["title": "test"],
+            rawContent: "title: test"
+        )
+
+        let succeeded = await viewModel.saveDataFile()
+
+        XCTAssertTrue(succeeded)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testSaveDataFileReturnsFalseWhenNoDataFileLoaded() async {
+        let viewModel = SiteViewModel()
+
+        let succeeded = await viewModel.saveDataFile()
+
+        XCTAssertFalse(succeeded)
+        XCTAssertEqual(viewModel.errorMessage, "No data file to save")
+    }
+
+    func testSaveHugoConfigReturnsFalseWhenNoConfigLoaded() async {
+        let viewModel = SiteViewModel()
+
+        let succeeded = await viewModel.saveHugoConfig()
+
+        XCTAssertFalse(succeeded)
+        XCTAssertNotNil(viewModel.errorMessage)
+    }
+
+    func testSaveHugoConfigRawReturnsFalseWhenNoConfigLoaded() async {
+        let viewModel = SiteViewModel()
+
+        let succeeded = await viewModel.saveHugoConfigRaw()
+
+        XCTAssertFalse(succeeded)
+        XCTAssertNotNil(viewModel.errorMessage)
+    }
+
+    // MARK: - Save All Failure Reporting
+    //
+    // saveAllModifiedFiles used to log failures and return Void. Its callers - "Save and
+    // Quit", "Save All and Close" - then terminated/closed unconditionally, so a save that
+    // failed (read-only volume, deleted parent, permissions) lost the edits with no warning.
+    // It now returns the names that failed and posts to `errorMessage`; callers gate on it.
+
+    /// Builds a markdown node whose parent directory doesn't exist, so writing throws.
+    private func unwritableMarkdownNode(name: String) -> FileNode {
+        let url = URL(fileURLWithPath: "/nonexistent-\(UUID().uuidString)/\(name)")
+        let node = FileNode(url: url, isDirectory: false, isPageBundle: false)
+        let frontmatter = Frontmatter(rawContent: "---\ntitle: T\n---", format: .yaml)
+        frontmatter.title = "T"
+        node.contentFile = ContentFile(
+            url: url,
+            frontmatter: frontmatter,
+            markdownContent: "body",
+            lastModified: Date()
+        )
+        return node
+    }
+
+    func testSaveAllModifiedFilesReportsNamesThatFailed() async {
+        let viewModel = SiteViewModel()
+        let node = unwritableMarkdownNode(name: "doomed.md")
+        viewModel.fileNodes = [node]
+        viewModel.markFileModified(node.id)
+
+        let failed = await viewModel.saveAllModifiedFiles()
+
+        XCTAssertEqual(failed, ["doomed.md"], "a failed write must be reported to the caller")
+        XCTAssertNotNil(viewModel.errorMessage, "and surfaced to the user")
+        XCTAssertTrue(
+            viewModel.errorMessage?.contains("doomed.md") == true,
+            "the message should name the file that failed"
+        )
+    }
+
+    func testSaveAllModifiedFilesKeepsFileMarkedModifiedOnFailure() async {
+        let viewModel = SiteViewModel()
+        let node = unwritableMarkdownNode(name: "doomed.md")
+        viewModel.fileNodes = [node]
+        viewModel.markFileModified(node.id)
+
+        _ = await viewModel.saveAllModifiedFiles()
+
+        XCTAssertTrue(
+            viewModel.isFileModified(node.id),
+            "a file that failed to save must stay dirty - clearing it would strand the edit"
+        )
+    }
+
+    func testSaveAllModifiedFilesReturnsEmptyWhenEverythingSaves() async throws {
+        let viewModel = SiteViewModel()
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("victor-saveall-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let url = dir.appendingPathComponent("ok.md")
+        let node = FileNode(url: url, isDirectory: false, isPageBundle: false)
+        let frontmatter = Frontmatter(rawContent: "---\ntitle: T\n---", format: .yaml)
+        frontmatter.title = "T"
+        node.contentFile = ContentFile(
+            url: url,
+            frontmatter: frontmatter,
+            markdownContent: "body",
+            lastModified: Date()
+        )
+        viewModel.fileNodes = [node]
+        viewModel.markFileModified(node.id)
+
+        let failed = await viewModel.saveAllModifiedFiles()
+
+        XCTAssertTrue(failed.isEmpty)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertFalse(viewModel.isFileModified(node.id))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testSaveAllModifiedFilesReturnsEmptyWhenNothingIsModified() async {
+        let viewModel = SiteViewModel()
+
+        let failed = await viewModel.saveAllModifiedFiles()
+
+        XCTAssertTrue(failed.isEmpty)
+        XCTAssertNil(viewModel.errorMessage)
+    }
 }

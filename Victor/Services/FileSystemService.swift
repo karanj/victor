@@ -12,11 +12,7 @@ final class FileSystemService: @unchecked Sendable {
 
     // MARK: - Path Security
 
-    /// Validate that a URL stays within the given site root (prevents path traversal attacks)
-    /// - Parameters:
-    ///   - url: The URL to validate
-    ///   - siteRoot: The root URL of the Hugo site
-    /// - Throws: FileError.accessDenied if the path escapes the site root
+    /// Path-traversal guard. Throws `FileError.accessDenied` if `url` escapes `siteRoot`.
     func validatePathWithinSite(_ url: URL, siteRoot: URL) throws {
         let canonicalPath = url.standardized.path
         let canonicalSiteRoot = siteRoot.standardized.path
@@ -50,9 +46,7 @@ final class FileSystemService: @unchecked Sendable {
         return path.hasPrefix(rootWithSeparator)
     }
 
-    /// Check if a filename contains path traversal sequences
-    /// - Parameter name: The filename to check
-    /// - Returns: true if the name is safe, false if it contains traversal sequences
+    /// False if `name` carries a path separator or traversal sequence.
     private func isSafeFilename(_ name: String) -> Bool {
         // Reject names containing path separators or traversal patterns
         let dangerousPatterns = ["/", "\\", "..", "~"]
@@ -226,10 +220,8 @@ final class FileSystemService: @unchecked Sendable {
         return nodes
     }
 
-    /// Recursively build file tree including all file types
-    /// - Parameters:
-    ///   - directory: The directory to scan
-    ///   - isContentDirectory: If true, only include markdown files (Hugo content behavior)
+    /// Recursively build the file tree. Under `isContentDirectory`, only markdown files are
+    /// included - matching how Hugo treats `content/`.
     private func buildFileTree(at directory: URL, isContentDirectory: Bool = false) throws -> [FileNode] {
         var nodes: [FileNode] = []
         let fileManager = FileManager.default
@@ -382,10 +374,6 @@ final class FileSystemService: @unchecked Sendable {
         try await writeFile(to: url, content: content)
     }
 
-    /// Create a new markdown file inside the given folder URL
-    /// - Parameters:
-    ///   - folderURL: The folder to create the file in
-    ///   - siteRoot: The site root URL for path traversal validation
     func createMarkdownFile(in folderURL: URL, siteRoot: URL) async throws -> URL {
         let fileManager = FileManager.default
 
@@ -439,11 +427,6 @@ final class FileSystemService: @unchecked Sendable {
 
     // MARK: - File Operations (Context Menu)
 
-    /// Rename a file or folder
-    /// - Parameters:
-    ///   - url: The current file URL
-    ///   - newName: The new filename
-    ///   - siteRoot: The site root URL for path traversal validation
     func renameFile(at url: URL, to newName: String, siteRoot: URL) async throws -> URL {
         // Security: Validate filename doesn't contain path traversal sequences
         guard isSafeFilename(newName) else {
@@ -490,11 +473,6 @@ final class FileSystemService: @unchecked Sendable {
     /// Move a file or folder within the site (drag-to-move). Same coordination pattern as
     /// `renameFile`: source `isDirectory` stat, path-within-site validation, collision
     /// check, all before touching disk. No `isSafeFilename` check - the name doesn't change.
-    /// - Parameters:
-    ///   - url: the file/folder's current URL
-    ///   - targetDirectory: the destination folder's URL (must be inside the site)
-    ///   - siteRoot: the site root URL for path traversal validation
-    /// - Returns: the new URL after the move (same filename, new parent)
     func moveFile(at url: URL, to targetDirectory: URL, siteRoot: URL) async throws -> URL {
         var sourceIsDirectory: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &sourceIsDirectory)
@@ -569,11 +547,6 @@ final class FileSystemService: @unchecked Sendable {
     /// accessor completes, so there's no asynchrony to expose - and staying sync lets drop
     /// handlers call it without a `Task { }`, which for a non-Sendable class would raise
     /// "sending self risks causing data races" at every call site.
-    /// - Parameters:
-    ///   - sourceURL: the external file being imported
-    ///   - directory: destination directory; must be inside the site
-    ///   - siteRoot: site root for path traversal validation
-    /// - Returns: the URL the file was copied to (the filename may differ on collision)
     func importFile(from sourceURL: URL, into directory: URL, siteRoot: URL) throws -> URL {
         let fileManager = FileManager.default
 

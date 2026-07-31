@@ -1,33 +1,26 @@
 import Foundation
 
+/// Signals a save that failed and was already reported to the user elsewhere - typically via
+/// `SiteViewModel.errorMessage`, which `ContentView` shows as an alert. `EditorSaveHelper`
+/// treats it as any other failure (no saved indicator); the editor discards the message so the
+/// user doesn't get told twice.
+enum EditorSaveFailure: Error {
+    case alreadyReported
+}
+
 // MARK: - EditorSaveHelper
 
-/// Helper for common save operations across all editor views
-/// Encapsulates the save pattern: set isSaving, write content, mark saved, show indicator
+/// The save pattern shared by every non-markdown editor view: flag saving, write,
+/// mark saved, flash the saved indicator, surface any error.
 struct EditorSaveHelper {
 
-    /// Perform a save operation with consistent state management and error handling
-    /// - Parameters:
-    ///   - url: The file URL to save to
-    ///   - content: Closure that returns the content to save (may throw)
-    ///   - isSaving: Getter for current isSaving state
-    ///   - setIsSaving: Setter for isSaving state
-    ///   - showSavedIndicator: Getter for current showSavedIndicator state
-    ///   - setShowSavedIndicator: Setter for showSavedIndicator state
-    ///   - errorMessage: Getter for current errorMessage state
-    ///   - setErrorMessage: Setter for errorMessage state
-    ///   - markAsSaved: Called after successful save to mark the model as saved
-    ///   - afterSave: Optional callback after successful save (e.g., to notify parent)
-    ///   - savedIndicatorDuration: How long to show the saved indicator (default 2 seconds)
+    /// Writes `content()` to `url`.
     @MainActor
     func performSave(
         to url: URL,
         content: () throws -> String,
-        isSaving: () -> Bool,
         setIsSaving: (Bool) -> Void,
-        showSavedIndicator: () -> Bool,
         setShowSavedIndicator: (Bool) -> Void,
-        errorMessage: () -> String?,
         setErrorMessage: (String?) -> Void,
         markAsSaved: () -> Void,
         afterSave: () async -> Void,
@@ -51,26 +44,13 @@ struct EditorSaveHelper {
         setIsSaving(false)
     }
 
-    /// Perform a save operation with a custom async save closure
-    /// Use this when the save logic is more complex than just writing content to a file
-    /// - Parameters:
-    ///   - saveOperation: Async closure that performs the actual save (may throw)
-    ///   - isSaving: Getter for current isSaving state
-    ///   - setIsSaving: Setter for isSaving state
-    ///   - showSavedIndicator: Getter for current showSavedIndicator state
-    ///   - setShowSavedIndicator: Setter for showSavedIndicator state
-    ///   - errorMessage: Getter for current errorMessage state
-    ///   - setErrorMessage: Setter for errorMessage state
-    ///   - afterSave: Optional callback after successful save (e.g., to notify parent)
-    ///   - savedIndicatorDuration: How long to show the saved indicator (default 2 seconds)
+    /// Same state handling, but the caller owns the write - for editors whose save is
+    /// more than "put this string on disk".
     @MainActor
     func performSave(
         operation saveOperation: () async throws -> Void,
-        isSaving: () -> Bool,
         setIsSaving: (Bool) -> Void,
-        showSavedIndicator: () -> Bool,
         setShowSavedIndicator: (Bool) -> Void,
-        errorMessage: () -> String?,
         setErrorMessage: (String?) -> Void,
         afterSave: () async -> Void,
         savedIndicatorDuration: Double = 2.0
@@ -94,22 +74,13 @@ struct EditorSaveHelper {
 
 // MARK: - EditorReloadHelper
 
-/// Helper for common reload operations across all editor views
-/// Encapsulates the reload pattern: read from disk, update model, mark saved
+/// The reload counterpart: read from disk, hand the content to the model, mark saved.
 struct EditorReloadHelper {
 
-    /// Perform a reload operation with consistent error handling
-    /// - Parameters:
-    ///   - url: The file URL to reload from
-    ///   - updateContent: Closure to update the model with the loaded content
-    ///   - errorMessage: Getter for current errorMessage state
-    ///   - setErrorMessage: Setter for errorMessage state
-    ///   - markAsSaved: Called after successful reload to mark the model as saved
     @MainActor
     func performReload(
         from url: URL,
         updateContent: (String) throws -> Void,
-        errorMessage: () -> String?,
         setErrorMessage: (String?) -> Void,
         markAsSaved: () -> Void
     ) async {

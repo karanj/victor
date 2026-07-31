@@ -11,9 +11,6 @@ final class DataFileParser: @unchecked Sendable {
 
     // MARK: - Parsing
 
-    /// Parse a data file from disk
-    /// - Parameter url: The file URL
-    /// - Returns: A DataFile instance
     /// `@MainActor`: constructs a `DataFile`, which is itself `@MainActor`-isolated
     /// (WP3.5 Cluster 13) — this method already only ever runs from `@MainActor` callers.
     @MainActor
@@ -40,11 +37,7 @@ final class DataFileParser: @unchecked Sendable {
         )
     }
 
-    /// Parse content string into data structure
-    /// - Parameters:
-    ///   - content: The file content
-    ///   - format: The data format
-    /// - Returns: Parsed data (dictionary or array)
+    /// Returns a dictionary or an array, depending on what the document's root is.
     func parse(content: String, format: DataFormat) throws -> Any {
         switch format {
         case .yaml:
@@ -102,19 +95,21 @@ final class DataFileParser: @unchecked Sendable {
         }
     }
 
+    // A Hugo data file may be a mapping OR a sequence at the root - `DataFile.dataArray`
+    // and the editor's "Array" badge both model that. Rejecting arrays here meant an
+    // array-root YAML/JSON file could be opened and edited but never saved.
     private func serializeToYAML(_ data: Any) throws -> String {
-        guard let dict = data as? [String: Any] else {
+        guard data is [String: Any] || data is [Any] else {
             throw DataFileError.serializationFailed
         }
-
-        return try SerializationHelper.serializeToYAMLValidated(dict)
+        return try SerializationHelper.serializeToYAMLValidated(data)
     }
 
     private func serializeToJSON(_ data: Any) throws -> String {
-        guard let dict = data as? [String: Any] else {
+        guard data is [String: Any] || data is [Any] else {
             throw DataFileError.serializationFailed
         }
-        return try SerializationHelper.serializeToJSON(dict)
+        return try SerializationHelper.serializeToJSON(data)
     }
 
     private func serializeToTOML(_ dictionary: [String: Any]) throws -> String {

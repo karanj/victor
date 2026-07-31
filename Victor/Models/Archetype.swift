@@ -174,12 +174,7 @@ class Archetype: @MainActor EditableFile {
 
     // MARK: - Template Processing
 
-    /// Process the archetype to generate content for a new file
-    /// - Parameters:
-    ///   - title: The title for the new content
-    ///   - date: The date for the new content
-    ///   - additionalParams: Additional template parameters
-    /// - Returns: The processed content string
+    /// Expand the archetype's template placeholders into content for a new file.
     func processTemplate(title: String, date: Date = Date(), additionalParams: [String: String] = [:]) -> String {
         let dateString = date.formatted(Date.ISO8601FormatStyle.hugoArchetypeTimestamp)
 

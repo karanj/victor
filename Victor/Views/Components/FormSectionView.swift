@@ -9,11 +9,6 @@ struct FormSectionView<Content: View>: View {
     let icon: String?
     @ViewBuilder let content: Content
 
-    /// Creates a form section with title, optional icon, and content
-    /// - Parameters:
-    ///   - title: The section title
-    ///   - icon: Optional SF Symbol name for the section icon
-    ///   - content: The section content
     init(_ title: String, icon: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon

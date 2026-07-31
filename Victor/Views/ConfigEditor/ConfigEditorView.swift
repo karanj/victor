@@ -3,8 +3,9 @@ import SwiftUI
 /// Main view for editing Hugo configuration
 struct ConfigEditorView: View {
     @Bindable var config: HugoConfig
-    let onSave: () async -> Void
-    let onSaveRaw: () async -> Void
+    /// Both return false if the save failed - the caller has already surfaced the error.
+    let onSave: () async -> Bool
+    let onSaveRaw: () async -> Bool
     /// Site root, threaded down to `ConfigEssentialsTab` for the `theme`
     /// field's on-disk `themes/` validator. `nil` is a valid, harmless
     /// default (validator no-ops without a site root — e.g. previews/tests).
@@ -15,6 +16,9 @@ struct ConfigEditorView: View {
     @State private var isSaving = false
     @State private var showSavedIndicator = false
     @State private var parseError: String?
+    /// Set while `onChange` puts `showRawEditor` back after a failed conversion, so the
+    /// resulting second `onChange` doesn't run the opposite (stale) conversion.
+    @State private var isRevertingMode = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -81,22 +85,31 @@ struct ConfigEditorView: View {
             }
         }
         .onChange(of: showRawEditor) { oldValue, newValue in
-            if oldValue == false && newValue == true {
-                FormRawToggleHandler.handleFormToRaw(
+            guard !isRevertingMode else {
+                isRevertingMode = false
+                return
+            }
+
+            let converted: Bool
+            if newValue {
+                converted = FormRawToggleHandler.handleFormToRaw(
                     serializeToRaw: {
-                        let serialized = try HugoConfigParser.shared.serialize(config)
-                        config.rawContent = serialized
-                        print("[ConfigEditorView] Form→Raw: serialized \(serialized.count) chars")
+                        config.rawContent = try HugoConfigParser.shared.serialize(config)
                     },
                     parseError: &parseError
                 )
-            } else if oldValue == true && newValue == false {
-                FormRawToggleHandler.handleRawToForm(
+            } else {
+                converted = FormRawToggleHandler.handleRawToForm(
                     parseFromRaw: {
                         try config.updateFromRawContent()
                     },
                     parseError: &parseError
                 )
+            }
+
+            if !converted {
+                isRevertingMode = true
+                showRawEditor = oldValue
             }
         }
         .parseErrorAlert($parseError)
@@ -163,23 +176,15 @@ struct ConfigEditorView: View {
 
     private func save() async {
         let helper = EditorSaveHelper()
-        var errorMessage: String?
         await helper.performSave(
             operation: {
-                if showRawEditor {
-                    // In raw mode, save rawContent directly (bypass serialize)
-                    await onSaveRaw()
-                } else {
-                    // In form mode, serialize from structured fields
-                    await onSave()
-                }
+                // Raw mode writes rawContent directly; form mode serializes the fields.
+                let saved = showRawEditor ? await onSaveRaw() : await onSave()
+                guard saved else { throw EditorSaveFailure.alreadyReported }
             },
-            isSaving: { isSaving },
             setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
             setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setErrorMessage: { _ in },  // SiteViewModel's alert already reported it
             afterSave: {}
         )
     }

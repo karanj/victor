@@ -33,19 +33,13 @@ final class EditableEditorTests: XCTestCase {
         var isSaving = false {
             didSet { capturedIsSavingValues.append(isSaving) }
         }
-        var showSavedIndicator = false
-        var errorMessage: String?
-
         let helper = EditorSaveHelper()
         await helper.performSave(
             to: testFileURL,
             content: { "new content" },
-            isSaving: { isSaving },
             setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
-            setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setShowSavedIndicator: { _ in },
+            setErrorMessage: { _ in },
             markAsSaved: {},
             afterSave: {},
             savedIndicatorDuration: 0.01 // Short duration for testing
@@ -59,19 +53,14 @@ final class EditableEditorTests: XCTestCase {
     func testSaveOperationClearsErrorOnSuccess() async throws {
         try "initial".write(to: testFileURL, atomically: true, encoding: .utf8)
 
-        var isSaving = false
-        var showSavedIndicator = false
         var errorMessage: String? = "Previous error"
 
         let helper = EditorSaveHelper()
         await helper.performSave(
             to: testFileURL,
             content: { "new content" },
-            isSaving: { isSaving },
-            setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
-            setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
+            setIsSaving: { _ in },
+            setShowSavedIndicator: { _ in },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: {},
             afterSave: {},
@@ -85,20 +74,13 @@ final class EditableEditorTests: XCTestCase {
     func testSaveOperationWritesContentToDisk() async throws {
         try "initial".write(to: testFileURL, atomically: true, encoding: .utf8)
 
-        var isSaving = false
-        var showSavedIndicator = false
-        var errorMessage: String?
-
         let helper = EditorSaveHelper()
         await helper.performSave(
             to: testFileURL,
             content: { "updated content" },
-            isSaving: { isSaving },
-            setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
-            setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setIsSaving: { _ in },
+            setShowSavedIndicator: { _ in },
+            setErrorMessage: { _ in },
             markAsSaved: {},
             afterSave: {},
             savedIndicatorDuration: 0.01
@@ -112,21 +94,15 @@ final class EditableEditorTests: XCTestCase {
     func testSaveOperationCallsMarkAsSaved() async throws {
         try "initial".write(to: testFileURL, atomically: true, encoding: .utf8)
 
-        var isSaving = false
-        var showSavedIndicator = false
-        var errorMessage: String?
         var markAsSavedCalled = false
 
         let helper = EditorSaveHelper()
         await helper.performSave(
             to: testFileURL,
             content: { "new content" },
-            isSaving: { isSaving },
-            setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
-            setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setIsSaving: { _ in },
+            setShowSavedIndicator: { _ in },
+            setErrorMessage: { _ in },
             markAsSaved: { markAsSavedCalled = true },
             afterSave: {},
             savedIndicatorDuration: 0.01
@@ -139,24 +115,19 @@ final class EditableEditorTests: XCTestCase {
     func testSaveOperationShowsSavedIndicator() async throws {
         try "initial".write(to: testFileURL, atomically: true, encoding: .utf8)
 
-        var isSaving = false
         var showSavedIndicator = false
         var indicatorWasShown = false
-        var errorMessage: String?
 
         let helper = EditorSaveHelper()
         await helper.performSave(
             to: testFileURL,
             content: { "new content" },
-            isSaving: { isSaving },
-            setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
+            setIsSaving: { _ in },
             setShowSavedIndicator: {
                 showSavedIndicator = $0
                 if $0 { indicatorWasShown = true }
             },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setErrorMessage: { _ in },
             markAsSaved: {},
             afterSave: {},
             savedIndicatorDuration: 0.01
@@ -171,7 +142,6 @@ final class EditableEditorTests: XCTestCase {
         // Use invalid URL that will fail to write
         let invalidURL = URL(fileURLWithPath: "/nonexistent/directory/file.txt")
 
-        var isSaving = false
         var showSavedIndicator = false
         var errorMessage: String?
         var markAsSavedCalled = false
@@ -180,11 +150,8 @@ final class EditableEditorTests: XCTestCase {
         await helper.performSave(
             to: invalidURL,
             content: { "content" },
-            isSaving: { isSaving },
-            setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
+            setIsSaving: { _ in },
             setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: { markAsSavedCalled = true },
             afterSave: {},
@@ -201,19 +168,14 @@ final class EditableEditorTests: XCTestCase {
     func testSaveOperationHandlesContentProviderError() async throws {
         try "initial".write(to: testFileURL, atomically: true, encoding: .utf8)
 
-        var isSaving = false
-        var showSavedIndicator = false
         var errorMessage: String?
 
         let helper = EditorSaveHelper()
         await helper.performSave(
             to: testFileURL,
             content: { throw NSError(domain: "TestError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Content error"]) },
-            isSaving: { isSaving },
-            setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
-            setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
+            setIsSaving: { _ in },
+            setShowSavedIndicator: { _ in },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: {},
             afterSave: {},
@@ -237,7 +199,6 @@ final class EditableEditorTests: XCTestCase {
         await helper.performReload(
             from: testFileURL,
             updateContent: { loadedContent = $0 },
-            errorMessage: { errorMessage },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: {}
         )
@@ -250,15 +211,13 @@ final class EditableEditorTests: XCTestCase {
     func testReloadOperationCallsMarkAsSaved() async throws {
         try "content".write(to: testFileURL, atomically: true, encoding: .utf8)
 
-        var errorMessage: String?
         var markAsSavedCalled = false
 
         let helper = EditorReloadHelper()
         await helper.performReload(
             from: testFileURL,
             updateContent: { _ in },
-            errorMessage: { errorMessage },
-            setErrorMessage: { errorMessage = $0 },
+            setErrorMessage: { _ in },
             markAsSaved: { markAsSavedCalled = true }
         )
 
@@ -277,7 +236,6 @@ final class EditableEditorTests: XCTestCase {
         await helper.performReload(
             from: nonexistentURL,
             updateContent: { loadedContent = $0 },
-            errorMessage: { errorMessage },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: { markAsSavedCalled = true }
         )

@@ -8,14 +8,9 @@ actor SearchService {
 
     // MARK: - Search
 
-    /// Search for matches across multiple files
-    /// - Parameters:
-    ///   - options: search configuration including query, regex, case sensitivity
-    ///   - fileURLs: pre-filtered URLs from `searchableFileURLs(from:options:)`, called on
-    ///     `@MainActor` first - `FileNode` can never be Sendable, so a live tree must
-    ///     never cross this boundary
-    ///   - siteRootURL: root URL of the Hugo site (for relative paths)
-    /// - Returns: array of file results with matches
+    /// `fileURLs` comes pre-filtered from `searchableFileURLs(from:options:)`, which runs on
+    /// `@MainActor` first - `FileNode` can never be Sendable, so a live tree must never cross
+    /// this boundary.
     func search(
         options: SearchOptions,
         in fileURLs: [URL],
@@ -118,11 +113,8 @@ actor SearchService {
 
     // MARK: - Replace
 
-    /// Replace all matches in files
-    /// - Parameters:
-    ///   - results: Search results to replace in
-    ///   - options: Search options including replacement text
-    /// - Returns: Number of replacements made
+    /// Replace every match in `results`, using the replacement text carried on `options`.
+    /// Returns the number of replacements written.
     func replaceAll(
         in results: [FileSearchResult],
         options: SearchOptions

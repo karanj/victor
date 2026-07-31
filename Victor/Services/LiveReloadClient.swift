@@ -18,10 +18,8 @@ final class LiveReloadSessionDelegate: NSObject, URLSessionDelegate, @unchecked 
     /// Localhost and loopback addresses that are trusted for local development
     private static let trustedLocalHosts: Set<String> = ["localhost", "127.0.0.1", "::1"]
 
-    /// Resolve an authentication challenge and return the appropriate disposition.
-    /// Exposed for testing purposes.
-    /// - Parameter protectionSpace: The protection space describing the authentication challenge
-    /// - Returns: The disposition to use for the challenge
+    /// Resolve an authentication challenge to a disposition. Internal rather than private
+    /// so the trust rules can be tested directly.
     func resolveAuthChallenge(for protectionSpace: URLProtectionSpace) -> URLSession.AuthChallengeDisposition {
         // For non-server-trust challenges, use default handling
         guard protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust else {
@@ -122,8 +120,7 @@ actor LiveReloadClient {
         eventContinuations.removeValue(forKey: id)
     }
 
-    /// Connect to Hugo's LiveReload WebSocket
-    /// - Parameter serverURL: The Hugo server base URL (e.g., http://localhost:1313)
+    /// Connect to Hugo's LiveReload WebSocket. `serverURL` is the base URL (http://localhost:1313).
     func connect(to serverURL: URL) {
         self.serverURL = serverURL
 

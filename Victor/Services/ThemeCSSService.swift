@@ -12,11 +12,8 @@ actor ThemeCSSService {
 
     // MARK: - Public API
 
-    /// Load CSS from a Hugo theme's static/css directory
-    /// - Parameters:
-    ///   - themeName: Theme name from Hugo config (may be comma-separated for composition)
-    ///   - siteRootURL: Root URL of the Hugo site
-    /// - Returns: Combined CSS from theme(s), or nil if no CSS found
+    /// Load CSS from a theme's `static/css`. `themeName` comes straight from the Hugo config,
+    /// so it may be comma-separated for theme composition - each is loaded and concatenated.
     func loadThemeCSS(themeName: String?, siteRootURL: URL?) async -> String? {
         guard let themeName = themeName, !themeName.isEmpty,
               let siteRoot = siteRootURL else {
@@ -62,8 +59,7 @@ actor ThemeCSSService {
         Logger.shared.debug("ThemeCSSService: Cleared all cache")
     }
 
-    /// Clear cache for a specific site (call when site is closed)
-    /// - Parameter siteRootURL: Root URL of the site to clear
+    /// Call when a site is closed.
     func clearCache(for siteRootURL: URL) {
         let prefix = siteRootURL.path + ":"
         let keysToRemove = cache.keys.filter { $0.hasPrefix(prefix) }
@@ -77,11 +73,6 @@ actor ThemeCSSService {
 
     // MARK: - Private Helpers
 
-    /// Load all CSS files from a single theme's static/css directory
-    /// - Parameters:
-    ///   - themeName: Name of the theme directory
-    ///   - siteRoot: Root URL of the Hugo site
-    /// - Returns: Combined CSS content, or nil if no CSS files found
     private func loadCSSFromTheme(_ themeName: String, siteRoot: URL) -> String? {
         let themeCSSDir = siteRoot
             .appendingPathComponent("themes")
@@ -102,9 +93,7 @@ actor ThemeCSSService {
         return loadCSSFilesFromDirectory(themeCSSDir)
     }
 
-    /// Load and combine all .css files from a directory
-    /// - Parameter directory: Directory URL to scan
-    /// - Returns: Combined CSS content, or nil if no CSS files found
+    /// nil when the directory holds no .css files.
     private func loadCSSFilesFromDirectory(_ directory: URL) -> String? {
         guard FileManager.default.fileExists(atPath: directory.path) else {
             return nil

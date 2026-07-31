@@ -60,9 +60,7 @@ final class FrontmatterParser: @unchecked Sendable {
 
     // MARK: - Parsing
 
-    /// Parse content and extract frontmatter + markdown
-    /// - Parameter content: The full file content including frontmatter and markdown
-    /// - Returns: A tuple with optional frontmatter and the markdown content
+    /// Parse content into frontmatter + markdown.
     /// - Note: This method swallows parsing errors and returns frontmatter with rawContent only.
     ///         Use `parseContentThrowing(_:)` if you want to handle parsing errors explicitly.
     func parseContent(_ content: String) -> (frontmatter: Frontmatter?, markdown: String) {
@@ -77,10 +75,7 @@ final class FrontmatterParser: @unchecked Sendable {
         return (frontmatter, markdown)
     }
 
-    /// Parse content and extract frontmatter + markdown (throwing variant)
-    /// - Parameter content: The full file content including frontmatter and markdown
-    /// - Returns: A tuple with optional frontmatter and the markdown content
-    /// - Throws: `FrontmatterError` if parsing fails
+    /// Throwing variant of `parseContent(_:)`.
     /// - Note: Use this method when you want to handle parsing errors explicitly and show them to users
     func parseContentThrowing(_ content: String) throws -> (frontmatter: Frontmatter?, markdown: String) {
         // Try to extract frontmatter
@@ -636,10 +631,8 @@ final class FrontmatterParser: @unchecked Sendable {
 
     // MARK: - Lightweight Status Parsing
 
-    /// Parse only the fields needed for status indicators (draft, date, publishDate, expiryDate)
-    /// This is much faster than full parsing as it doesn't need to extract all fields
-    /// - Parameter content: The raw file content (can be partial - just first ~4KB)
-    /// - Returns: FileStatusMetadata if frontmatter was found, nil otherwise
+    /// Parse only the status-indicator fields (draft, date, publishDate, expiryDate) - much
+    /// faster than full parsing. `content` may be partial; the first ~4KB is enough.
     func parseStatusMetadata(from content: String) -> FileStatusMetadata? {
         // Extract frontmatter
         guard let (rawFrontmatter, _, format) = extractFrontmatter(from: content) else {
@@ -725,9 +718,7 @@ final class FrontmatterParser: @unchecked Sendable {
 
     // MARK: - Serialization
 
-    /// Serialize frontmatter back to original format
-    /// - Parameter frontmatter: The frontmatter to serialize
-    /// - Returns: Serialized frontmatter string with delimiters
+    /// Serialize back to the original format, delimiters included.
     /// - Note: This method swallows serialization errors and falls back to rawContent.
     ///         Use `serializeFrontmatterThrowing(_:)` if you want to handle errors explicitly.
     func serializeFrontmatter(_ frontmatter: Frontmatter) -> String {
@@ -741,10 +732,7 @@ final class FrontmatterParser: @unchecked Sendable {
         }
     }
 
-    /// Serialize frontmatter back to original format (throwing variant)
-    /// - Parameter frontmatter: The frontmatter to serialize
-    /// - Returns: Serialized frontmatter string with delimiters
-    /// - Throws: `FrontmatterError` if serialization fails
+    /// Throwing variant of `serializeFrontmatter(_:)`.
     /// - Note: Use this method when you want to handle serialization errors explicitly
     func serializeFrontmatterThrowing(_ frontmatter: Frontmatter) throws -> String {
         switch frontmatter.format {

@@ -84,6 +84,25 @@ struct EditorRevealInFinderButton: View {
     }
 }
 
+// MARK: - Editor Error Label
+
+/// Inline error text for an editor toolbar. Renders nothing when `message` is nil.
+///
+/// The accessibility label repeats the "Error:" prefix that sighted users get from the red
+/// tint - without it VoiceOver reads the message as ordinary toolbar text.
+struct EditorErrorLabel: View {
+    let message: String?
+
+    var body: some View {
+        if let message {
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(Color.Status.error)
+                .accessibilityLabel("Error: \(message)")
+        }
+    }
+}
+
 // MARK: - Editor Toolbar Divider
 
 /// Consistent divider used between toolbar button groups

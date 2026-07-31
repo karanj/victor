@@ -68,12 +68,7 @@ struct TemplateEditorView: View {
 
             Spacer()
 
-            // Error message
-            if let error = errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(Color.Status.error)
-            }
+            EditorErrorLabel(message: errorMessage)
 
             EditorToolbarDivider()
 
@@ -114,11 +109,8 @@ struct TemplateEditorView: View {
         let helper = EditorSaveHelper()
         await helper.performSave(
             operation: { try await TemplateParser.shared.save(template) },
-            isSaving: { isSaving },
             setIsSaving: { isSaving = $0 },
-            showSavedIndicator: { showSavedIndicator },
             setShowSavedIndicator: { showSavedIndicator = $0 },
-            errorMessage: { errorMessage },
             setErrorMessage: { errorMessage = $0 },
             afterSave: { await onSave() }
         )
@@ -133,7 +125,6 @@ struct TemplateEditorView: View {
                 template.originalContent = content
                 template.metadata = TemplateParser.shared.extractMetadata(from: content)
             },
-            errorMessage: { errorMessage },
             setErrorMessage: { errorMessage = $0 },
             markAsSaved: { template.markAsSaved() }
         )

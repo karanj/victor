@@ -9,13 +9,9 @@ struct PermalinkResolver {
     /// Permalink patterns keyed by section name (e.g. ["posts": "/:year/:month/:title/"])
     let permalinks: [String: String]
 
-    /// Resolve a content file path to the Hugo URL it will be served at.
-    ///
-    /// - Parameters:
-    ///   - filePath: Relative path from site root (e.g. "content/posts/my-post.md")
-    ///   - date: The page's date from frontmatter (needed for date-based permalink tokens)
-    ///   - slug: Optional slug override from frontmatter
-    /// - Returns: The URL path (e.g. "/2024/03/my-post/")
+    /// Resolve a content file path to the Hugo URL it will be served at -
+    /// "content/posts/my-post.md" -> "/2024/03/my-post/". `filePath` is relative to the site
+    /// root; `date` feeds the date-based permalink tokens.
     func resolveURL(filePath: String, date: Date?, slug: String?) -> String {
         var path = filePath
 

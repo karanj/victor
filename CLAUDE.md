@@ -2,60 +2,7 @@
 
 Native macOS application (SwiftUI) serving as a CMS for Hugo static sites. Provides markdown editing with live preview, frontmatter editing, Hugo config GUI, asset management, and Hugo server integration.
 
-**Status**: Production ready | **Build**: Clean | **Size**: 91 Swift files, ~25k LOC | **Updated**: 2026-07-03
-
-## Technical Stack
-
-- **Platform**: macOS 14.0+ (Sonoma)
-- **Framework**: SwiftUI + AppKit (NSTextView, WKWebView)
-- **Architecture**: MVVM with `@Observable`, `@MainActor`
-- **Build**: XcodeGen (`project.yml` → `.xcodeproj`)
-- **Dependencies**: Down (Markdown), Yams (YAML), TOMLKit (TOML)
-
-## File Type Routing
-
-| File Type | Editor/Viewer |
-|-----------|---------------|
-| Markdown (.md) | EditorPanelView + live preview + frontmatter |
-| Images | ImageViewerPanel with zoom/pan |
-| hugo/config .toml/yaml/yml/json | ConfigEditorView (Form/Raw tabs) |
-| data/*.yaml/json/toml | DataFileEditorView (dynamic fields) |
-| i18n/*.yaml/json/toml | TranslationEditorView |
-| layouts/, themes/ HTML | TemplateEditorView (Go syntax) |
-| Other code files | TextEditorPanel |
-
-Routing logic: `FileViewerRouter.swift`
-
-## Code Structure
-
-```
-Victor/
-├── Models/           # HugoSite, ContentFile, Frontmatter, FileNode, FileType (19 types)
-├── ViewModels/       # SiteViewModel (global state), EditorViewModel, TextEditorViewModel
-├── Services/         # FileSystemService, AutoSaveService (actor), HugoServerService (actor),
-│                     # FrontmatterParser, HugoConfigParser, DataFileParser, MarkdownRenderer
-├── Views/
-│   ├── MainWindow/   # ContentView (NavigationSplitView), SidebarView, EditorPanelView
-│   ├── Editor/       # EditorTextView (NSTextView wrapper), FrontmatterEditorView, Tabs/
-│   ├── ConfigEditor/ # ConfigEditorView
-│   ├── DataEditor/   # DataFileEditorView
-│   ├── AssetBrowser/ # AssetBrowserView, AssetDetailPanel
-│   ├── ServerControls/ # ServerControlView, ServerLogView
-│   ├── Preview/      # PreviewWebView, LivePreviewPanel, BuildErrorOverlay
-│   └── Viewers/      # FileViewerRouter, ImageViewerPanel, TextViewerPanel
-└── VictorTests/      # 8 test files, 200+ tests
-```
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `SiteViewModel.swift` | Global state: selected file, search, site tree |
-| `EditorViewModel.swift` | Markdown editing, auto-save, frontmatter sync |
-| `FileViewerRouter.swift` | Routes files to appropriate editor/viewer |
-| `HugoServerService.swift` | Actor managing hugo server subprocess |
-| `AutoSaveService.swift` | Actor for debounced saves with conflict detection |
-| `FrontmatterParser.swift` | Parse/serialize YAML/TOML/JSON frontmatter |
+File-type routing logic lives in `FileViewerRouter.swift`.
 
 ## Development
 
@@ -81,32 +28,6 @@ let capturedContent = markdownContent
 let capturedFrontmatter = frontmatter
 // In callbacks: guard selectedNode?.id == nodeID else { return }
 ```
-
-### Yams Type Normalization
-Yams returns `Dictionary<AnyHashable, Any>` which can't serialize back. Must normalize:
-```swift
-private func normalizeForSerialization(_ value: Any) -> Any {
-    if let dict = value as? [AnyHashable: Any] {
-        var normalized: [String: Any] = [:]
-        for (key, val) in dict {
-            if let stringKey = key as? String {
-                normalized[stringKey] = normalizeForSerialization(val)
-            }
-        }
-        return normalized
-    }
-    // ... handle arrays
-}
-```
-
-### Boolean Serialization
-Always include boolean fields (don't skip `false`):
-```swift
-dictionary["buildDrafts"] = config.buildDrafts  // Always include
-```
-
-### YAML Width
-Use `width: -1` to prevent line wrapping in Yams serialization.
 
 ### Content State Dual Storage
 Content is stored in two places for file switching without data loss:
@@ -138,45 +59,6 @@ Two keystroke-lag incidents (2026-07-05/06) came from @Observable state that mut
 4. Typing is handled in the model, not the view: `EditorViewModel.editableContent`'s setter owns dirty-flag + auto-save scheduling. No view `.onChange` on editor content.
 5. Views that genuinely need typing signals (PreviewPanel, InspectorPanel stats) observe `SiteViewModel.editedContentVersion` (bumped in `setEditedContent`, the single write path) behind their own debounce. `FileCacheManager` is deliberately NOT @Observable — the raw content string must never be an observation dependency.
 
-### Service Concurrency Strategy
-Services use different patterns based on their state and access patterns:
-
-| Service | Pattern | Rationale |
-|---------|---------|-----------|
-| `HugoServerService` | `actor` | Manages process lifecycle, output buffering - mutable state with concurrent access |
-| `AutoSaveService` | `actor` | Debounce timers, pending save tracking - mutable state modified from multiple call sites |
-| `FileSystemService` | `class` + `@MainActor` methods | Stateless operations, but some methods update UI-bound data |
-| Parsers (Frontmatter, Config, Data) | `class` with static `shared` | Stateless, thread-safe parsing operations |
-| `AssetService` | `class` with static `shared` | Mostly reads with cached thumbnails - cache is thread-safe via actor isolation |
-
-**When to use `actor`**: Service has mutable state accessed from multiple concurrent contexts (timers, callbacks, async operations).
-
-**When `@MainActor` methods suffice**: Service is stateless but needs to update `@Observable` models or UI state.
-
-**Dependency injection (victor-zw4, done):** `FileSystemService`, `AutoSaveService`, and `HugoServerService` — the three services tests actually need isolated instances of — are injectable via initializer parameters defaulting to `.shared` (e.g. `init(fileSystemService: FileSystemService = .shared)`), stored as `let`. Each has a non-private `init()` (all three are side-effect-free to construct) so tests can pass a fresh instance instead of the process-wide singleton — critical for `AutoSaveService`/`HugoServerService` since they're actors with mutable state that would otherwise leak between tests. `SiteViewModel` holds `fileSystemService`/`hugoServerService` as non-private `let`s (not `private`) so views that already hold a `siteViewModel` reference (`ServerControlView`, `LivePreviewPanel`, `EditorTextView`'s Coordinator) thread the same instance through instead of reaching `.shared` directly; `EditorViewModel`/`TextEditorViewModel` take their own injected service directly. Views with no such seam (`ServerLogView` — separate `Window` scene, no `SiteViewModel`; `PreferencesView` — zero-arg `Settings` scene) keep `.shared`, since threading an instance through would require adding SwiftUI Environment plumbing solely for that one call site — a cost the design explicitly avoids. No protocol abstraction: the win is instance isolation, not behavioral fakes. Stateless parsers, `AssetService`, `NotificationService`, and `LiveReloadClient` are unaffected and keep plain `static let shared`.
-
-### Model Type Strategy (Struct vs Class)
-
-Models use `@Observable class` pattern by design. Evaluation of struct alternatives:
-
-| Model | Pattern | Rationale |
-|-------|---------|-----------|
-| `Frontmatter` | class | 30+ mutable fields, `@Bindable` in 7+ views, version tracking for change detection |
-| `FileNode` | class | Tree structure with `weak var parent`, recursive child relationships require reference semantics |
-| `HugoConfig` | class | Form-bound editing via `@Bindable`, implements `EditableFile: AnyObject` protocol |
-| `DataFile` | class | Form-bound editing, `EditableFile` protocol, change tracking via `originalContent` comparison |
-| `ContentFile` | class | Contains `Frontmatter` reference, assigned to `FileNode.contentFile` for shared access |
-
-**Why classes are appropriate here:**
-1. **SwiftUI Binding**: `@Bindable` requires `@Observable` which works with classes. Form editors use two-way binding extensively.
-2. **Shared Mutation**: Models are mutated from multiple locations (form fields, raw editor sync, auto-save). Reference semantics ensure all observers see the same state.
-3. **Protocol Constraints**: `EditableFile` requires `AnyObject` for type-erased storage in dictionaries and generic handling.
-4. **Tree Structures**: `FileNode` needs parent-child references that would cause copy-on-write issues with structs.
-
-**Struct alternatives considered:**
-- `FrontmatterSnapshot` already exists as an immutable struct for change detection - this is the appropriate pattern for value-type needs.
-- `HugoMenuItem` is a struct because it's a simple data container without binding requirements.
-
 ## Debugging
 
 | Issue | Check |
@@ -202,6 +84,12 @@ Key areas:
 - **P3**: Git integration (6 tickets), Hugo theme CSS, editor Unicode-safety (victor-u16), cache eviction wiring (victor-lru), Config Editor v2 Phase 6 (3 tickets — config directories/environments, languages editor, module GUI; design in `Docs/CONFIG-EDITOR-PHASE6-DESIGN.md`, each needs a Hugo source-verification pass before implementation)
 - **P4**: Mac-arsed follow-ups (Move to Folder… command victor-mvf, accessibility leftovers victor-a2x), code-health leftovers from the 2026-07-03 analysis (see `Docs/CODE-ANALYSIS-2026-07-03.md`), menu bar extra (victor-mbe)
 
+## Scoped Notes
+
+Design rationale that loads only when you work in that directory:
+
+- `Victor/Services/CLAUDE.md` - Yams/boolean/YAML-width serialization gotchas, service concurrency strategy, dependency injection
+- `Victor/Models/CLAUDE.md` - Model type strategy (why `@Observable class` over structs)
 
 ## Project Docs
 

@@ -22,11 +22,7 @@ struct ContentPathSuggestion: Identifiable, Hashable {
 // MARK: - Filtering
 
 extension ContentPathSuggestion {
-    /// Filter suggestions based on a search query
-    /// - Parameters:
-    ///   - suggestions: Array of suggestions to filter
-    ///   - query: Search query string
-    /// - Returns: Filtered suggestions matching the query
+    /// Case-insensitive substring match; an empty query matches everything.
     static func filter(_ suggestions: [ContentPathSuggestion], query: String) -> [ContentPathSuggestion] {
         guard !query.isEmpty else { return suggestions }
         let lowercasedQuery = query.lowercased()

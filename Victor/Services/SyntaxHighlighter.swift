@@ -81,11 +81,7 @@ class SyntaxHighlighter {
 
     // MARK: - Highlighting
 
-    /// Highlight code with the specified language
-    /// - Parameters:
-    ///   - code: Source code string
-    ///   - language: Highlightr language identifier (e.g., "yaml", "json")
-    /// - Returns: Attributed string with syntax highlighting, or nil if highlighting fails
+    /// `language` is a Highlightr identifier ("yaml", "json"). nil if Highlightr is unavailable.
     func highlight(code: String, language: String) -> NSAttributedString? {
         guard let highlightr = highlightr else {
             Logger.shared.warning("[SyntaxHighlighter] Highlightr not initialized")
@@ -94,11 +90,7 @@ class SyntaxHighlighter {
         return highlightr.highlight(code, as: language)
     }
 
-    /// Highlight code based on FileType
-    /// - Parameters:
-    ///   - code: Source code string
-    ///   - fileType: The file type to determine language
-    /// - Returns: Attributed string with syntax highlighting, or nil if no highlighting for this type
+    /// nil when `fileType` maps to no Highlightr language.
     func highlight(code: String, fileType: FileType) -> NSAttributedString? {
         guard let language = languageName(for: fileType) else {
             return nil
@@ -106,10 +98,7 @@ class SyntaxHighlighter {
         return highlight(code: code, language: language)
     }
 
-    /// Highlight Go/Hugo template code (HTML with Go template syntax)
-    /// Uses Highlightr for HTML base and adds custom Go template patterns
-    /// - Parameter code: Template source code
-    /// - Returns: Attributed string with combined highlighting
+    /// Go/Hugo templates: Highlightr's XML pass for the HTML, then custom Go template patterns on top.
     func highlightGoTemplate(code: String) -> NSAttributedString {
         // Start with Highlightr's HTML/XML highlighting
         let attributedString: NSMutableAttributedString
@@ -207,11 +196,7 @@ class SyntaxHighlighter {
 
     // MARK: - Apply to Text Storage
 
-    /// Apply syntax highlighting to an NSTextStorage
-    /// - Parameters:
-    ///   - textStorage: The text storage to highlight
-    ///   - language: Highlightr language identifier
-    ///   - font: Font to use (preserves monospace)
+    /// Re-applies `font` over the highlighted output, so a monospace face survives.
     func applyHighlighting(to textStorage: NSTextStorage, language: String, font: NSFont) {
         let code = textStorage.string
 

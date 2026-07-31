@@ -25,9 +25,7 @@ enum BuildErrorParser {
         (#"^[Ww]arning:?\s+(.+)"#, .warning)
     ]
 
-    /// Parse a single line of Hugo output
-    /// - Parameter line: A line of Hugo server output
-    /// - Returns: A HugoBuildError if the line contains an error/warning, nil otherwise
+    /// nil when the line is neither an error nor a warning.
     static func parseLine(_ line: String) -> HugoBuildError? {
         let trimmedLine = line.trimmingCharacters(in: .whitespaces)
 
@@ -71,9 +69,7 @@ enum BuildErrorParser {
         )
     }
 
-    /// Extract file path and line number from an error message
-    /// - Parameter text: The error message text
-    /// - Returns: Tuple of optional file path and line number
+    /// Extract file path and line number from an error message.
     static func extractFileLocation(from text: String) -> (file: String?, line: Int?) {
         // Pattern 1: "path/to/file.ext:123" or "path/to/file.ext:123:45"
         let fileLinePattern = #"([\/\w\-\.]+\.[a-zA-Z0-9]+):(\d+)(?::\d+)?"#
@@ -112,9 +108,7 @@ enum BuildErrorParser {
         return (nil, nil)
     }
 
-    /// Clean up an error message by removing timestamps and log prefixes
-    /// - Parameter message: Raw error message
-    /// - Returns: Cleaned message
+    /// Strip Hugo's timestamp/level prefix off an error message.
     static func cleanMessage(_ message: String) -> String {
         var cleaned = message
 
@@ -134,18 +128,13 @@ enum BuildErrorParser {
         return cleaned
     }
 
-    /// Parse multiple lines of Hugo output
-    /// - Parameter output: Multi-line Hugo output string
-    /// - Returns: Array of parsed build errors
     static func parseOutput(_ output: String) -> [HugoBuildError] {
         output
             .components(separatedBy: .newlines)
             .compactMap { parseLine($0) }
     }
 
-    /// Check if a line indicates Hugo server is ready
-    /// - Parameter line: A line of Hugo output
-    /// - Returns: Port number if server is ready, nil otherwise
+    /// Returns the port Hugo announced, or nil if this isn't the server-ready line.
     static func parseServerReady(_ line: String) -> Int? {
         // Look for: "Web Server is available at http://localhost:1313/"
         guard line.contains("Web Server is available") else { return nil }
@@ -160,18 +149,13 @@ enum BuildErrorParser {
         return nil
     }
 
-    /// Check if a line indicates Hugo is rebuilding
-    /// - Parameter line: A line of Hugo output
-    /// - Returns: true if Hugo is rebuilding
     static func isRebuildingLine(_ line: String) -> Bool {
         line.contains("Change detected") ||
         line.contains("Rebuilding site") ||
         line.contains("change detected")
     }
 
-    /// Check if a line indicates build completion
-    /// - Parameter line: A line of Hugo output
-    /// - Returns: Build time in milliseconds if completed, nil otherwise
+    /// Returns the build time in milliseconds, or nil if this isn't the build-complete line.
     static func parseBuildComplete(_ line: String) -> Int? {
         // Look for: "Total in 123 ms"
         guard line.contains("Total in") && line.contains("ms") else { return nil }

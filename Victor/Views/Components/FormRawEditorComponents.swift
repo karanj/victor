@@ -32,7 +32,9 @@ struct ParseErrorAlertModifier: ViewModifier {
                 Button("OK") { parseError = nil }
             } message: {
                 if let error = parseError {
-                    Text("Could not parse the raw content: \(error)")
+                    // The message carries its own direction ("Failed to serialize: ..." vs a
+                    // parse error), so don't prefix one here.
+                    Text(error)
                 }
             }
     }
@@ -47,36 +49,38 @@ extension View {
 
 // MARK: - Form/Raw Toggle Handler
 
-/// Helper to handle Form/Raw toggle transitions
+/// Form/Raw toggle transitions.
+///
+/// Both directions return whether the conversion landed. A false result means the target
+/// mode is showing stale content while the user's real edits sit in the mode they came
+/// from - the caller must revert the toggle rather than leave them there, or the next
+/// toggle back overwrites the edits from the stale side.
 struct FormRawToggleHandler {
-    /// Handle the transition from Form to Raw mode
-    /// - Parameters:
-    ///   - serializeToRaw: Closure that serializes form data to raw content (throws on error)
-    ///   - parseError: Binding to store any serialization error
     static func handleFormToRaw(
         serializeToRaw: () throws -> Void,
         parseError: inout String?
-    ) {
+    ) -> Bool {
         do {
             try serializeToRaw()
+            parseError = nil
+            return true
         } catch {
             parseError = "Failed to serialize: \(error.localizedDescription)"
+            return false
         }
     }
 
-    /// Handle the transition from Raw to Form mode
-    /// - Parameters:
-    ///   - parseFromRaw: Closure that parses raw content to form data (throws on error)
-    ///   - parseError: Binding to store any parse error
     static func handleRawToForm(
         parseFromRaw: () throws -> Void,
         parseError: inout String?
-    ) {
+    ) -> Bool {
         do {
             try parseFromRaw()
             parseError = nil
+            return true
         } catch {
             parseError = error.localizedDescription
+            return false
         }
     }
 }
