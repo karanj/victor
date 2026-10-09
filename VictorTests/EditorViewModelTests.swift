@@ -756,14 +756,17 @@ final class EditorViewModelTests: XCTestCase {
         // While the debounce is still pending, edit frontmatter directly on the model -
         // NOT calling handleContentChange() again, to isolate "does fire-time build
         // read live state" from "does re-triggering recapture" (already covered by the
-        // rapid-keystrokes test below).
-        try await Task.sleep(for: .milliseconds(150))
+        // rapid-keystrokes test below). Synchronous with scheduling: this MainActor test
+        // hasn't suspended, so the debounce Task can't have run - no wall-clock margin.
         contentFile.frontmatter?.title = "Changed During Debounce"
 
-        // Wait past the debounce interval for the save to land.
-        try await Task.sleep(for: .seconds(1.0))
-
-        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        // Poll for the save rather than sleeping a fixed interval past the debounce.
+        let deadline = Date().addingTimeInterval(5)
+        var onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        while !onDisk.contains("Body edited"), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+            onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        }
         XCTAssertTrue(
             onDisk.contains("Changed During Debounce"),
             "Frontmatter edited during the debounce window must reach disk - the full " +
