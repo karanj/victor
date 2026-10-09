@@ -119,7 +119,7 @@ final class LiveReloadClientTests: XCTestCase {
             authenticationMethod: NSURLAuthenticationMethodServerTrust
         )
 
-        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        let disposition = delegate.resolveAuthChallenge(for: protectionSpace)
         XCTAssertEqual(disposition, .performDefaultHandling, "Localhost should use default handling")
     }
 
@@ -135,7 +135,7 @@ final class LiveReloadClientTests: XCTestCase {
             authenticationMethod: NSURLAuthenticationMethodServerTrust
         )
 
-        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        let disposition = delegate.resolveAuthChallenge(for: protectionSpace)
         XCTAssertEqual(disposition, .performDefaultHandling, "127.0.0.1 should use default handling")
     }
 
@@ -151,7 +151,7 @@ final class LiveReloadClientTests: XCTestCase {
             authenticationMethod: NSURLAuthenticationMethodServerTrust
         )
 
-        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        let disposition = delegate.resolveAuthChallenge(for: protectionSpace)
         XCTAssertEqual(disposition, .performDefaultHandling, "IPv6 loopback should use default handling")
     }
 
@@ -167,7 +167,7 @@ final class LiveReloadClientTests: XCTestCase {
             authenticationMethod: NSURLAuthenticationMethodServerTrust
         )
 
-        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        let disposition = delegate.resolveAuthChallenge(for: protectionSpace)
         XCTAssertEqual(disposition, .performDefaultHandling, "Remote hosts should use default certificate validation")
     }
 
@@ -183,7 +183,7 @@ final class LiveReloadClientTests: XCTestCase {
             authenticationMethod: NSURLAuthenticationMethodHTTPBasic
         )
 
-        let disposition = await delegate.resolveAuthChallenge(for: protectionSpace)
+        let disposition = delegate.resolveAuthChallenge(for: protectionSpace)
         XCTAssertEqual(disposition, .performDefaultHandling, "Non-server-trust challenges should use default handling")
     }
 

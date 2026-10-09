@@ -3,8 +3,8 @@ name: Victor
 options:
   bundleIdPrefix: com.victor
   deploymentTarget:
-    macOS: "14.0"
-  xcodeVersion: "15.0"
+    macOS: "27.0"
+  xcodeVersion: "27.0"
   generateEmptyDirectories: true
   groupSortPosition: top
 
@@ -76,7 +76,7 @@ targets:
         # strict-concurrency burn-down reached zero warnings - see
         # Docs/SC6-BURNDOWN-MEMO.md). Data-race safety is now a compile error.
         SWIFT_VERSION: "6.0"
-        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        MACOSX_DEPLOYMENT_TARGET: "27.0"
         ENABLE_PREVIEWS: YES
       configs:
         Debug:
