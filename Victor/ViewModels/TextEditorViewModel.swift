@@ -172,28 +172,9 @@ class TextEditorViewModel {
         autoSaveTask?.cancel()
 
         guard let nodeID else { return }
-        let service = autoSaveService
-        let debounceToken = UUID()
-        let delay = autoSaveDelay
-
-        var newTask: Task<Void, Never>!
-        newTask = Task { [weak self] in
-            await service.registerDebounce(nodeID: nodeID, token: debounceToken, task: newTask)
-
-            // Wait for the debounce interval
-            try? await Task.sleep(for: .seconds(delay))
-
-            // Check if task was cancelled
-            if !Task.isCancelled {
-                await self?.save()
-            }
-
-            // Always deregister - single exit point, mirrors EditorViewModel's
-            // scheduleAutoSave (see AutoSaveService.cancelDebounce's doc comment
-            // for why this must be the Task's last action).
-            await service.deregisterDebounce(nodeID: nodeID, token: debounceToken)
+        autoSaveTask = autoSaveService.startDebounce(nodeID: nodeID, delay: .seconds(autoSaveDelay)) { [weak self] in
+            await self?.save()
         }
-        autoSaveTask = newTask
     }
 
     private func showSavedIndicatorBriefly() {
