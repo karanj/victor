@@ -32,7 +32,7 @@ Verification: `c445934` at the 14.0 target (clean worktree), full suite 3/3 gree
 - README requirements, `CLAUDE.md` deployment-target note, `WrappingHStack` comment.
 - `testFrontmatterEditedDuringDebounceWindowReachesDisk`: failed once while a second suite ran concurrently (150ms + 1s fixed sleeps around a 0.5s debounce). Now edits synchronously after scheduling (MainActor test, Task can't have run) and polls the disk. Mutation-checked: a schedule-time frontmatter snapshot still fails it. Test-only, so left off the frozen 1.1.0 line.
 - `LiveReloadClientTests`: dropped `await` on the synchronous `resolveAuthChallenge` (flagged at 27 only).
-- `MARKETING_VERSION` left at 1.1.0 — bump to 2.0.0 at the first 27-only release, per `Docs/RELEASING.md`.
+- `MARKETING_VERSION` 1.1.0 → 1.2.0: a compatibility jump, not a major — the 27 line is functionally the 1.1.0 app on a new floor.
 
 ## Pending (not done in session)
 
