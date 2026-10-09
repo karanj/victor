@@ -785,7 +785,7 @@ final class SiteViewModelTests: XCTestCase {
     /// a mismatched instance here would let this pass for the wrong reason.
     func testRenameCancelsPendingAutoSaveForOldPath() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
-        UserDefaults.standard.set(0.3, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        UserDefaults.standard.set(60.0, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) // only cancellation can end it
         defer {
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -819,7 +819,7 @@ final class SiteViewModelTests: XCTestCase {
         editorVM.editableContent = "edited content"
         editorVM.handleContentChange() // schedules the debounce, registers with `autoSaveService`
 
-        try await Task.sleep(for: .milliseconds(50)) // let it reach registerDebounce, still well inside the 0.3s debounce
+        try await waitForDebounceRegistration(on: autoSaveService)
 
         await viewModel.renameFile(node: node, to: "renamed.md")
 
@@ -985,7 +985,7 @@ final class SiteViewModelTests: XCTestCase {
     /// asserts the registry, not just disk timing.
     func testMoveNodeCancelsPendingAutoSaveForOldPath() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
-        UserDefaults.standard.set(0.3, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        UserDefaults.standard.set(60.0, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay) // only cancellation can end it
         defer {
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -1026,7 +1026,7 @@ final class SiteViewModelTests: XCTestCase {
         editorVM.editableContent = "edited content"
         editorVM.handleContentChange() // schedules the debounce, registers with `autoSaveService`
 
-        try await Task.sleep(for: .milliseconds(50)) // still well inside the 0.3s debounce
+        try await waitForDebounceRegistration(on: autoSaveService)
 
         await viewModel.moveNode(from: fileNode, to: folderBNode)
 

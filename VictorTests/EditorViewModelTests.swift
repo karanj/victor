@@ -898,7 +898,9 @@ final class EditorViewModelTests: XCTestCase {
     /// per-file cache and survives the rename.
     func testRenameCancelsStillSleepingDebounceInsteadOfLettingItWriteAnywhere() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
-        UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        // Far longer than the test runs, so the debounce can only end by cancellation.
+        // A short delay raced renameFile under full-suite load and fired first.
+        UserDefaults.standard.set(60.0, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
         defer {
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -939,22 +941,17 @@ final class EditorViewModelTests: XCTestCase {
         // Wait for the Task's actual registration signal, not a wall-clock guess (#51): Task
         // scheduling can lag under load, and the old fixed sleep raced it, leaving
         // cancelDebounce running against an empty registry.
-        let registrationDeadline = Date().addingTimeInterval(5)
-        while await sharedAutoSaveService.debounceRegistrationCount == 0 {
-            guard Date() < registrationDeadline else {
-                return XCTFail("debounce never registered within 5s - can't exercise the cancel-while-sleeping scenario")
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitForDebounceRegistration(on: sharedAutoSaveService)
 
         // Rename lands WHILE the debounce is registered and still sleeping.
         await renameSiteViewModel.renameFile(node: node, to: "renamed.md")
         let renamedURL = tempDir.appendingPathComponent("renamed.md")
         XCTAssertEqual(node.url, renamedURL) // sanity check the rename itself worked
 
-        // Wait past what would have been the debounce interval - nothing should
-        // fire, since renameFile's cancelDebounce already stopped the Task.
-        try await Task.sleep(for: .seconds(1))
+        // cancelDebounce awaits the Task, which deregisters as its last action - an
+        // empty registry means it has finished and can never write later.
+        let remaining = await sharedAutoSaveService.debounceRegistrationCount
+        XCTAssertEqual(remaining, 0, "renameFile must leave no debounce still pending")
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: originalURL.path),
                        "the cancelled debounce must not recreate the file at the OLD path")
