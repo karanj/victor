@@ -383,4 +383,3 @@ Note: Icon-only buttons already have labels (victor-0qe, done). This covers the 
 - **Detailed code review findings**: `Docs/CODE-REVIEW-PLAN.md`
 - **Priority legend**: P0 (critical) > P1 (high) > P2 (medium) > P3 (low) > P4 (backlog)
 - **Dependency graph**: FSEvents chain is `bfs + 93p -> 5cl -> (u5y + 8cw + 8u1) -> rey`. Git chain is `04m -> (cit + 7zv + agi + 95t + 2d4)`.
-- **Original issue tracker**: `.beads/issues.jsonl` (archived, no longer updated)
