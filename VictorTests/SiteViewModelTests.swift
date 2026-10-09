@@ -2567,6 +2567,40 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: urlZ.path), "redo must re-trash the file")
     }
 
+    /// Selecting a file starts a fire-and-forget content load. If the file is gone and
+    /// deselected before that load runs (Duplicate selects the copy; an immediate Move to
+    /// Trash removes it), the failure is stale and must not surface as an error alert.
+    /// Deterministic: the load Task can't start until this MainActor test suspends.
+    func testStaleContentLoadFailureForDeselectedFileIsNotSurfaced() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let markdownURL = tempDir.appendingPathComponent("post.md")
+        let textURL = tempDir.appendingPathComponent("notes.txt")
+        try "hello".write(to: markdownURL, atomically: true, encoding: .utf8)
+        try "notes".write(to: textURL, atomically: true, encoding: .utf8)
+
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        let markdownNode = FileNode(url: markdownURL, isDirectory: false)
+        let textNode = FileNode(url: textURL, isDirectory: false)
+        viewModel.fileNodes = [markdownNode, textNode]
+
+        for (node, url) in [(markdownNode, markdownURL), (textNode, textURL)] {
+            viewModel.selectNode(node)              // schedules the load
+            try FileManager.default.removeItem(at: url)
+            viewModel.selectNode(nil)               // gone before the load runs
+
+            let deadline = Date().addingTimeInterval(5)
+            while viewModel.isLoadingFile {
+                guard Date() < deadline else { return XCTFail("load never finished") }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            XCTAssertNil(viewModel.errorMessage, "\(url.lastPathComponent): a load for a no-longer-selected file must fail silently")
+        }
+    }
+
     /// All four file operations must still work when no window (and therefore
     /// no `UndoManager`) is attached - `SiteViewModel.undoManager` defaults to
     /// nil, and every `registerFileOpUndo` call must no-op rather than crash.
