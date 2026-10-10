@@ -642,13 +642,59 @@ class SiteViewModel {
 
     // MARK: - Site Operations
 
+    /// Set when an open was deferred behind the Close Site confirmation.
+    private(set) var pendingSiteToOpen: URL?
+
+    /// Drives the "Close Site?" dialog. Changes only when the dialog opens or closes,
+    /// so App-level scopes may read it (CLAUDE.md invalidation rule 1).
+    var isCloseSiteConfirmationPresented = false
+
     /// Open a Hugo site folder
     func openSiteFolder() async {
         guard let url = await fileSystemService.selectHugoSiteFolder() else {
             return
         }
 
+        await requestOpenSite(url)
+    }
+
+    /// Every user-initiated open goes through here, so switching sites never drops
+    /// unsaved edits without asking.
+    func requestOpenSite(_ url: URL) async {
+        guard !hasUnsavedChanges else {
+            pendingSiteToOpen = url
+            isCloseSiteConfirmationPresented = true
+            return
+        }
         await loadSite(from: url)
+    }
+
+    func requestCloseSite() {
+        guard !hasUnsavedChanges else {
+            pendingSiteToOpen = nil
+            isCloseSiteConfirmationPresented = true
+            return
+        }
+        closeSite()
+    }
+
+    /// The dialog's "Save All and Close" (`saveFirst`) or "Close Without Saving". A failed
+    /// save keeps the site open - `errorMessage` says why - and abandons any pending open.
+    func confirmCloseSite(saveFirst: Bool) async {
+        let pending = pendingSiteToOpen
+        cancelCloseSite()
+        if saveFirst {
+            guard await saveAllModifiedFiles().isEmpty else { return }
+        }
+        closeSite()
+        if let pending {
+            await loadSite(from: pending)
+        }
+    }
+
+    func cancelCloseSite() {
+        pendingSiteToOpen = nil
+        isCloseSiteConfirmationPresented = false
     }
 
     /// Load a Hugo site from URL
@@ -682,6 +728,14 @@ class SiteViewModel {
 
             // Scan for files
             let nodes = try fileSystemService.scanDirectory(at: url)
+
+            // Switching to a different site: drop the old site's selection, cached edits
+            // and server first, or its open file carries over and auto-save writes into
+            // it. Unsaved changes were already confirmed via requestOpenSite. Only after
+            // validation and scan succeed, so a bad folder leaves the current site open.
+            if let current = self.site, current.rootURL.standardizedFileURL != url.standardizedFileURL {
+                closeSite()
+            }
 
             // Update state
             self.site = site
@@ -737,7 +791,7 @@ class SiteViewModel {
             return
         }
 
-        await loadSite(from: url)
+        await requestOpenSite(url)
     }
 
     /// Clear recent sites list

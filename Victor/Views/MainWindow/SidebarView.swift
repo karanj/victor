@@ -241,7 +241,7 @@ struct SiteHeader: View {
                 Divider()
 
                 Button("Close Site") {
-                    siteViewModel.closeSite()
+                    siteViewModel.requestCloseSite()
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")

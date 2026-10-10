@@ -2955,4 +2955,184 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertTrue(failed.isEmpty)
         XCTAssertNil(viewModel.errorMessage)
     }
+
+    // MARK: - Site Switching
+
+    /// A minimal Hugo site on disk: `hugo.toml` plus `content/post.md`.
+    private func makeSiteFolder(named name: String) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SiteViewModelTests-\(UUID().uuidString)")
+            .appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("content"), withIntermediateDirectories: true)
+        try "title = \"\(name)\"\n".write(to: root.appendingPathComponent("hugo.toml"), atomically: true, encoding: .utf8)
+        try "---\ntitle: \(name)\n---\n\n\(name) body\n".write(
+            to: root.appendingPathComponent("content/post.md"), atomically: true, encoding: .utf8)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        return root
+    }
+
+    private func node(named name: String, in viewModel: SiteViewModel) -> FileNode? {
+        var stack = viewModel.fileNodes
+        while let candidate = stack.popLast() {
+            if candidate.name == name { return candidate }
+            stack.append(contentsOf: candidate.children)
+        }
+        return nil
+    }
+
+    /// Opening site B while A has a file selected must not leave A's file selected or
+    /// its edits cached - otherwise the editor keeps showing A's file under B, and
+    /// auto-save writes into site A.
+    func testLoadingDifferentSiteClearsPreviousSiteSelectionAndEdits() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let siteB = try makeSiteFolder(named: "site-b")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.selectNode(postA)
+        viewModel.setEditedContent("edited in A", for: postA.id)
+
+        await viewModel.loadSite(from: siteB)
+
+        XCTAssertEqual(viewModel.site?.rootURL.standardizedFileURL, siteB.standardizedFileURL)
+        XCTAssertNotEqual(viewModel.selectedNode?.id, postA.id, "site A's file must not stay selected under site B")
+        if let selected = viewModel.selectedNode {
+            XCTAssertTrue(selected.url.resolvingSymlinksInPath().path.hasPrefix(siteB.resolvingSymlinksInPath().path), "any selection must belong to site B, got \(selected.url.path)")
+        }
+        XCTAssertNil(viewModel.getEditedContent(for: postA.id), "site A's cached edits must not survive into site B")
+    }
+
+    /// Reloading the SAME site is not a switch: the selection is restored by path.
+    func testReloadingSameSiteKeepsSelectedFile() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.selectNode(postA)
+
+        await viewModel.loadSite(from: siteA)
+
+        XCTAssertEqual(viewModel.selectedNode?.url.standardizedFileURL, postA.url.standardizedFileURL)
+    }
+
+    /// A folder that fails validation must leave the current site open.
+    func testLoadingInvalidFolderKeepsCurrentSiteOpen() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let notASite = FileManager.default.temporaryDirectory.appendingPathComponent("not-a-site-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: notASite, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: notASite) }
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.selectNode(postA)
+
+        await viewModel.loadSite(from: notASite)
+
+        XCTAssertEqual(viewModel.site?.rootURL.standardizedFileURL, siteA.standardizedFileURL)
+        XCTAssertEqual(viewModel.selectedNode?.id, postA.id)
+        XCTAssertNotNil(viewModel.errorMessage)
+    }
+
+    func testRequestOpenSiteWithUnsavedChangesDefersBehindConfirmation() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let siteB = try makeSiteFolder(named: "site-b")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.markFileModified(postA.id)
+
+        await viewModel.requestOpenSite(siteB)
+
+        XCTAssertEqual(viewModel.site?.rootURL.standardizedFileURL, siteA.standardizedFileURL, "must not switch before the user answers")
+        XCTAssertTrue(viewModel.isCloseSiteConfirmationPresented)
+        XCTAssertEqual(viewModel.pendingSiteToOpen, siteB)
+    }
+
+    /// Open Recent (menu, Dock, sidebar) used to call loadSite directly and drop edits.
+    func testOpenRecentSiteWithUnsavedChangesDefersBehindConfirmation() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let siteB = try makeSiteFolder(named: "site-b")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.markFileModified(postA.id)
+
+        await viewModel.openRecentSite(siteB.path)
+
+        XCTAssertEqual(viewModel.site?.rootURL.standardizedFileURL, siteA.standardizedFileURL)
+        XCTAssertTrue(viewModel.isCloseSiteConfirmationPresented)
+    }
+
+    func testRequestOpenSiteWithoutUnsavedChangesOpensImmediately() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let siteB = try makeSiteFolder(named: "site-b")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        await viewModel.loadSite(from: siteA)
+
+        await viewModel.requestOpenSite(siteB)
+
+        XCTAssertEqual(viewModel.site?.rootURL.standardizedFileURL, siteB.standardizedFileURL)
+        XCTAssertFalse(viewModel.isCloseSiteConfirmationPresented)
+    }
+
+    func testCloseWithoutSavingThenOpensPendingSite() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let siteB = try makeSiteFolder(named: "site-b")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.markFileModified(postA.id)
+        await viewModel.requestOpenSite(siteB)
+
+        await viewModel.confirmCloseSite(saveFirst: false)
+
+        XCTAssertEqual(viewModel.site?.rootURL.standardizedFileURL, siteB.standardizedFileURL)
+        XCTAssertNil(viewModel.pendingSiteToOpen)
+        XCTAssertFalse(viewModel.hasUnsavedChanges)
+    }
+
+    func testCancellingConfirmationKeepsSiteAndDropsPendingOpen() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let siteB = try makeSiteFolder(named: "site-b")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.markFileModified(postA.id)
+        await viewModel.requestOpenSite(siteB)
+
+        viewModel.cancelCloseSite()
+
+        XCTAssertEqual(viewModel.site?.rootURL.standardizedFileURL, siteA.standardizedFileURL)
+        XCTAssertNil(viewModel.pendingSiteToOpen)
+        XCTAssertTrue(viewModel.hasUnsavedChanges, "cancel must not discard anything")
+    }
+
+    /// The sidebar's Close Site used to call closeSite() with no unsaved-changes check.
+    func testRequestCloseSiteWithUnsavedChangesAsksFirst() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        await viewModel.loadSite(from: siteA)
+        let postA = try XCTUnwrap(node(named: "post.md", in: viewModel))
+        viewModel.markFileModified(postA.id)
+
+        viewModel.requestCloseSite()
+
+        XCTAssertNotNil(viewModel.site)
+        XCTAssertTrue(viewModel.isCloseSiteConfirmationPresented)
+        XCTAssertNil(viewModel.pendingSiteToOpen)
+    }
+
+    func testRequestCloseSiteWithoutUnsavedChangesClosesImmediately() async throws {
+        let siteA = try makeSiteFolder(named: "site-a")
+        let viewModel = SiteViewModel(fileSystemService: FileSystemService())
+        await viewModel.loadSite(from: siteA)
+
+        viewModel.requestCloseSite()
+
+        XCTAssertNil(viewModel.site)
+        XCTAssertFalse(viewModel.isCloseSiteConfirmationPresented)
+    }
 }
