@@ -248,13 +248,16 @@ struct VictorApp: App {
     @State private var isRevertConfirmationPresented = false
 
     // De-dupes duplicate delivery of the same open-folder event: `open -a Victor <folder>`
-    // can arrive via both `onOpenURL` and the AppDelegate, and `onOpenURL` alone has been
-    // seen firing twice. Two racing `loadSite` calls thrash the filteredNodes cache into
+    // can arrive via both `onOpenURL` and the AppDelegate (`onOpenURL` "firing twice" was
+    // one per stacked WindowGroup window, before the switch to `Window`). Two racing `loadSite` calls thrash the filteredNodes cache into
     // a re-render loop. Set synchronously so same-run-loop deliveries can't both pass.
     @State private var siteURLLoadInFlight: URL?
 
     var body: some Scene {
-        WindowGroup {
+        // `Window`, not `WindowGroup`: a WindowGroup opens a NEW window for every external
+        // open event (Finder, Dock drop, `open -a`), and state restoration then brings
+        // them all back stacked on one frame. Victor is single-window by design.
+        Window("Victor", id: "main") {
             ContentView(siteViewModel: siteViewModel)
                 .frame(minWidth: AppConstants.Window.minWidth, minHeight: AppConstants.Window.minHeight)
                 .onAppear {
