@@ -81,9 +81,9 @@ enum AppConstants {
     /// Sidebar layout constants
     enum Sidebar {
         /// Minimum sidebar width
-        static let minWidth: CGFloat = 250
+        static let minWidth: CGFloat = 200
         /// Ideal/default sidebar width
-        static let idealWidth: CGFloat = 350
+        static let idealWidth: CGFloat = 250
         /// Maximum sidebar width
         static let maxWidth: CGFloat = 450
     }
