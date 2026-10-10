@@ -243,14 +243,9 @@ struct VictorApp: App {
     // File-menu confirmation dialogs. Attached to the window content (not
     // ContentView itself, which WP1.1 owns concurrently) so they present
     // against a real window instead of the menu bar's detached view context.
-    @State private var isCloseSiteConfirmationPresented = false
+    // The Close Site confirmation's state lives on SiteViewModel
+    // (`requestOpenSite`/`requestCloseSite`), shared by every open/close path.
     @State private var isRevertConfirmationPresented = false
-
-    // W3.1 (victor-doc): folder awaiting load once the Close Site
-    // confirmation above resolves. Set only when an incoming open request
-    // (Dock drop / Open With / `open -a`) arrives while a site with unsaved
-    // changes is already open.
-    @State private var pendingOpenSiteURL: URL?
 
     // De-dupes duplicate delivery of the same open-folder event: `open -a Victor <folder>`
     // can arrive via both `onOpenURL` and the AppDelegate, and `onOpenURL` alone has been
@@ -303,25 +298,17 @@ struct VictorApp: App {
                 }
                 .confirmationDialog(
                     "Close Site?",
-                    isPresented: $isCloseSiteConfirmationPresented,
+                    isPresented: $siteViewModel.isCloseSiteConfirmationPresented,
                     titleVisibility: .visible
                 ) {
                     Button("Save All and Close") {
-                        Task {
-                            // Closing discards the in-memory edits, so only close if every
-                            // save landed; otherwise errorMessage's alert explains why not.
-                            guard await siteViewModel.saveAllModifiedFiles().isEmpty else { return }
-                            siteViewModel.closeSite()
-                            await openPendingSiteIfNeeded()
-                        }
+                        Task { await siteViewModel.confirmCloseSite(saveFirst: true) }
                     }
                     Button("Close Without Saving", role: .destructive) {
-                        siteViewModel.closeSite()
-                        Task { await openPendingSiteIfNeeded() }
+                        Task { await siteViewModel.confirmCloseSite(saveFirst: false) }
                     }
                     Button("Cancel", role: .cancel) {
-                        // W3.1: an open request that triggered this dialog is abandoned on Cancel.
-                        pendingOpenSiteURL = nil
+                        siteViewModel.cancelCloseSite()
                     }
                 } message: {
                     Text("This site has unsaved changes. Choose whether to save them before closing.")
@@ -491,11 +478,7 @@ struct VictorApp: App {
                 Divider()
 
                 Button("Close Site") {
-                    if siteViewModel.hasUnsavedChanges {
-                        isCloseSiteConfirmationPresented = true
-                    } else {
-                        siteViewModel.closeSite()
-                    }
+                    siteViewModel.requestCloseSite()
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
                 .disabled(siteViewModel.site == nil)
@@ -755,33 +738,10 @@ struct VictorApp: App {
             // `initialSiteRestoreTask`'s doc comment for why that matters.
             await siteViewModel.initialSiteRestoreTask?.value
 
-            guard !siteViewModel.hasUnsavedChanges else {
-                pendingOpenSiteURL = url
-                isCloseSiteConfirmationPresented = true
-                siteURLLoadInFlight = nil
-                return
-            }
-
-            await siteViewModel.loadSite(from: url)
+            await siteViewModel.requestOpenSite(url)
             if siteURLLoadInFlight == url {
                 siteURLLoadInFlight = nil
             }
-        }
-    }
-
-    /// Loads `pendingOpenSiteURL` (set by `handleOpenSiteFolder` when the
-    /// Close Site confirmation had to run first) once the previous site has
-    /// been closed. `loadSite` performs the Hugo-site validation itself and
-    /// sets `errorMessage` if `url` isn't one.
-    private func openPendingSiteIfNeeded() async {
-        guard let url = pendingOpenSiteURL else { return }
-        pendingOpenSiteURL = nil
-
-        guard siteURLLoadInFlight != url else { return }
-        siteURLLoadInFlight = url
-        await siteViewModel.loadSite(from: url)
-        if siteURLLoadInFlight == url {
-            siteURLLoadInFlight = nil
         }
     }
 
