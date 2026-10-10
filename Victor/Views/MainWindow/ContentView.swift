@@ -151,6 +151,9 @@ struct ContentView: View {
             SidebarView(siteViewModel: siteViewModel)
                 // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
                 .focusable()
+                // Pane containers are focus targets for Cmd+Option+Arrow traversal, not
+                // controls: without this macOS draws a window-sized focus ring on launch.
+                .focusEffectDisabled()
                 .focusSection()
                 .focused($focusedPane, equals: .sidebar)
                 .navigationSplitViewColumnWidth(
@@ -182,6 +185,7 @@ struct ContentView: View {
                 .frame(minWidth: AppConstants.Content.minWidth)
                 // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
                 .focusable()
+                .focusEffectDisabled() // see the sidebar's
                 .focusSection()
                 .focused($focusedPane, equals: .editor)
 
@@ -194,6 +198,7 @@ struct ContentView: View {
                     )
                     .transition(.move(edge: .trailing))
                     .focusable()
+                    .focusEffectDisabled() // see the sidebar's
                     .focusSection()
                     .focused($focusedPane, equals: .inspector)
                 }
