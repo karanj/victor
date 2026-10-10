@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Flow layout: lays subviews out left-to-right, wrapping when the next one
-/// would overrun the proposed width. SwiftUI ships no wrapping stack on
-/// macOS 14, and `ConfigFieldView`'s `.stringArray` chip rows need one.
+/// would overrun the proposed width. SwiftUI ships no wrapping stack (still
+/// true in the macOS 27 SDK), and `ConfigFieldView`'s `.stringArray` chip rows need one.
 ///
 /// Claims the full proposed width when offered, else the natural single-line
 /// width — so `sizeThatFits` probes don't collapse it to one column.

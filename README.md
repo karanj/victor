@@ -15,7 +15,7 @@ A native macOS app built with SwiftUI that provides a sophisticated editing expe
 | **Status** | Production ready, clean build |
 | **Codebase** | 91 Swift files, ~25,000 lines of code |
 | **Tests** | 200+ tests |
-| **Platform** | macOS 14.0 (Sonoma) or later |
+| **Platform** | macOS 27.0 or later (macOS 14–26: Victor 1.1.0, tag `v1.1.0`) |
 
 ## Why Victor?
 
@@ -47,7 +47,7 @@ For detailed usage instructions, see the **[User Manual](Docs/USER-MANUAL.md)**.
 
 ## Requirements
 
-- macOS 14.0 (Sonoma) or later
+- macOS 27.0 or later (macOS 14–26: Victor 1.1.0, tag `v1.1.0`)
 - [Hugo](https://gohugo.io/installation/) installed on your system
 
 ## Installation

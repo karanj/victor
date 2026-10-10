@@ -389,12 +389,12 @@ struct VictorApp: App {
                 // rebuilt here via responder-chain dispatch.
                 Menu("Spelling and Grammar") {
                     Button("Show Spelling and Grammar") {
-                        EditMenuHelper.send(Selector("showGuessPanel:"))
+                        EditMenuHelper.send(#selector(NSText.showGuessPanel(_:)))
                     }
                     .keyboardShortcut(":", modifiers: .command)
 
                     Button("Check Document Now") {
-                        EditMenuHelper.send(Selector("checkSpelling:"))
+                        EditMenuHelper.send(#selector(NSText.checkSpelling(_:)))
                     }
                     .keyboardShortcut(";", modifiers: .command)
 
@@ -407,7 +407,7 @@ struct VictorApp: App {
 
                 Menu("Substitutions") {
                     Button("Show Substitutions") {
-                        EditMenuHelper.send(Selector("orderFrontSubstitutionsPanel:"))
+                        EditMenuHelper.send(#selector(NSTextView.orderFrontSubstitutionsPanel(_:)))
                     }
 
                     Divider()
@@ -421,25 +421,25 @@ struct VictorApp: App {
 
                 Menu("Transformations") {
                     Button("Make Upper Case") {
-                        EditMenuHelper.send(Selector("uppercaseWord:"))
+                        EditMenuHelper.send(#selector(NSResponder.uppercaseWord(_:)))
                     }
 
                     Button("Make Lower Case") {
-                        EditMenuHelper.send(Selector("lowercaseWord:"))
+                        EditMenuHelper.send(#selector(NSResponder.lowercaseWord(_:)))
                     }
 
                     Button("Capitalize") {
-                        EditMenuHelper.send(Selector("capitalizeWord:"))
+                        EditMenuHelper.send(#selector(NSResponder.capitalizeWord(_:)))
                     }
                 }
 
                 Menu("Speech") {
                     Button("Start Speaking") {
-                        EditMenuHelper.send(Selector("startSpeaking:"))
+                        EditMenuHelper.send(#selector(NSTextView.startSpeaking(_:)))
                     }
 
                     Button("Stop Speaking") {
-                        EditMenuHelper.send(Selector("stopSpeaking:"))
+                        EditMenuHelper.send(#selector(NSTextView.stopSpeaking(_:)))
                     }
                 }
             }

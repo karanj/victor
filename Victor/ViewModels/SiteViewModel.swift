@@ -1132,8 +1132,7 @@ class SiteViewModel {
             // Track in LRU cache and evict old entries
             updateContentCache(accessedNodeID: node.id)
         } catch {
-            errorMessage = "Failed to load file: \(error.localizedDescription)"
-            Logger.shared.error("Error loading file content", error: error)
+            reportLoadFailure(error, for: node, logMessage: "Error loading file content")
         }
     }
 
@@ -1158,9 +1157,16 @@ class SiteViewModel {
             // Track in LRU cache and evict old entries
             updateContentCache(accessedNodeID: node.id)
         } catch {
-            errorMessage = "Failed to load file: \(error.localizedDescription)"
-            Logger.shared.error("Error loading text file content", error: error)
+            reportLoadFailure(error, for: node, logMessage: "Error loading text file content")
         }
+    }
+
+    /// Loads are fire-and-forget from selection, so the file may already be deselected
+    /// (e.g. trashed right after Duplicate selected it). Only alert for the current file.
+    private func reportLoadFailure(_ error: Error, for node: FileNode, logMessage: String) {
+        Logger.shared.error(logMessage, error: error)
+        guard node.id == selectedNode?.id else { return }
+        errorMessage = "Failed to load file: \(error.localizedDescription)"
     }
 
     /// Update LRU cache when a file is accessed, evicting old entries if over limit

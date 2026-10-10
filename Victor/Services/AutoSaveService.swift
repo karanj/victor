@@ -196,6 +196,32 @@ actor AutoSaveService {
         }
     }
 
+    /// The editors' shared debounce: register under `nodeID`, sleep `delay`, run `fire`
+    /// unless cancelled, then deregister as the Task's last action (which `cancelDebounce`
+    /// depends on). Cancel the returned handle to supersede it on the next keystroke.
+    @MainActor
+    func startDebounce(
+        nodeID: UUID,
+        delay: Duration,
+        fire: @escaping @MainActor () async -> Void
+    ) -> Task<Void, Never> {
+        let token = UUID()
+        // Hands the Task its own handle. MainActor-isolated, so Sendable, and the
+        // Task body (also MainActor) can't run until the assignment below completes.
+        let handle = DebounceHandle()
+        let task = Task { @MainActor in
+            guard let selfTask = handle.task else { return }
+            await self.registerDebounce(nodeID: nodeID, token: token, task: selfTask)
+            try? await Task.sleep(for: delay)
+            if !Task.isCancelled {
+                await fire()
+            }
+            await self.deregisterDebounce(nodeID: nodeID, token: token)
+        }
+        handle.task = task
+        return task
+    }
+
     /// Perform the actual save operation with conflict detection
     private func performSave(
         fileURL: URL,
@@ -300,4 +326,9 @@ enum AutoSaveError: LocalizedError {
             return "File was modified by another application"
         }
     }
+}
+
+@MainActor
+private final class DebounceHandle {
+    var task: Task<Void, Never>?
 }

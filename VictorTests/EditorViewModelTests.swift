@@ -756,14 +756,17 @@ final class EditorViewModelTests: XCTestCase {
         // While the debounce is still pending, edit frontmatter directly on the model -
         // NOT calling handleContentChange() again, to isolate "does fire-time build
         // read live state" from "does re-triggering recapture" (already covered by the
-        // rapid-keystrokes test below).
-        try await Task.sleep(for: .milliseconds(150))
+        // rapid-keystrokes test below). Synchronous with scheduling: this MainActor test
+        // hasn't suspended, so the debounce Task can't have run - no wall-clock margin.
         contentFile.frontmatter?.title = "Changed During Debounce"
 
-        // Wait past the debounce interval for the save to land.
-        try await Task.sleep(for: .seconds(1.0))
-
-        let onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        // Poll for the save rather than sleeping a fixed interval past the debounce.
+        let deadline = Date().addingTimeInterval(5)
+        var onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        while !onDisk.contains("Body edited"), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+            onDisk = try String(contentsOf: fileURL, encoding: .utf8)
+        }
         XCTAssertTrue(
             onDisk.contains("Changed During Debounce"),
             "Frontmatter edited during the debounce window must reach disk - the full " +
@@ -898,7 +901,9 @@ final class EditorViewModelTests: XCTestCase {
     /// per-file cache and survives the rename.
     func testRenameCancelsStillSleepingDebounceInsteadOfLettingItWriteAnywhere() async throws {
         UserDefaults.standard.set(true, forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
-        UserDefaults.standard.set(0.4, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
+        // Far longer than the test runs, so the debounce can only end by cancellation.
+        // A short delay raced renameFile under full-suite load and fired first.
+        UserDefaults.standard.set(60.0, forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
         defer {
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.isAutoSaveEnabled)
             UserDefaults.standard.removeObject(forKey: AppConstants.UserDefaultsKeys.autoSaveDelay)
@@ -939,22 +944,17 @@ final class EditorViewModelTests: XCTestCase {
         // Wait for the Task's actual registration signal, not a wall-clock guess (#51): Task
         // scheduling can lag under load, and the old fixed sleep raced it, leaving
         // cancelDebounce running against an empty registry.
-        let registrationDeadline = Date().addingTimeInterval(5)
-        while await sharedAutoSaveService.debounceRegistrationCount == 0 {
-            guard Date() < registrationDeadline else {
-                return XCTFail("debounce never registered within 5s - can't exercise the cancel-while-sleeping scenario")
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitForDebounceRegistration(on: sharedAutoSaveService)
 
         // Rename lands WHILE the debounce is registered and still sleeping.
         await renameSiteViewModel.renameFile(node: node, to: "renamed.md")
         let renamedURL = tempDir.appendingPathComponent("renamed.md")
         XCTAssertEqual(node.url, renamedURL) // sanity check the rename itself worked
 
-        // Wait past what would have been the debounce interval - nothing should
-        // fire, since renameFile's cancelDebounce already stopped the Task.
-        try await Task.sleep(for: .seconds(1))
+        // cancelDebounce awaits the Task, which deregisters as its last action - an
+        // empty registry means it has finished and can never write later.
+        let remaining = await sharedAutoSaveService.debounceRegistrationCount
+        XCTAssertEqual(remaining, 0, "renameFile must leave no debounce still pending")
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: originalURL.path),
                        "the cancelled debounce must not recreate the file at the OLD path")

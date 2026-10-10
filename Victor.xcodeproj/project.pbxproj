@@ -132,6 +132,7 @@
 		ABF71C2D7E28AAD363927210 /* EditableFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3DF46362EB71C65A513888A /* EditableFile.swift */; };
 		ACCFC7D5781CAF89BC72599D /* MenusTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C64E4BC3CB89092AD3D394 /* MenusTab.swift */; };
 		AE972CDA068B71F6E3000771 /* RecursiveValueEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73FF4A079F026B14DAB1BA0F /* RecursiveValueEditor.swift */; };
+		B05C35794579DD58C77EC944 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED13E817F7F41A100D1F154 /* TestSupport.swift */; };
 		B1D968E0DEDCD821046FAD0B /* ImageViewerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C3A8A5613E8BFF9D10A642 /* ImageViewerPanel.swift */; };
 		B24FE34CA8F800E79A2639A8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E394C27DB0DEEF088DDEC4C /* Assets.xcassets */; };
 		B618E4399B0A3A3F9A00F5BD /* ShortcodeFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD201981E79241B53455BF5 /* ShortcodeFormView.swift */; };
@@ -268,6 +269,7 @@
 		6C10280F6580C58FDF7E32AB /* HugoConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HugoConfig.swift; sourceTree = "<group>"; };
 		6D5DFBC7BB7EE3AA4800B5F9 /* TabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarView.swift; sourceTree = "<group>"; };
 		6E425A63F6B4F5A81217B8AB /* PublishingTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublishingTab.swift; sourceTree = "<group>"; };
+		6ED13E817F7F41A100D1F154 /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
 		70DD437971B6A2557B522DFF /* TOMLHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOMLHelper.swift; sourceTree = "<group>"; };
 		71CD8718559B4D36EDAAD857 /* ContentPathAutocompleteField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPathAutocompleteField.swift; sourceTree = "<group>"; };
 		73FF4A079F026B14DAB1BA0F /* RecursiveValueEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecursiveValueEditor.swift; sourceTree = "<group>"; };
@@ -633,6 +635,7 @@
 				FCBABD9E712D1C124E8CD106 /* SiteViewModelTests.swift */,
 				C9C25D27213B6F1D3F4A3650 /* SpecializedFileManagerTests.swift */,
 				F204538C5A9B5E2FBD303D5A /* StateViewTests.swift */,
+				6ED13E817F7F41A100D1F154 /* TestSupport.swift */,
 				E26C877E1ACF87322356CA1C /* TextEditorViewModelTests.swift */,
 				E6DB0C77D4AEF9E89097B93B /* TOMLHelperTests.swift */,
 			);
@@ -909,7 +912,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					66F7D7C26C7A8FD03DD1796D = {
 						DevelopmentTeam = 55V96YBUQ4;
@@ -1143,6 +1146,7 @@
 				11EB96936A0D5CDFB03BC138 /* SpecializedFileManagerTests.swift in Sources */,
 				8CBB1905890B4AE58961FFF6 /* StateViewTests.swift in Sources */,
 				89FE97FE2DA4D521BDA54DE1 /* TOMLHelperTests.swift in Sources */,
+				B05C35794579DD58C77EC944 /* TestSupport.swift in Sources */,
 				C8C3A543194C97B000075D04 /* TextEditorViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1183,7 +1187,7 @@
 				CODE_SIGN_ENTITLEMENTS = Victor/Victor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 202607190018;
+				CURRENT_PROJECT_VERSION = 202610101030;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 55V96YBUQ4;
 				ENABLE_PREVIEWS = YES;
@@ -1196,8 +1200,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.1;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.victor.Victor;
 				SDKROOT = macosx;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -1268,7 +1272,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1286,7 +1290,7 @@
 				CODE_SIGN_ENTITLEMENTS = Victor/Victor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 202607190018;
+				CURRENT_PROJECT_VERSION = 202610101030;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 55V96YBUQ4;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1300,8 +1304,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.1;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.victor.Victor;
 				SDKROOT = macosx;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -1360,7 +1364,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

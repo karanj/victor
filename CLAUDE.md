@@ -12,6 +12,8 @@ open Victor.xcodeproj                # Open in Xcode, Cmd+R to run
 xcodebuild test -project Victor.xcodeproj -scheme Victor -destination 'platform=macOS'
 ```
 
+**Deployment target**: macOS 27.0 (raised from 14.0 on 2026-10-10). The macOS 14–26 line is frozen at tag `v1.1.0` / `macos14-final`; backport fixes on branch `macos14-maintenance`. Log: `Docs/MACOS27-UPLIFT.md`.
+
 **Conventions**:
 - ViewModels: `@MainActor @Observable`
 - File I/O: `async/await`
@@ -96,6 +98,7 @@ Design rationale that loads only when you work in that directory:
 - `Docs/CONFIG-EDITOR-DESIGN.md` - Config Editor v2: coverage review, round-trip issues, phased plan (vetted 2026-07-19)
 - `Docs/CONFIG-SCHEMA-SPEC.md` - Config Editor v2: full schema table + `ConfigValueStore` architecture, source-verified against Hugo v0.164.0
 - `Docs/CONFIG-EDITOR-PHASE6-DESIGN.md` - Config Editor v2 Phase 6 (deferred): config directories/environments, multilingual `languages` editor, module imports/mounts GUI — design only, needs Hugo source verification before implementation (2026-07-20)
+- `Docs/MACOS27-UPLIFT.md` - macOS 14 → 27 baseline uplift: review, execution log, legacy tag/branch, Liquid Glass branch inventory (2026-10-10)
 - `Docs/CODE-REVIEW-PLAN.md` - Code review findings and status
 - `Docs/CODE-ANALYSIS-2026-07-03.md` - Critical analysis session: 10 fixes (data loss, hang, dead prefs) + leftovers
 - `Docs/MAC-POLISH-DESIGN.md` - Mac polish design: window chrome, menus, system integration, modernisation track (approved 2026-07-04)

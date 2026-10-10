@@ -244,6 +244,59 @@ final class AutoSaveServiceTests: XCTestCase {
         XCTAssertFalse(box.wrote, "a cancelled, still-sleeping debounce must not proceed to write")
     }
 
+    // MARK: - startDebounce (shared editor debounce shape)
+
+    @MainActor
+    func testStartDebounceFiresAfterDelayThenDeregisters() async throws {
+        let service = AutoSaveService()
+        var fired = false
+
+        let task = service.startDebounce(nodeID: UUID(), delay: .milliseconds(20)) {
+            fired = true
+        }
+        await task.value
+
+        XCTAssertTrue(fired, "an uncancelled debounce must fire once its delay elapses")
+        let count = await service.debounceRegistrationCount
+        XCTAssertEqual(count, 0, "deregistration must be the Task's last action")
+    }
+
+    @MainActor
+    func testStartDebounceIsCancellableViaRegistryWhileSleeping() async throws {
+        let service = AutoSaveService()
+        let nodeID = UUID()
+        var fired = false
+
+        _ = service.startDebounce(nodeID: nodeID, delay: .seconds(60)) {
+            fired = true
+        }
+        try await waitForDebounceRegistration(on: service)
+
+        await service.cancelDebounce(nodeID: nodeID)
+
+        XCTAssertFalse(fired, "a debounce cancelled while sleeping must not fire")
+        let count = await service.debounceRegistrationCount
+        XCTAssertEqual(count, 0)
+    }
+
+    /// The keystroke-supersede path: the caller cancels the handle directly
+    /// rather than via the registry. Must skip `fire` but still deregister.
+    @MainActor
+    func testStartDebounceCancelledViaHandleSkipsFireAndDeregisters() async throws {
+        let service = AutoSaveService()
+        var fired = false
+
+        let task = service.startDebounce(nodeID: UUID(), delay: .seconds(60)) {
+            fired = true
+        }
+        task.cancel()
+        await task.value
+
+        XCTAssertFalse(fired)
+        let count = await service.debounceRegistrationCount
+        XCTAssertEqual(count, 0)
+    }
+
     func testCancelDebounceOnUnregisteredNodeIsANoOp() async throws {
         let service = AutoSaveService()
         // Must return promptly without hanging or crashing when nothing is registered.
