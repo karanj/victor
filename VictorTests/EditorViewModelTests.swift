@@ -949,6 +949,10 @@ final class EditorViewModelTests: XCTestCase {
         // Rename lands WHILE the debounce is registered and still sleeping.
         await renameSiteViewModel.renameFile(node: node, to: "renamed.md")
         let renamedURL = tempDir.appendingPathComponent("renamed.md")
+        // Intermittent (1 in ~8 full runs, 2026-10-10): the rename didn't happen. These
+        // two distinguish renameFile's silent `site == nil` return from a thrown error.
+        XCTAssertNotNil(renameSiteViewModel.site, "renameFile returns silently without a site")
+        XCTAssertNil(renameSiteViewModel.errorMessage)
         XCTAssertEqual(node.url, renamedURL) // sanity check the rename itself worked
 
         // cancelDebounce awaits the Task, which deregisters as its last action - an
