@@ -36,10 +36,10 @@ Verification: `c445934` at the 14.0 target (clean worktree), full suite 3/3 gree
 
 ## Pending (not done in session)
 
-- [ ] Push branches + tags, merge to `main` (needs approval).
+- [x] Pushed `claude/macos27-baseline`, `macos14-maintenance`, tags `v1.1.0` + `macos14-final`; PR #57 (merge commit, not squash, so the tags stay on `main`'s history).
 - [ ] `scripts/release.sh` for 1.1.0 → signed, notarized zip on a GitHub release.
 - [ ] Smoke-test the 1.1.0 binary on a real macOS 14 or 15 machine/VM — everything above was built and tested on 27.
-- [ ] Human check on 27: does `ShareLink` inside a `CommandGroup` now work? If so, delete `SharingHelper` (`VictorApp.swift`).
+- [ ] Human check on 27: does `ShareLink` inside a `CommandGroup` now work? If so, delete `SharingHelper` (`VictorApp.swift`). (2026-10-10: Share via the existing `SharingHelper` path confirmed working on 27 — doesn't answer the `ShareLink` question.)
 
 ## Next: Liquid Glass branch
 
