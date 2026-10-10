@@ -149,15 +149,15 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar - File navigation
             SidebarView(siteViewModel: siteViewModel)
+                // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
+                .focusable()
+                .focusSection()
+                .focused($focusedPane, equals: .sidebar)
                 .navigationSplitViewColumnWidth(
                     min: AppConstants.Sidebar.minWidth,
                     ideal: AppConstants.Sidebar.idealWidth,
                     max: AppConstants.Sidebar.maxWidth
                 )
-                // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
-                .focusable()
-                .focusSection()
-                .focused($focusedPane, equals: .sidebar)
         } detail: {
             // Main content area with optional inspector
             HSplitView {
