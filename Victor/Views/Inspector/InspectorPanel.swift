@@ -58,8 +58,6 @@ struct InspectorPanel: View {
             }
             .padding(12)
         }
-        .frame(width: 260)
-        .background(.ultraThinMaterial)
         .onAppear {
             // Compute initial stats when panel appears
             updateStatsImmediately()

@@ -196,16 +196,24 @@ struct EditorToolbar: View {
     let onInsertShortcode: (String) -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            formattingGroups
-            Spacer()
-            LivePreviewToggle(isEnabled: $isLivePreviewEnabled)
-            actionSeparator
-            SaveButton(
-                viewModel: viewModel,
-                reduceMotion: reduceMotion,
-                onSave: onSave
-            )
+        // Full row when it fits; otherwise the same controls scroll horizontally.
+        // The fallback matters beyond looks: the row's AppKit-backed buttons give it a
+        // hard ~600pt minimum width, which clipped in Split mode and - inside the Split
+        // HSplitView beside an open .inspector on macOS 27 - looped Update Constraints
+        // until AppKit threw (Docs/MACOS27-UPLIFT.md). A ScrollView has no minimum.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                formattingGroups
+                Spacer()
+                trailingActions
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    formattingGroups
+                    actionSeparator
+                    trailingActions
+                }
+            }
         }
         .padding(.horizontal, AppConstants.Toolbar.horizontalPadding)
         .padding(.vertical, AppConstants.Toolbar.verticalPadding)
@@ -284,6 +292,17 @@ struct EditorToolbar: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var trailingActions: some View {
+        LivePreviewToggle(isEnabled: $isLivePreviewEnabled)
+        actionSeparator
+        SaveButton(
+            viewModel: viewModel,
+            reduceMotion: reduceMotion,
+            onSave: onSave
+        )
     }
 
     private var actionSeparator: some View {

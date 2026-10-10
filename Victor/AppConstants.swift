@@ -88,12 +88,19 @@ enum AppConstants {
         static let maxWidth: CGFloat = 450
     }
 
+    enum Inspector {
+        /// Minimum inspector width (tag chips and the date picker row need ~220)
+        static let minWidth: CGFloat = 220
+        /// Ideal/default inspector width (the old fixed width)
+        static let idealWidth: CGFloat = 260
+        /// Maximum inspector width
+        static let maxWidth: CGFloat = 360
+    }
+
     /// Content area layout constants
     enum Content {
         /// Minimum width for main content area
         static let minWidth: CGFloat = 400
-        /// Minimum width for editor/preview panels in split view
-        static let panelMinWidth: CGFloat = 300
     }
 
     /// Main window constants

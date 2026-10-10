@@ -86,8 +86,14 @@ struct ContentView: View {
             WindowAccessor { newWindow in
                 window = newWindow
                 window?.isDocumentEdited = siteViewModel.hasUnsavedChanges
+                lockSidebarCollapse()
             }
         )
+        // mainContent swaps NavigationSplitView branches when a site opens or closes,
+        // which builds a fresh split view controller - re-lock on that edge.
+        .onChange(of: siteViewModel.site == nil) { _, _ in
+            lockSidebarCollapse()
+        }
         .onChange(of: siteViewModel.hasUnsavedChanges) { _, newValue in
             window?.isDocumentEdited = newValue
         }
@@ -131,6 +137,15 @@ struct ContentView: View {
         }
     }
 
+    /// Deferred a runloop turn: the split view controller is built during the same
+    /// update that attaches the window / swaps the branch, so it may not exist yet.
+    private func lockSidebarCollapse() {
+        guard let window else { return }
+        DispatchQueue.main.async {
+            SidebarCollapseLock.apply(in: window)
+        }
+    }
+
     // MARK: - Main Content
 
     @ViewBuilder
@@ -162,48 +177,48 @@ struct ContentView: View {
                     max: AppConstants.Sidebar.maxWidth
                 )
         } detail: {
-            // Main content area with optional inspector
-            HSplitView {
-                // Main content area with tab-based layout
-                VStack(spacing: 0) {
-                    // Tab bar only shown for content files (markdown with frontmatter)
-                    if siteViewModel.selectedNode?.contentFile != nil {
-                        TabBarView(viewModel: siteViewModel)
-                    }
-
-                    // Content based on selected layout mode
-                    if let selectedNode = siteViewModel.selectedNode {
-                        layoutContent(for: selectedNode)
-                            .id(selectedNode.id)  // Force view recreation on file switch
-                            .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
-                            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.layoutMode)
-                    } else {
-                        noFileSelectedView
-                            .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
-                    }
+            // Main content area with tab-based layout
+            VStack(spacing: 0) {
+                // Tab bar only shown for content files (markdown with frontmatter)
+                if siteViewModel.selectedNode?.contentFile != nil {
+                    TabBarView(viewModel: siteViewModel)
                 }
-                .frame(minWidth: AppConstants.Content.minWidth)
-                // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
-                .focusable()
-                .focusEffectDisabled() // see the sidebar's
-                .focusSection()
-                .focused($focusedPane, equals: .editor)
 
-                // Inspector panel (right side)
-                if settings.isInspectorVisible {
-                    InspectorPanel(
-                        contentFile: siteViewModel.selectedNode?.contentFile,
-                        fileNode: siteViewModel.selectedNode,
-                        siteViewModel: siteViewModel
-                    )
-                    .transition(.move(edge: .trailing))
-                    .focusable()
-                    .focusEffectDisabled() // see the sidebar's
-                    .focusSection()
-                    .focused($focusedPane, equals: .inspector)
+                // Content based on selected layout mode
+                if let selectedNode = siteViewModel.selectedNode {
+                    layoutContent(for: selectedNode)
+                        .id(selectedNode.id)  // Force view recreation on file switch
+                        .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
+                        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.layoutMode)
+                } else {
+                    noFileSelectedView
+                        .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
                 }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.isInspectorVisible)
+            .frame(minWidth: AppConstants.Content.minWidth)
+            // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
+            .focusable()
+            .focusEffectDisabled() // see the sidebar's
+            .focusSection()
+            .focused($focusedPane, equals: .editor)
+        }
+        // System inspector column (Liquid Glass): full height, toolbar extends over it,
+        // and drag-to-close writes back through the binding.
+        .inspector(isPresented: $settings.isInspectorVisible) {
+            InspectorPanel(
+                contentFile: siteViewModel.selectedNode?.contentFile,
+                fileNode: siteViewModel.selectedNode,
+                siteViewModel: siteViewModel
+            )
+            .inspectorColumnWidth(
+                min: AppConstants.Inspector.minWidth,
+                ideal: AppConstants.Inspector.idealWidth,
+                max: AppConstants.Inspector.maxWidth
+            )
+            .focusable()
+            .focusEffectDisabled() // see the sidebar's
+            .focusSection()
+            .focused($focusedPane, equals: .inspector)
         }
         .navigationTitle(windowTitle)
         .navigationSubtitle(windowSubtitle)
@@ -234,6 +249,9 @@ struct ContentView: View {
                     // invisible "loading" item even when nothing is loading.
                     .accessibilityHidden(!(siteViewModel.isLoading || siteViewModel.isLoadingFile))
             }
+
+            // Own glass group: the inspector toggle is window chrome, not a server control.
+            ToolbarSpacer(.fixed, placement: .primaryAction)
 
             // Inspector toggle: enabled only for markdown content files
             // (Assets have their own built-in detail panel)
@@ -301,13 +319,17 @@ struct ContentView: View {
 
         case .split:
             // Side-by-side editor and preview (markdown only)
+            // No minWidth on the panes: on macOS 27, HSplitView panes with a min width
+            // (>= ~150pt) beside an open .inspector loop Update Constraints until AppKit
+            // throws - reproduced standalone, see Docs/MACOS27-UPLIFT.md. The detail
+            // column's own minWidth still bounds the pair.
             if node.contentFile != nil {
                 HSplitView {
                     FileViewerRouter(node: node, siteViewModel: siteViewModel)
-                        .frame(minWidth: AppConstants.Content.panelMinWidth)
+                        .frame(maxWidth: .infinity)
 
                     previewPanel(for: node)
-                        .frame(minWidth: AppConstants.Content.panelMinWidth)
+                        .frame(maxWidth: .infinity)
                 }
             } else {
                 FileViewerRouter(node: node, siteViewModel: siteViewModel)

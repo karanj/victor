@@ -158,10 +158,12 @@ class SiteViewModel {
             pushNavigationHistory(node)
         }
 
-        // Auto-hide inspector when switching to a non-markdown file
-        // (The inspector toolbar button is only shown for markdown files,
-        // so we need to auto-dismiss to prevent the user being stuck)
-        if AppSettings.shared.isInspectorVisible && (node == nil || !node!.isMarkdownFile) {
+        // Auto-hide inspector when switching to anything but a content file - the
+        // same condition that enables its toolbar button, so the user is never stuck
+        // with it open. Archetype/layout .md files count as non-content: they're
+        // markdown, but have no ContentFile and their editors use HSplitView, which
+        // crashes beside an open inspector on macOS 27 (Docs/MACOS27-UPLIFT.md).
+        if AppSettings.shared.isInspectorVisible && node?.contentFile == nil {
             AppSettings.shared.isInspectorVisible = false
         }
 
