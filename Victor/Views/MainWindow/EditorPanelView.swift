@@ -217,7 +217,6 @@ struct EditorToolbar: View {
         }
         .padding(.horizontal, AppConstants.Toolbar.horizontalPadding)
         .padding(.vertical, AppConstants.Toolbar.verticalPadding)
-        .background(Color(nsColor: .controlBackgroundColor))
         .overlay(alignment: .bottom) {
             Divider()
         }
@@ -226,68 +225,58 @@ struct EditorToolbar: View {
     // MARK: - Formatting Groups
 
     private var formattingGroups: some View {
-        HStack(spacing: 0) {
-            // Group 1: Text Formatting
-            ToolbarGroup {
-                ToolbarButton(icon: "bold", label: "Bold", help: "Bold (⌘B)") {
-                    onFormat(.bold)
+        GlassEffectContainer(spacing: AppConstants.Toolbar.glassGroupSpacing) {
+            HStack(spacing: AppConstants.Toolbar.glassGroupSpacing) {
+                // Group 1: Text Formatting
+                ToolbarGroup {
+                    ToolbarButton(icon: "bold", label: "Bold", help: "Bold (⌘B)") {
+                        onFormat(.bold)
+                    }
+                    ToolbarButton(icon: "italic", label: "Italic", help: "Italic (⌘I)") {
+                        onFormat(.italic)
+                    }
                 }
-                ToolbarButton(icon: "italic", label: "Italic", help: "Italic (⌘I)") {
-                    onFormat(.italic)
-                }
-            }
 
-            ToolbarSeparator()
-
-            // Group 2: Headings
-            ToolbarGroup {
-                HeadingMenu(onFormat: onFormat)
-            }
-
-            ToolbarSeparator()
-
-            // Group 3: Lists
-            ToolbarGroup {
-                ToolbarButton(icon: "list.bullet", label: "Bullet List", help: "Bullet List") {
-                    onFormat(.unorderedList)
+                // Group 2: Headings
+                ToolbarGroup {
+                    HeadingMenu(onFormat: onFormat)
                 }
-                ToolbarButton(icon: "list.number", label: "Numbered List", help: "Numbered List") {
-                    onFormat(.orderedList)
-                }
-            }
 
-            ToolbarSeparator()
+                // Group 3: Lists
+                ToolbarGroup {
+                    ToolbarButton(icon: "list.bullet", label: "Bullet List", help: "Bullet List") {
+                        onFormat(.unorderedList)
+                    }
+                    ToolbarButton(icon: "list.number", label: "Numbered List", help: "Numbered List") {
+                        onFormat(.orderedList)
+                    }
+                }
 
-            // Group 4: Block Elements
-            ToolbarGroup {
-                ToolbarButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code", help: "Code Block") {
-                    onFormat(.code)
+                // Group 4: Block Elements
+                ToolbarGroup {
+                    ToolbarButton(icon: "chevron.left.forwardslash.chevron.right", label: "Code", help: "Code Block") {
+                        onFormat(.code)
+                    }
+                    ToolbarButton(icon: "text.quote", label: "Quote", help: "Block Quote (⌘')") {
+                        onFormat(.blockquote)
+                    }
                 }
-                ToolbarButton(icon: "text.quote", label: "Quote", help: "Block Quote (⌘')") {
-                    onFormat(.blockquote)
-                }
-            }
 
-            ToolbarSeparator()
-
-            // Group 5: Insert Elements
-            ToolbarGroup {
-                ToolbarButton(icon: "link", label: "Link", help: "Insert Link (⌘K)") {
-                    onFormat(.link)
-                }
-                ToolbarButton(icon: "photo", label: "Image", help: "Insert Image (⌘⇧I)") {
-                    onFormat(.image)
-                }
-                Button(action: { showShortcodePicker = true }) {
-                    Label("Shortcode", systemImage: "curlybraces")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.bordered)
-                .help("Insert Shortcode (⌘⇧K)")
-                .accessibilityLabel("Insert Shortcode")
-                .popover(isPresented: $showShortcodePicker) {
-                    ShortcodePickerView(contentPaths: contentPaths) { shortcodeText in
-                        onInsertShortcode(shortcodeText)
+                // Group 5: Insert Elements
+                ToolbarGroup {
+                    ToolbarButton(icon: "link", label: "Link", help: "Insert Link (⌘K)") {
+                        onFormat(.link)
+                    }
+                    ToolbarButton(icon: "photo", label: "Image", help: "Insert Image (⌘⇧I)") {
+                        onFormat(.image)
+                    }
+                    ToolbarButton(icon: "curlybraces", label: "Insert Shortcode", help: "Insert Shortcode (⌘⇧K)") {
+                        showShortcodePicker = true
+                    }
+                    .popover(isPresented: $showShortcodePicker) {
+                        ShortcodePickerView(contentPaths: contentPaths) { shortcodeText in
+                            onInsertShortcode(shortcodeText)
+                        }
                     }
                 }
             }
@@ -314,7 +303,9 @@ struct EditorToolbar: View {
 
 // MARK: - Toolbar Components
 
-/// A group of toolbar buttons with consistent spacing
+/// A group of toolbar buttons sharing one Liquid Glass capsule. Buttons inside
+/// are borderless - the capsule is the chrome. Place inside a
+/// `GlassEffectContainer` (see `EditorToolbar.formattingGroups`).
 struct ToolbarGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
@@ -322,15 +313,10 @@ struct ToolbarGroup<Content: View>: View {
         HStack(spacing: AppConstants.Toolbar.groupSpacing) {
             content
         }
-    }
-}
-
-/// Visual separator between toolbar groups
-struct ToolbarSeparator: View {
-    var body: some View {
-        Divider()
-            .frame(height: AppConstants.Toolbar.separatorHeight)
-            .padding(.horizontal, AppConstants.Toolbar.separatorPadding)
+        .buttonStyle(.borderless)
+        .padding(.horizontal, AppConstants.Toolbar.glassGroupPadding)
+        .padding(.vertical, AppConstants.Toolbar.glassGroupPadding / 2)
+        .glassEffect(.regular, in: .capsule)
     }
 }
 
@@ -345,8 +331,9 @@ struct ToolbarButton: View {
         Button(action: action) {
             Label(label, systemImage: icon)
                 .labelStyle(.iconOnly)
+                .frame(minWidth: AppConstants.Toolbar.iconButtonSize, minHeight: AppConstants.Toolbar.iconButtonSize)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
         .help(help)
         .accessibilityLabel(label)
     }
@@ -367,7 +354,7 @@ struct HeadingMenu: View {
         } label: {
             Label("Heading", systemImage: "h.square")
         }
-        .buttonStyle(.bordered)
+        .menuStyle(.button)
         .help("Insert Heading (H1-H6)")
         .frame(width: AppConstants.Toolbar.headingMenuWidth)
     }
@@ -386,7 +373,7 @@ struct LivePreviewToggle: View {
             .labelStyle(.titleAndIcon)
             .font(.callout)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.glass)
         .help(isEnabled ? "Disable live preview" : "Enable live preview")
     }
 }
@@ -449,7 +436,7 @@ struct SaveButton: View {
         // No .keyboardShortcut here - File > Save (Cmd+S) is the single owner,
         // routed through the focusedValue(\.editorActions) published above.
         .disabled(!viewModel.hasUnsavedChanges)
-        .buttonStyle(.bordered)
+        .buttonStyle(.glassProminent)
     }
 }
 

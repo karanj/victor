@@ -151,10 +151,12 @@ enum AppConstants {
         static let verticalPadding: CGFloat = 8
         /// Spacing between buttons within a group
         static let groupSpacing: CGFloat = 4
-        /// Height of separator dividers between groups
-        static let separatorHeight: CGFloat = 20
-        /// Horizontal padding around separators
-        static let separatorPadding: CGFloat = 8
+        /// Gap between the formatting toolbar's glass capsules
+        static let glassGroupSpacing: CGFloat = 8
+        /// Inset of buttons inside a glass capsule (vertical uses half)
+        static let glassGroupPadding: CGFloat = 6
+        /// Minimum hit area for an icon-only toolbar button
+        static let iconButtonSize: CGFloat = 22
         /// Height of action separator (before save button)
         static let actionSeparatorHeight: CGFloat = 24
         /// Width of heading dropdown menu
