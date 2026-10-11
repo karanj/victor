@@ -96,3 +96,20 @@ Verified: full suite 784 tests green ×2 (one earlier run hit the known intermit
 - [ ] Split mode + inspector at the 1000pt minimum window width: editor toolbar scrolls, nothing clips.
 
 Debugging note: while bisecting, the "launch crashes" were really the restored `post-1.md` in Split mode — Victor restores the last selection, so the editor was always on screen.
+
+### Liquid Glass pass 2 — code-only items while the Mac was locked (2026-10-12, branch `liquid-glass`)
+
+Session ran with the screen locked: AX trust and Screen Recording were both granted (the pass-1 "lost TCC grant" was the rebuilt helper binary, not a revoked permission), but a locked session returns black screenshots, `screencapture -l` fails, and AX child walks loop. Nothing below has been seen on screen. Suite 784 green after each commit.
+
+- `3b60959` audit layout bugs: `EmptyStateView` fills its container (asset browser header no longer floats mid-pane; 12 callers); fixed-width segmented "View" pickers `.labelsHidden()` (template browser "Vie/w"; also Form|Raw, folder, asset view pickers); sidebar status badges inline after the name; config Locale/Theme use the shared bordered `configTextFieldStyle()`.
+- `a084d7b` `.cornerRadius` → `clipShape(RoundedRectangle)` (0 left); 9 duplicated grey chips → `secondaryBadgeStyle()`; `FileTagBadge` shared by sidebar + folder view.
+- Formatting toolbar → glass capsules per group in one `GlassEffectContainer`, borderless buttons, Live Preview `.glass`, Save `.glassProminent`; opaque strip removed.
+
+Human checks (in addition to pass 1's three):
+- [ ] Formatting toolbar: capsules read as groups, icons not cramped (22pt hit area), Heading menu looks right borderless, Save prominent only when dirty. Light + dark.
+- [ ] Toolbar without the grey strip: still separated from the editor text? (Revert the background line in `EditorToolbar.body` if not.)
+- [ ] Split + inspector at 1000pt: toolbar falls back to scrolling, no constraint-loop crash.
+- [ ] Sidebar: Draft/Scheduled badges inline; long names truncate before badges.
+- [ ] Template browser / Form|Raw / asset + folder view pickers: no label, widths look right (constants were sized with the label; may want trimming).
+- [ ] Empty `assets/` folder: header at top, empty state centred below.
+- [ ] Config ▸ Essentials: Locale and Theme bordered like Base URL/Title.
