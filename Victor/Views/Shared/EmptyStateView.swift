@@ -30,6 +30,9 @@ struct EmptyStateView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
+        // ContentUnavailableView doesn't expand on its own; without this a
+        // header above it in a VStack floats to the vertical centre.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

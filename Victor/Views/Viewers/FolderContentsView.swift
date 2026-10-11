@@ -71,6 +71,7 @@ struct FolderContentsView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
 
             // Reveal in Finder

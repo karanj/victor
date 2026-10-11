@@ -153,6 +153,7 @@ struct AssetBrowserView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
                 .accessibilityLabel("View mode")
 

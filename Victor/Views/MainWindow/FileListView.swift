@@ -385,38 +385,19 @@ struct FileRowView: View, Equatable {
                     Text(viewModel.name)
                         .lineLimit(1)
 
-                    // Page bundle badge
                     if viewModel.isPageBundle {
-                        Text("bundle")
-                            .font(.caption2)
-                            .foregroundStyle(Color.Badge.pageBundle.contrastingTextColor)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.Badge.pageBundle)
-                            .cornerRadius(3)
+                        SidebarBadge(text: "bundle", color: Color.Badge.pageBundle)
                     }
 
-                    // Config file badge
                     if viewModel.isConfigFile {
-                        Text("config")
-                            .font(.caption2)
-                            .foregroundStyle(Color.Badge.config.contrastingTextColor)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.Badge.config)
-                            .cornerRadius(3)
+                        SidebarBadge(text: "config", color: Color.Badge.config)
                     }
-                }
 
-                // Content status badges (Draft/Scheduled/Expired)
-                // Read directly from node to observe async changes
-                // A file can have multiple statuses (e.g., draft AND scheduled)
-                let statuses = node.contentStatuses
-                if !statuses.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(statuses, id: \.self) { status in
-                            ContentStatusBadge(status: status)
-                        }
+                    // Content status badges (Draft/Scheduled/Expired), inline
+                    // like bundle/config. Read directly from node to observe
+                    // async changes; a file can have several (draft AND scheduled).
+                    ForEach(node.contentStatuses, id: \.self) { status in
+                        ContentStatusBadge(status: status)
                     }
                 }
 
@@ -482,6 +463,27 @@ struct FileStatusIndicator: View {
     }
 }
 
+// MARK: - Sidebar Badge
+
+/// Filled tag trailing a sidebar row's name (bundle, config, Draft, ...).
+/// Fixed-size so the file name truncates first instead of the badge wrapping.
+struct SidebarBadge: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.medium)
+            .lineLimit(1)
+            .foregroundStyle(color.contrastingTextColor)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(color, in: RoundedRectangle(cornerRadius: 3))
+            .fixedSize()
+    }
+}
+
 // MARK: - Content Status Badge
 
 /// Badge displaying content publication status (Draft/Scheduled/Expired)
@@ -489,25 +491,8 @@ struct ContentStatusBadge: View {
     let status: ContentStatus
 
     var body: some View {
-        Text(status.displayName)
-            .font(.caption2)
-            .fontWeight(.medium)
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(status.badgeColor)
-            .cornerRadius(3)
+        SidebarBadge(text: status.displayName, color: status.badgeColor)
             .help(tooltipText)
-    }
-
-    private var foregroundColor: Color {
-        switch status {
-        case .draft, .scheduled, .expired:
-            // Use contrast-aware text color based on badge background luminance
-            return status.badgeColor.contrastingTextColor
-        case .published:
-            return .clear
-        }
     }
 
     private var tooltipText: String {

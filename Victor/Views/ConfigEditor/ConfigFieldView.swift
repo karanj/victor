@@ -655,9 +655,7 @@ private struct ConfigTextDraftRow: View {
         HStack(spacing: 6) {
             TextField("", text: $draft, prompt: Text(placeholderText))
                 .font(monospaced ? .system(.body, design: .monospaced) : .body)
-                .labelsHidden()
-                .textFieldStyle(.roundedBorder)
-                .multilineTextAlignment(.leading)
+                .configTextFieldStyle()
                 .frame(maxWidth: AppConstants.FormField.textWidth)
                 .focused($isFocused)
                 .onSubmit { commitDraft() }
@@ -731,9 +729,7 @@ private struct ConfigIntFieldRow: View {
         VStack(alignment: .trailing, spacing: 2) {
             HStack(spacing: 6) {
                 TextField("", text: $draft, prompt: Text(placeholderText))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.leading)
+                    .configTextFieldStyle()
                     .frame(width: AppConstants.FormField.numberWidth)
                     .focused($isFocused)
                     .onSubmit { commitDraft() }
@@ -809,9 +805,7 @@ private struct ConfigDoubleFieldRow: View {
         VStack(alignment: .trailing, spacing: 2) {
             HStack(spacing: 6) {
                 TextField("", text: $draft, prompt: Text(placeholderText))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.leading)
+                    .configTextFieldStyle()
                     .frame(width: AppConstants.FormField.numberWidth)
                     .focused($isFocused)
                     .onSubmit { commitDraft() }
@@ -911,9 +905,7 @@ private struct ConfigStringArrayFieldRow: View {
 
             HStack(spacing: 6) {
                 TextField("", text: $newToken, prompt: Text("add…"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.leading)
+                    .configTextFieldStyle()
                     .frame(width: 120)
                     .onSubmit { addToken() }
                 Button("Add") { addToken() }
@@ -962,5 +954,17 @@ private extension ConfigValueType {
     var isRawOnly: Bool {
         if case .rawOnly = self { return true }
         return false
+    }
+}
+
+// MARK: - Text field style
+
+extension View {
+    /// Bordered, label-less text field used by every config row. Grouped
+    /// `Form`s render a bare `TextField` borderless, so rows must opt in.
+    func configTextFieldStyle() -> some View {
+        labelsHidden()
+            .textFieldStyle(.roundedBorder)
+            .multilineTextAlignment(.leading)
     }
 }

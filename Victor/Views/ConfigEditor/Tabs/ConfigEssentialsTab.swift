@@ -69,9 +69,8 @@ private struct ConfigLocaleRowView: View {
         LabeledContent("Locale") {
             VStack(alignment: .trailing, spacing: 4) {
                 TextField("", text: $draft, prompt: Text("e.g. en-US"))
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .frame(width: 200)
+                    .configTextFieldStyle()
+                    .frame(maxWidth: AppConstants.FormField.textWidth)
                     .focused($isFocused)
                     .onSubmit { commitDraft() }
                     .onChange(of: isFocused) { _, focused in
@@ -172,9 +171,8 @@ private struct ConfigThemeRowView: View {
         LabeledContent("Theme") {
             HStack(spacing: 6) {
                 TextField("", text: $draft, prompt: Text("none"))
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .frame(width: 200)
+                    .configTextFieldStyle()
+                    .frame(maxWidth: AppConstants.FormField.textWidth)
                     .focused($isFocused)
                     .onSubmit { commitDraft() }
                     .onChange(of: isFocused) { _, focused in

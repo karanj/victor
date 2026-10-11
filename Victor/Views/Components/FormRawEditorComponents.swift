@@ -13,6 +13,7 @@ struct FormRawPickerView: View {
             Text("Raw").tag(true)
         }
         .pickerStyle(.segmented)
+        .labelsHidden()
         .frame(width: width)
     }
 }
