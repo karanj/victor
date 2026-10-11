@@ -57,16 +57,11 @@ struct ArchetypeEditorView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(.orange)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
 
             // Format badge
             Text(archetype.frontmatterFormat.displayName)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.2))
-                .cornerRadius(4)
+                .secondaryBadgeStyle()
 
             // Default badge
             if archetype.isDefault {
@@ -76,7 +71,7 @@ struct ArchetypeEditorView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(.blue)
-                    .cornerRadius(4)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
 
             // Status indicator (uses reusable component)

@@ -47,17 +47,12 @@ struct TemplateEditorView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(templateTypeBadgeColor)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
 
             // Theme badge if applicable
             if template.isThemeTemplate, let themeName = template.themeName {
                 Text(themeName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.secondary.opacity(0.2))
-                    .cornerRadius(4)
+                    .secondaryBadgeStyle()
             }
 
             // File status badges

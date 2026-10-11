@@ -157,7 +157,7 @@ struct InspectorSection<Content: View>: View {
                 .padding(.vertical, 4)
                 .padding(.horizontal, 6)
                 .background(isHovered ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : Color.clear)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

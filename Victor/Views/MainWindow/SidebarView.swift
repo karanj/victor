@@ -179,7 +179,7 @@ struct RecentSiteRow: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
             .background(isHovering ? Color(nsColor: .controlBackgroundColor) : Color.clear)
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: isHovering)
         }
@@ -290,7 +290,7 @@ struct SearchBar: View {
         }
         .padding(8)
         .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(6)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .onChange(of: siteViewModel.shouldFocusSearch) { _, newValue in
             if newValue {
                 isSearchFocused = true

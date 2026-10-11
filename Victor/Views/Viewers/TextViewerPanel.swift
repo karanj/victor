@@ -56,12 +56,7 @@ struct TextViewerPanel: View {
 
             // File type badge
             Text(fileType.displayName)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.2))
-                .cornerRadius(4)
+                .secondaryBadgeStyle()
 
             Spacer()
 

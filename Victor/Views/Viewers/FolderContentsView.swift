@@ -220,17 +220,12 @@ struct FolderItemGridCell: View {
             } else if !node.isDirectory {
                 // Type badge for non-markdown files
                 Text(node.fileType.displayName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(.secondary.opacity(0.2))
-                    .cornerRadius(3)
+                    .secondaryBadgeStyle(font: .caption2, horizontalPadding: 4, cornerRadius: 3)
             }
         }
         .padding(8)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var iconName: String {
@@ -275,13 +270,7 @@ struct FolderItemListRow: View {
                         .lineLimit(1)
 
                     if node.isPageBundle {
-                        Text("bundle")
-                            .font(.caption2)
-                            .foregroundStyle(Color.Badge.pageBundle.contrastingTextColor)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.Badge.pageBundle)
-                            .cornerRadius(3)
+                        FileTagBadge(text: "bundle", color: Color.Badge.pageBundle)
                     }
 
                     // Content status badges (Draft/Scheduled/Expired)

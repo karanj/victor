@@ -386,11 +386,11 @@ struct FileRowView: View, Equatable {
                         .lineLimit(1)
 
                     if viewModel.isPageBundle {
-                        SidebarBadge(text: "bundle", color: Color.Badge.pageBundle)
+                        FileTagBadge(text: "bundle", color: Color.Badge.pageBundle)
                     }
 
                     if viewModel.isConfigFile {
-                        SidebarBadge(text: "config", color: Color.Badge.config)
+                        FileTagBadge(text: "config", color: Color.Badge.config)
                     }
 
                     // Content status badges (Draft/Scheduled/Expired), inline
@@ -463,27 +463,6 @@ struct FileStatusIndicator: View {
     }
 }
 
-// MARK: - Sidebar Badge
-
-/// Filled tag trailing a sidebar row's name (bundle, config, Draft, ...).
-/// Fixed-size so the file name truncates first instead of the badge wrapping.
-struct SidebarBadge: View {
-    let text: String
-    let color: Color
-
-    var body: some View {
-        Text(text)
-            .font(.caption2)
-            .fontWeight(.medium)
-            .lineLimit(1)
-            .foregroundStyle(color.contrastingTextColor)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(color, in: RoundedRectangle(cornerRadius: 3))
-            .fixedSize()
-    }
-}
-
 // MARK: - Content Status Badge
 
 /// Badge displaying content publication status (Draft/Scheduled/Expired)
@@ -491,7 +470,7 @@ struct ContentStatusBadge: View {
     let status: ContentStatus
 
     var body: some View {
-        SidebarBadge(text: status.displayName, color: status.badgeColor)
+        FileTagBadge(text: status.displayName, color: status.badgeColor)
             .help(tooltipText)
     }
 

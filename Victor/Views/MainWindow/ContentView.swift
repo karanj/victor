@@ -436,7 +436,7 @@ struct KeyboardHintRow: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
                 .frame(minWidth: 50)
 
             Text(description)
