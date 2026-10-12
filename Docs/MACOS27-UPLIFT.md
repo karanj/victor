@@ -126,3 +126,18 @@ Still open:
 - [x] Split mode: Live Preview/Save hidden off the end of the scrolling toolbar → fixed: only the formatting groups scroll; Live Preview/Save stay pinned (labelled, then icon-only). Not moved to the window toolbar — Save's enabled state is per-keystroke, which CLAUDE.md keeps out of toolbar scopes. Same pass: the tab bar's "Preview:" caption drops out when narrow instead of wrapping a letter per line. Verified by screenshot at 1200pt (with/without inspector) and 1000pt.
 - [ ] Inspector Description `TextEditor` has a hard 1pt border and visible scroller — restyle to match the other inspector fields.
 - [ ] Revisit `.inspector` when a macOS 27.x SDK fixes the standalone repro.
+
+### Pass 4 — window toolbar regroup, bundle resources, frontmatter panel (2026-10-13, branch `liquid-glass`)
+
+Driven by user feedback on the pass-3 build (all five items addressed; each verified by screenshot in the scratchpad build at 1200 and 1000pt).
+
+- **Bundle resources missing from the tree** (unrelated pre-existing bug): `FileSystemService.buildFileTree` only kept `.md` under `content/`, so a branch bundle's `screenshots/` + `icon.png` (bitstories `apps/dose-tracker`) never showed. Now a bundle (`index.md`/`_index.md`) shows all its files, and that carries into subfolders with no markdown of their own (resource folders). Loose non-md outside bundles still hidden. `FileTreeScanTests` (3).
+- **Window toolbar**, Mail/Xcode-style: leading = Editor|Preview|Split segmented + document title (editing first, where it used to be); trailing = one server capsule (● status text + Run/Stop split-button menu: Open in Browser, Show Server Logs, Server Settings…) then the inspector toggle. One `ToolbarItem` for the server group — separate items in `.primaryAction` got assigned to the sidebar column. `ServerControlView` → `ServerToolbarItems.swift`; presentation logic in `ServerActivity` (`ServerToolbarTests`, 8). Secondary bar (`TabBarView`) now only appears outside Editor mode or with build issues (`TabBarView.isNeeded`).
+- **New Post** moved out of the window toolbar to a "+" in the sidebar site header (the user hit it while reaching for the editor view). ⌘N unchanged.
+- **Frontmatter panel**: one header row styled like the formatting toolbar — leading disclosure chevron, neutral format chip (`secondaryBadgeStyle`), and a single glass picker `Essential · Publishing · SEO · Menus · Advanced | Raw` (`FrontmatterPane`) that replaces both the blue Form|Raw segmented control and the separate category tab strip. Picker is laid out while collapsed (hidden/disabled) so the row height doesn't jump; falls back to icon-only via `ViewThatFits`. Opaque header strip and drawn pill removed; resize is an invisible 8pt strip over the top hairline (`.pointerStyle(.rowResize)`), drag now uses the start height + global translation (previously compounded the cumulative translation each frame). `FrontmatterFormat.displayName` moved from `StatisticsSection` into the model and reused by the archetype format picker. `FrontmatterPanelTests` (5).
+
+Suite: 800 tests green (one earlier run hit the known intermittent debounce flake; three reruns clean).
+
+Still open:
+- [ ] Frontmatter picker icon-only fallback not yet seen on screen (needs a detail pane narrower than ~800pt with the panel open).
+- [ ] Light mode pass over pass 3–4 surfaces.
