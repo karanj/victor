@@ -220,9 +220,19 @@ final class FileSystemService: @unchecked Sendable {
         return nodes
     }
 
+    private static func containsMarkdown(directlyIn directory: URL) -> Bool {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names.contains { ($0 as NSString).pathExtension.lowercased() == "md" }
+    }
+
     /// Recursively build the file tree. Under `isContentDirectory`, only markdown files are
-    /// included - matching how Hugo treats `content/`.
-    private func buildFileTree(at directory: URL, isContentDirectory: Bool = false) throws -> [FileNode] {
+    /// included - except where `showsResources`: a bundle's directory, and markdown-free
+    /// subfolders of it (e.g. `screenshots/`), whose files are Hugo page resources.
+    private func buildFileTree(
+        at directory: URL,
+        isContentDirectory: Bool = false,
+        showsResources: Bool = false
+    ) throws -> [FileNode] {
         var nodes: [FileNode] = []
         let fileManager = FileManager.default
 
@@ -254,8 +264,17 @@ final class FileSystemService: @unchecked Sendable {
                 // Create directory node
                 let dirNode = FileNode(url: itemURL, isDirectory: true, isPageBundle: isBundle)
 
+                // A bundle's resources: its own files, plus those of subfolders that hold
+                // no pages of their own. A subfolder with markdown is a section/page.
+                let childShowsResources = isBundle
+                    || (showsResources && !Self.containsMarkdown(directlyIn: itemURL))
+
                 // Recursively scan subdirectory
-                let children = try buildFileTree(at: itemURL, isContentDirectory: isContentDirectory)
+                let children = try buildFileTree(
+                    at: itemURL,
+                    isContentDirectory: isContentDirectory,
+                    showsResources: childShowsResources
+                )
 
                 // For content directories, only include if has children
                 // For other directories, always include for visibility
@@ -277,10 +296,10 @@ final class FileSystemService: @unchecked Sendable {
                     nodes.append(dirNode)
                 }
             } else {
-                // For content directory, only include markdown files
+                // For content directory, only include markdown files (plus bundle resources)
                 // For other directories, include all files
                 if isContentDirectory {
-                    if itemURL.pathExtension.lowercased() == "md" {
+                    if showsResources || itemURL.pathExtension.lowercased() == "md" {
                         let fileNode = FileNode(url: itemURL, isDirectory: false, isPageBundle: false)
                         nodes.append(fileNode)
                     }
