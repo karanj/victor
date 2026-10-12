@@ -196,22 +196,25 @@ struct EditorToolbar: View {
     let onInsertShortcode: (String) -> Void
 
     var body: some View {
-        // Full row when it fits; otherwise the same controls scroll horizontally.
-        // The row's AppKit-backed buttons give it a hard ~600pt minimum width, which
-        // clipped (and pushed on the window's constraints) in Split mode. A ScrollView
-        // has no minimum.
+        // Full row when it fits. Narrower (Split mode, inspector open): only the
+        // formatting groups scroll, so Live Preview and Save stay reachable at the
+        // trailing edge - first with labels, then icon-only. The row's AppKit-backed
+        // buttons give it a hard ~600pt minimum; a ScrollView has none.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 0) {
                 formattingGroups
                 Spacer()
-                trailingActions
+                trailingActions(compact: false)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    formattingGroups
-                    actionSeparator
-                    trailingActions
-                }
+            HStack(spacing: 0) {
+                scrollingFormattingGroups
+                actionSeparator
+                trailingActions(compact: false)
+            }
+            HStack(spacing: 0) {
+                scrollingFormattingGroups
+                actionSeparator
+                trailingActions(compact: true)
             }
         }
         .padding(.horizontal, AppConstants.Toolbar.horizontalPadding)
@@ -282,13 +285,28 @@ struct EditorToolbar: View {
         }
     }
 
+    private var scrollingFormattingGroups: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            formattingGroups
+        }
+        // ViewThatFits measures ideal widths, and a ScrollView's is its content's -
+        // so without an explicit small ideal width this variant would never "fit"
+        // where the full row didn't. maxWidth lets it take the leftover space.
+        .frame(
+            minWidth: AppConstants.Toolbar.scrollingGroupsMinWidth,
+            idealWidth: AppConstants.Toolbar.scrollingGroupsMinWidth,
+            maxWidth: .infinity
+        )
+    }
+
     @ViewBuilder
-    private var trailingActions: some View {
-        LivePreviewToggle(isEnabled: $isLivePreviewEnabled)
+    private func trailingActions(compact: Bool) -> some View {
+        LivePreviewToggle(isEnabled: $isLivePreviewEnabled, compact: compact)
         actionSeparator
         SaveButton(
             viewModel: viewModel,
             reduceMotion: reduceMotion,
+            compact: compact,
             onSave: onSave
         )
     }
@@ -362,6 +380,8 @@ struct HeadingMenu: View {
 /// Toggle button for enabling/disabling live preview
 struct LivePreviewToggle: View {
     @Binding var isEnabled: Bool
+    /// Icon only, for a narrow editor pane
+    var compact = false
 
     var body: some View {
         Button(action: { isEnabled.toggle() }) {
@@ -369,7 +389,7 @@ struct LivePreviewToggle: View {
                 isEnabled ? "Live Preview On" : "Live Preview Off",
                 systemImage: isEnabled ? "eye.fill" : "eye.slash.fill"
             )
-            .labelStyle(.titleAndIcon)
+            .labelStyle(.adaptive(iconOnly: compact))
             .font(.callout)
         }
         .buttonStyle(.glass)
@@ -383,6 +403,8 @@ struct LivePreviewToggle: View {
 struct SaveButton: View {
     let viewModel: EditorViewModel
     let reduceMotion: Bool
+    /// Icon only, for a narrow editor pane
+    var compact = false
     let onSave: () -> Void
 
     @State private var indicatorScale: CGFloat = 0.5
@@ -402,6 +424,7 @@ struct SaveButton: View {
 
     private var savedIndicator: some View {
         Label("Saved", systemImage: "checkmark.circle.fill")
+            .labelStyle(.adaptive(iconOnly: compact))
             .foregroundStyle(Color.Status.saved)
             .font(.callout)
             .scaleEffect(indicatorScale)
@@ -429,7 +452,7 @@ struct SaveButton: View {
     private var saveButton: some View {
         Button(action: onSave) {
             Label("Save", systemImage: "arrow.down.doc.fill")
-                .labelStyle(.titleAndIcon)
+                .labelStyle(.adaptive(iconOnly: compact))
                 .font(.callout)
         }
         // No .keyboardShortcut here - File > Save (Cmd+S) is the single owner,
@@ -451,4 +474,23 @@ private struct EditorStatusBarView: View {
             cursorColumn: viewModel.cursorColumn
         )
     }
+}
+
+// MARK: - Adaptive label style
+
+/// Title + icon, or icon only (title kept for VoiceOver and tooltips).
+struct AdaptiveLabelStyle: LabelStyle {
+    let iconOnly: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly {
+            Label(configuration).labelStyle(.iconOnly)
+        } else {
+            Label(configuration).labelStyle(.titleAndIcon)
+        }
+    }
+}
+
+extension LabelStyle where Self == AdaptiveLabelStyle {
+    static func adaptive(iconOnly: Bool) -> AdaptiveLabelStyle { AdaptiveLabelStyle(iconOnly: iconOnly) }
 }

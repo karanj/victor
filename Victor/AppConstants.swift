@@ -151,6 +151,8 @@ enum AppConstants {
         static let glassGroupSpacing: CGFloat = 8
         /// Inset of buttons inside a glass capsule (vertical uses half)
         static let glassGroupPadding: CGFloat = 6
+        /// Smallest visible slice of the scrolling formatting groups (two buttons)
+        static let scrollingGroupsMinWidth: CGFloat = 80
         /// Minimum hit area for an icon-only toolbar button
         static let iconButtonSize: CGFloat = 22
         /// Height of action separator (before save button)

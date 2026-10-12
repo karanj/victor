@@ -123,6 +123,6 @@ It's a framework bug: a standalone app — `NavigationSplitView` + `.inspector {
 Decision (user, 2026-10-13): don't fight it. Inspector is a fixed 260pt panel beside the content in an `HStack` (`AppConstants.Inspector.width`), Pages-style — no drag-resize, no split view, toolbar toggle unchanged. Lost vs pass 1: drag-to-resize and drag-to-close. All four crash repros now survive (inspector toggled at runtime, Title/Description focused, Editor and Split, resize to the 1000pt min).
 
 Still open:
-- [ ] Split mode: the formatting toolbar's scroll fallback hides Live Preview/Save off the end of the editor pane with no affordance. Needs an overflow menu or moving those two into the window toolbar.
+- [x] Split mode: Live Preview/Save hidden off the end of the scrolling toolbar → fixed: only the formatting groups scroll; Live Preview/Save stay pinned (labelled, then icon-only). Not moved to the window toolbar — Save's enabled state is per-keystroke, which CLAUDE.md keeps out of toolbar scopes. Same pass: the tab bar's "Preview:" caption drops out when narrow instead of wrapping a letter per line. Verified by screenshot at 1200pt (with/without inspector) and 1000pt.
 - [ ] Inspector Description `TextEditor` has a hard 1pt border and visible scroller — restyle to match the other inspector fields.
 - [ ] Revisit `.inspector` when a macOS 27.x SDK fixes the standalone repro.

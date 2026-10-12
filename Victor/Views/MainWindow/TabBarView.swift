@@ -99,22 +99,31 @@ struct TabBarView: View {
 
     /// Labelled segmented control choosing what the preview pane renders:
     /// this app's own markdown rendering, or the running Hugo server's output.
+    /// The "Preview:" caption drops out when the bar is narrow (Split mode with
+    /// the inspector open) rather than wrapping a letter per line.
     private var previewSourcePicker: some View {
-        HStack(spacing: 6) {
-            Text("Preview:")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Picker("Preview Source", selection: $viewModel.useLivePreview) {
-                Text("Markdown").tag(false)
-                Text("Hugo Server").tag(true)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                Text("Preview:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                previewSourceSegments
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+            previewSourceSegments
         }
         .help("Choose the preview pane's source: Victor's rendered markdown, or the live site from the Hugo development server")
         .accessibilityLabel("Preview source")
+    }
+
+    private var previewSourceSegments: some View {
+        Picker("Preview Source", selection: $viewModel.useLivePreview) {
+            Text("Markdown").tag(false)
+            Text("Hugo Server").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
     }
 }
 
