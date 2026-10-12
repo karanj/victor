@@ -177,48 +177,50 @@ struct ContentView: View {
                     max: AppConstants.Sidebar.maxWidth
                 )
         } detail: {
-            // Main content area with tab-based layout
-            VStack(spacing: 0) {
-                // Tab bar only shown for content files (markdown with frontmatter)
-                if siteViewModel.selectedNode?.contentFile != nil {
-                    TabBarView(viewModel: siteViewModel)
-                }
+            // Content + fixed-width inspector, Pages-style: no drag-resize, no
+            // split view. Deliberately not SwiftUI's .inspector - on macOS 27 it
+            // crashes AppKit's constraint pass (Docs/MACOS27-UPLIFT.md, pass 3).
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    // Tab bar only shown for content files (markdown with frontmatter)
+                    if siteViewModel.selectedNode?.contentFile != nil {
+                        TabBarView(viewModel: siteViewModel)
+                    }
 
-                // Content based on selected layout mode
-                if let selectedNode = siteViewModel.selectedNode {
-                    layoutContent(for: selectedNode)
-                        .id(selectedNode.id)  // Force view recreation on file switch
-                        .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
-                        .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.layoutMode)
-                } else {
-                    noFileSelectedView
-                        .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
+                    // Content based on selected layout mode
+                    if let selectedNode = siteViewModel.selectedNode {
+                        layoutContent(for: selectedNode)
+                            .id(selectedNode.id)  // Force view recreation on file switch
+                            .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
+                            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.layoutMode)
+                    } else {
+                        noFileSelectedView
+                            .transition(.opacity.animation(.easeInOut(duration: reduceMotion ? 0 : AppConstants.Animation.fast)))
+                    }
+                }
+                .frame(minWidth: AppConstants.Content.minWidth)
+                // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
+                .focusable()
+                .focusEffectDisabled() // see the sidebar's
+                .focusSection()
+                .focused($focusedPane, equals: .editor)
+
+                if settings.isInspectorVisible {
+                    Divider()
+                    InspectorPanel(
+                        contentFile: siteViewModel.selectedNode?.contentFile,
+                        fileNode: siteViewModel.selectedNode,
+                        siteViewModel: siteViewModel
+                    )
+                    .frame(width: AppConstants.Inspector.width)
+                    .transition(.move(edge: .trailing))
+                    .focusable()
+                    .focusEffectDisabled() // see the sidebar's
+                    .focusSection()
+                    .focused($focusedPane, equals: .inspector)
                 }
             }
-            .frame(minWidth: AppConstants.Content.minWidth)
-            // W5.1 (victor-kbd): pane focus section - see `focusedPane` doc comment.
-            .focusable()
-            .focusEffectDisabled() // see the sidebar's
-            .focusSection()
-            .focused($focusedPane, equals: .editor)
-        }
-        // System inspector column (Liquid Glass): full height, toolbar extends over it,
-        // and drag-to-close writes back through the binding.
-        .inspector(isPresented: $settings.isInspectorVisible) {
-            InspectorPanel(
-                contentFile: siteViewModel.selectedNode?.contentFile,
-                fileNode: siteViewModel.selectedNode,
-                siteViewModel: siteViewModel
-            )
-            .inspectorColumnWidth(
-                min: AppConstants.Inspector.minWidth,
-                ideal: AppConstants.Inspector.idealWidth,
-                max: AppConstants.Inspector.maxWidth
-            )
-            .focusable()
-            .focusEffectDisabled() // see the sidebar's
-            .focusSection()
-            .focused($focusedPane, equals: .inspector)
+            .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: settings.isInspectorVisible)
         }
         .navigationTitle(windowTitle)
         .navigationSubtitle(windowSubtitle)
@@ -319,10 +321,9 @@ struct ContentView: View {
 
         case .split:
             // Side-by-side editor and preview (markdown only)
-            // No minWidth on the panes: on macOS 27, HSplitView panes with a min width
-            // (>= ~150pt) beside an open .inspector loop Update Constraints until AppKit
-            // throws - reproduced standalone, see Docs/MACOS27-UPLIFT.md. The detail
-            // column's own minWidth still bounds the pair.
+            // No minWidth on the panes: at the 1000pt window minimum with the inspector
+            // open the pair gets ~500pt, so per-pane minimums can't both be met. The
+            // content column's own minWidth bounds the pair.
             if node.contentFile != nil {
                 HSplitView {
                     FileViewerRouter(node: node, siteViewModel: siteViewModel)

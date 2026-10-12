@@ -89,12 +89,8 @@ enum AppConstants {
     }
 
     enum Inspector {
-        /// Minimum inspector width (tag chips and the date picker row need ~220)
-        static let minWidth: CGFloat = 220
-        /// Ideal/default inspector width (the old fixed width)
-        static let idealWidth: CGFloat = 260
-        /// Maximum inspector width
-        static let maxWidth: CGFloat = 360
+        /// Fixed inspector width (Pages-style, not user-resizable)
+        static let width: CGFloat = 260
     }
 
     /// Content area layout constants

@@ -161,8 +161,7 @@ class SiteViewModel {
         // Auto-hide inspector when switching to anything but a content file - the
         // same condition that enables its toolbar button, so the user is never stuck
         // with it open. Archetype/layout .md files count as non-content: they're
-        // markdown, but have no ContentFile and their editors use HSplitView, which
-        // crashes beside an open inspector on macOS 27 (Docs/MACOS27-UPLIFT.md).
+        // markdown, but have no ContentFile, so the inspector has nothing to show.
         if AppSettings.shared.isInspectorVisible && node?.contentFile == nil {
             AppSettings.shared.isInspectorVisible = false
         }

@@ -113,3 +113,16 @@ Human checks (in addition to pass 1's three):
 - [ ] Template browser / Form|Raw / asset + folder view pickers: no label, widths look right (constants were sized with the label; may want trimming).
 - [ ] Empty `assets/` folder: header at top, empty state centred below.
 - [ ] Config ▸ Essentials: Locale and Theme bordered like Base URL/Title.
+
+### Pass 3 — inspector back to a fixed panel (2026-10-13, branch `liquid-glass`)
+
+Pass 1's switch to SwiftUI `.inspector` introduced a crash, found on the pass-2 visual check: focus any text field in the inspector (Title, Description), then shrink the window → `NSGenericException: …more Update Constraints in Window passes than there are views in the window`. Bisected with scripted repros (AX + CGEvent, demo site in the scratchpad): `main` survives, `a7d2281` (pass 1) crashes, pass-2 commits irrelevant. Not fixed by dropping the inspector's focus section, pinning `inspectorColumnWidth`, or lowering `Content.minWidth` to 300.
+
+It's a framework bug: a standalone app — `NavigationSplitView` + `.inspector { Text("x") }` + detail `.frame(minWidth: 400)` + window `minWidth: 1000` — throws the same exception **at launch** (detail min 0–300 fine, ≥400 crashes; no window min fine). File as Feedback with that repro.
+
+Decision (user, 2026-10-13): don't fight it. Inspector is a fixed 260pt panel beside the content in an `HStack` (`AppConstants.Inspector.width`), Pages-style — no drag-resize, no split view, toolbar toggle unchanged. Lost vs pass 1: drag-to-resize and drag-to-close. All four crash repros now survive (inspector toggled at runtime, Title/Description focused, Editor and Split, resize to the 1000pt min).
+
+Still open:
+- [ ] Split mode: the formatting toolbar's scroll fallback hides Live Preview/Save off the end of the editor pane with no affordance. Needs an overflow menu or moving those two into the window toolbar.
+- [ ] Inspector Description `TextEditor` has a hard 1pt border and visible scroller — restyle to match the other inspector fields.
+- [ ] Revisit `.inspector` when a macOS 27.x SDK fixes the standalone repro.

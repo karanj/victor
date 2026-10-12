@@ -197,10 +197,9 @@ struct EditorToolbar: View {
 
     var body: some View {
         // Full row when it fits; otherwise the same controls scroll horizontally.
-        // The fallback matters beyond looks: the row's AppKit-backed buttons give it a
-        // hard ~600pt minimum width, which clipped in Split mode and - inside the Split
-        // HSplitView beside an open .inspector on macOS 27 - looped Update Constraints
-        // until AppKit threw (Docs/MACOS27-UPLIFT.md). A ScrollView has no minimum.
+        // The row's AppKit-backed buttons give it a hard ~600pt minimum width, which
+        // clipped (and pushed on the window's constraints) in Split mode. A ScrollView
+        // has no minimum.
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 0) {
                 formattingGroups
