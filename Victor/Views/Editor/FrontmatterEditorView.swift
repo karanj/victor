@@ -19,57 +19,19 @@ enum FrontmatterTab: String, CaseIterable {
     }
 }
 
-/// View for editing Hugo frontmatter fields with tabbed interface
+/// Fields for one frontmatter category. The category picker lives in the
+/// host's header (`FrontmatterBottomPanel`), so this is just the scrolling form.
 struct FrontmatterEditorView: View {
     @Bindable var frontmatter: Frontmatter
-    @State private var selectedTab: FrontmatterTab = .essential
+    let selectedTab: FrontmatterTab
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Tab bar
-            tabBar
-
-            Divider()
-
-            // Tab content
-            ScrollView {
-                tabContent
-                    .padding()
-            }
+        ScrollView {
+            tabContent
+                .padding()
         }
         // Change detection is handled by individual field tabs that call frontmatter.markChanged()
         // See EssentialFieldsTab, PublishingTab, etc. for implementation
-    }
-
-    private var tabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(FrontmatterTab.allCases, id: \.self) { tab in
-                tabButton(for: tab)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-    }
-
-    private func tabButton(for tab: FrontmatterTab) -> some View {
-        Button(action: { selectedTab = tab }) {
-            HStack(spacing: 4) {
-                Image(systemName: tab.icon)
-                    .font(.caption)
-                    .accessibilityHidden(true)
-                Text(tab.rawValue)
-                    .font(.caption)
-                    .fontWeight(selectedTab == tab ? .medium : .regular)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(selectedTab == tab ? Color.accentColor.opacity(0.2) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(selectedTab == tab ? Color.primary : Color.primary.opacity(0.6))
-        // Selection is otherwise conveyed only by background tint.
-        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -270,6 +232,6 @@ struct FlowLayout: Layout {
     sampleFrontmatter.menus = [MenuEntry(menuName: "main", weight: 10)]
     sampleFrontmatter.params = ["author": "Jane Doe", "featured": true]
 
-    return FrontmatterEditorView(frontmatter: sampleFrontmatter)
+    return FrontmatterEditorView(frontmatter: sampleFrontmatter, selectedTab: .essential)
         .frame(width: 450, height: 600)
 }
