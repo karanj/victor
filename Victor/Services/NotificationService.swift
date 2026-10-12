@@ -86,7 +86,7 @@ extension NotificationService: UNUserNotificationCenterDelegate {
 
     /// Bring Victor to the front. Deep-linking into the Build Issues popover would need a
     /// shared observable flag on `SiteViewModel` - the presentation flag today is private
-    /// `@State` in `ServerControlView` - so this activates the app only.
+    /// `@State` in `TabBarView` - so this activates the app only.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse

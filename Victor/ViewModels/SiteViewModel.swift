@@ -449,7 +449,7 @@ class SiteViewModel {
     private let fileOperationsService: FileOperationsService
 
     /// Hugo server service (for start/stop/status streams - WP3.5 Cluster 9). Not `private`
-    /// (victor-zw4): ServerControlView/LivePreviewPanel/ServerConfigPopover reach this via
+    /// (victor-zw4): ServerRunMenu/LivePreviewPanel/ServerConfigPopover reach this via
     /// `siteViewModel.hugoServerService` instead of `HugoServerService.shared`.
     let hugoServerService: HugoServerService
 

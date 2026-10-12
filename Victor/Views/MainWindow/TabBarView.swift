@@ -2,26 +2,21 @@ import SwiftUI
 
 // MARK: - Tab Bar View
 
-/// Tab bar for switching between Editor, Preview, and Split layout modes
+/// Bar under the toolbar for a content file: build issues and the preview
+/// source picker. (The Editor/Preview/Split picker lives in the window toolbar.)
 struct TabBarView: View {
     @Bindable var viewModel: SiteViewModel
     @Bindable private var settings = AppSettings.shared
 
     @State private var isBuildIssuesPopoverPresented = false
 
+    /// Whether the bar has anything to show - callers omit it otherwise.
+    static func isNeeded(layoutMode: EditorLayoutMode, hasBuildIssues: Bool) -> Bool {
+        layoutMode != .editor || hasBuildIssues
+    }
+
     var body: some View {
         HStack {
-            Picker("Layout Mode", selection: $settings.layoutMode) {
-                ForEach(EditorLayoutMode.allCases, id: \.self) { mode in
-                    Label(mode.displayName, systemImage: mode.iconName)
-                        .tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 240)
-            .help("Switch between Editor, Preview, and Split views")
-
             Spacer()
 
             // Build issues pill: passive surface for Hugo build errors/warnings.

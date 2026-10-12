@@ -183,7 +183,8 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     // Tab bar only shown for content files (markdown with frontmatter)
-                    if siteViewModel.selectedNode?.contentFile != nil {
+                    if siteViewModel.selectedNode?.contentFile != nil,
+                       TabBarView.isNeeded(layoutMode: settings.layoutMode, hasBuildIssues: !siteViewModel.hugoBuildErrors.isEmpty) {
                         TabBarView(viewModel: siteViewModel)
                     }
 
@@ -236,23 +237,29 @@ struct ContentView: View {
             // array and crashing on index bounds. State is expressed via .disabled/.opacity
             // only - also the HIG-correct behaviour.
 
-            ToolbarItem(id: "serverControls", placement: .automatic, showsByDefault: true) {
-                ServerControlView(siteViewModel: siteViewModel)
-                    .disabled(siteViewModel.site == nil)
+            // Editing first: the view-mode switch leads, where it sat before as the
+            // first control above the editor. The Hugo server is secondary - one
+            // trailing group (status + Run/Stop) - then the inspector on its own.
+            ToolbarItem(id: "layoutMode", placement: .navigation, showsByDefault: true) {
+                Picker("Layout", selection: $settings.layoutMode) {
+                    ForEach(EditorLayoutMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .help("Editor, Preview, or Split (⌘1, ⌘2, ⌘3)")
+                .disabled(siteViewModel.selectedNode?.contentFile == nil)
             }
 
-            ToolbarItem(id: "loadingIndicator", placement: .automatic, showsByDefault: true) {
-                ProgressView()
-                    .controlSize(.small)
-                    .opacity(siteViewModel.isLoading || siteViewModel.isLoadingFile ? 1 : 0)
-                    .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
-                    // Opacity alone doesn't remove it from the accessibility
-                    // tree - without this a screen reader would find an
-                    // invisible "loading" item even when nothing is loading.
-                    .accessibilityHidden(!(siteViewModel.isLoading || siteViewModel.isLoadingFile))
+            // One item, not two: as separate items SwiftUI parked the Run menu over the
+            // sidebar column instead of beside its status.
+            ToolbarItem(id: "hugoServer", placement: .primaryAction, showsByDefault: true) {
+                HStack(spacing: 4) {
+                    ServerStatusView(siteViewModel: siteViewModel)
+                    ServerRunMenu(siteViewModel: siteViewModel)
+                }
             }
 
-            // Own glass group: the inspector toggle is window chrome, not a server control.
             ToolbarSpacer(.fixed, placement: .primaryAction)
 
             // Inspector toggle: enabled only for markdown content files

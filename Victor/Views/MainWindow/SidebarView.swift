@@ -225,6 +225,18 @@ struct SiteHeader: View {
 
             Spacer()
 
+            // New content lives with the content tree (Mail/Finder put "add" in the
+            // sidebar too); File > New Post (⌘N) is the same action.
+            Button {
+                siteViewModel.isNewContentPresented = true
+            } label: {
+                Image(systemName: "plus")
+                    .imageScale(.large)
+            }
+            .buttonStyle(.borderless)
+            .help("New Post (⌘N)")
+            .accessibilityLabel("New Post")
+
             Menu {
                 Button("Reload Site") {
                     Task {

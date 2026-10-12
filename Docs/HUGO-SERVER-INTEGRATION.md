@@ -180,7 +180,7 @@ struct HugoBuildError: Identifiable, Equatable {
 
 | File | Purpose |
 |------|---------|
-| `ServerControlView.swift` | Toolbar controls for server management |
+| `ServerToolbarItems.swift` | Toolbar server group: status + Run/Stop menu |
 | `ServerConfigPopover.swift` | Configuration popover |
 | `ServerLogView.swift` | Server output log viewer |
 | `LivePreviewPanel.swift` | WKWebView-based live preview |
@@ -225,7 +225,7 @@ Victor/
 │   └── BuildErrorParser.swift     # Output parsing
 ├── Views/
 │   ├── ServerControls/
-│   │   ├── ServerControlView.swift
+│   │   ├── ServerToolbarItems.swift
 │   │   ├── ServerConfigPopover.swift
 │   │   └── ServerLogView.swift
 │   └── Preview/
