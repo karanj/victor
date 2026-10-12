@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Shared popover content for displaying Hugo build errors and warnings
-/// Used by both ServerControlView (toolbar badge) and LivePreviewPanel (floating badge)
+/// Popover content for displaying Hugo build errors and warnings.
+/// Shown from the build-issues pill in `TabBarView`
 struct BuildIssuesPopover: View {
     let errors: [HugoBuildError]
     let onFileClick: ((String) -> Void)?

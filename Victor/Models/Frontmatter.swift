@@ -13,6 +13,14 @@ enum FrontmatterFormat: String, CaseIterable {
         case .json: return ""
         }
     }
+
+    var displayName: String {
+        switch self {
+        case .yaml: return "YAML"
+        case .toml: return "TOML"
+        case .json: return "JSON"
+        }
+    }
 }
 
 /// Represents Hugo frontmatter metadata - Enhanced version

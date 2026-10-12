@@ -36,9 +36,9 @@ struct NewArchetypeView: View {
                         .textFieldStyle(.roundedBorder)
 
                     Picker("Frontmatter Format", selection: $selectedFormat) {
-                        Text("YAML").tag(FrontmatterFormat.yaml)
-                        Text("TOML").tag(FrontmatterFormat.toml)
-                        Text("JSON").tag(FrontmatterFormat.json)
+                        ForEach(FrontmatterFormat.allCases, id: \.self) { format in
+                            Text(format.displayName).tag(format)
+                        }
                     }
                     .pickerStyle(.segmented)
 

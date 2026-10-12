@@ -114,18 +114,6 @@ struct StatRow: View {
     }
 }
 
-// MARK: - Frontmatter Format Extension
-
-extension FrontmatterFormat {
-    var displayName: String {
-        switch self {
-        case .yaml: return "YAML"
-        case .toml: return "TOML"
-        case .json: return "JSON"
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview {

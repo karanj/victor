@@ -179,7 +179,7 @@ struct RecentSiteRow: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
             .background(isHovering ? Color(nsColor: .controlBackgroundColor) : Color.clear)
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
             .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.fast), value: isHovering)
         }
@@ -224,6 +224,18 @@ struct SiteHeader: View {
             }
 
             Spacer()
+
+            // New content lives with the content tree (Mail/Finder put "add" in the
+            // sidebar too); File > New Post (⌘N) is the same action.
+            Button {
+                siteViewModel.isNewContentPresented = true
+            } label: {
+                Image(systemName: "plus")
+                    .imageScale(.large)
+            }
+            .buttonStyle(.borderless)
+            .help("New Post (⌘N)")
+            .accessibilityLabel("New Post")
 
             Menu {
                 Button("Reload Site") {
@@ -290,7 +302,7 @@ struct SearchBar: View {
         }
         .padding(8)
         .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(6)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
         .onChange(of: siteViewModel.shouldFocusSearch) { _, newValue in
             if newValue {
                 isSearchFocused = true

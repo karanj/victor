@@ -85,15 +85,10 @@ struct TranslationEditorView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(.blue)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
 
             Text(dataFile.format.displayName)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.2))
-                .cornerRadius(4)
+                .secondaryBadgeStyle()
 
             FileStatusBadgeView(
                 hasUnsavedChanges: dataFile.hasUnsavedChanges,
@@ -123,7 +118,7 @@ struct TranslationEditorView: View {
             }
             .padding(6)
             .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
             FormRawPickerView(
                 showRawEditor: $showRawEditor,

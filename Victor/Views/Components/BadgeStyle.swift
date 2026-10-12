@@ -85,6 +85,20 @@ extension View {
         )
     }
 
+    /// Neutral grey chip for metadata labels (file type, format, theme name).
+    func secondaryBadgeStyle(
+        font: Font = .caption,
+        horizontalPadding: CGFloat = 6,
+        cornerRadius: CGFloat = 4
+    ) -> some View {
+        self
+            .font(font)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, 2)
+            .background(.secondary.opacity(0.2), in: RoundedRectangle(cornerRadius: cornerRadius))
+    }
+
     /// Applies count badge styling (for match counts, item counts, etc.)
     /// Uses secondary color with control background
     func countBadgeStyle() -> some View {
@@ -95,6 +109,28 @@ extension View {
             .padding(.vertical, 2)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+}
+
+// MARK: - File Tag Badge
+
+/// Filled tag trailing a file name in the sidebar and folder view
+/// (bundle, config, Draft, ...).
+/// Fixed-size so the file name truncates first instead of the badge wrapping.
+struct FileTagBadge: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.medium)
+            .lineLimit(1)
+            .foregroundStyle(color.contrastingTextColor)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(color, in: RoundedRectangle(cornerRadius: 3))
+            .fixedSize()
     }
 }
 

@@ -1,20 +1,61 @@
 import SwiftUI
 
-// MARK: - Frontmatter View Mode
+// MARK: - Frontmatter Pane
 
-enum FrontmatterViewMode {
-    case form
+/// What the expanded panel shows: one form category, or the raw text. A single
+/// picker covers both, so Raw is just the last segment rather than a second control.
+enum FrontmatterPane: Hashable, CaseIterable {
+    case form(FrontmatterTab)
     case raw
+
+    static var allCases: [FrontmatterPane] {
+        FrontmatterTab.allCases.map { .form($0) } + [.raw]
+    }
+
+    /// What has to happen to the raw text when switching panes.
+    enum Sync: Equatable {
+        case none
+        /// Rebuild raw text from the form's current values.
+        case serialize
+        /// Push edited raw text back into the form.
+        case parse
+    }
+
+    func sync(to next: FrontmatterPane) -> Sync {
+        switch (self, next) {
+        case (.form, .raw): return .serialize
+        case (.raw, .form): return .parse
+        default: return .none
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .form(let tab): return tab.rawValue
+        case .raw: return "Raw"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .form(let tab): return tab.icon
+        case .raw: return "doc.plaintext"
+        }
+    }
 }
 
 // MARK: - Frontmatter Bottom Panel
 
+/// Collapsible frontmatter editor under the markdown editor. Styled like the
+/// formatting toolbar above it: plain window-background row, controls in glass
+/// capsules, hairline separators only.
 struct FrontmatterBottomPanel: View {
     @Bindable var frontmatter: Frontmatter
     @Binding var isExpanded: Bool
-    @State private var viewMode: FrontmatterViewMode = .form
+    @State private var pane: FrontmatterPane = .form(.essential)
     @State private var rawText: String = ""
     @State private var parseError: String?
+    @State private var dragStartHeight: Double?
 
     /// Panel height - persisted via AppSettings
     @Bindable private var settings = AppSettings.shared
@@ -27,102 +68,19 @@ struct FrontmatterBottomPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Resize handle (only when expanded)
-            if isExpanded {
-                resizeHandle
-            }
+            header
 
-            // Collapsible header
-            Button(action: { isExpanded.toggle() }) {
-                HStack {
-                    Image(systemName: "doc.text.fill")
-                        .foregroundStyle(.primary.opacity(0.7))
-                        .font(.caption)
-                        .accessibilityHidden(true)
-
-                    Text("Frontmatter")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
-
-                    Text(frontmatterFormatBadge)
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary.opacity(0.8))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                    Spacer()
-
-                    // View mode picker (only show when expanded)
-                    if isExpanded {
-                        Picker("View Mode", selection: $viewMode) {
-                            Text("Form").tag(FrontmatterViewMode.form)
-                            Text("Raw").tag(FrontmatterViewMode.raw)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 120)
-                        .labelsHidden()
-                    }
-
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
-                        .font(.caption)
-                        .foregroundStyle(.primary.opacity(0.6))
-                        .padding(.leading, 8)
-                        .accessibilityHidden(true)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-            .help(isExpanded ? "Collapse frontmatter" : "Expand frontmatter")
-            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
-
-            // Frontmatter content (when expanded)
             if isExpanded {
                 Divider()
-
-                if viewMode == .form {
-                    // Form view - FrontmatterEditorView has its own ScrollView
-                    FrontmatterEditorView(frontmatter: frontmatter)
-                        .frame(height: settings.frontmatterPanelHeight)
-                        .background(Color(nsColor: .textBackgroundColor))
-                } else {
-                    // Raw view
-                    VStack(spacing: 0) {
-                        if let parseError = parseError {
-                            HStack {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(Color.Status.warning)
-                                    .accessibilityHidden(true)
-                                Text(parseError)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Button("Dismiss") {
-                                    self.parseError = nil
-                                }
-                                .buttonStyle(.plain)
-                                .font(.caption)
-                            }
-                            .padding(8)
-                            .background(Color.Status.warning.opacity(0.1))
-
-                            Divider()
-                        }
-
-                        TextEditor(text: $rawText)
-                            .font(.system(size: 12, design: .monospaced))
-                            .padding(8)
-                            .background(Color(nsColor: .textBackgroundColor))
-                            .accessibilityLabel(parseError.map { "Raw frontmatter, error: \($0)" } ?? "Raw frontmatter")
-                    }
+                content
                     .frame(height: settings.frontmatterPanelHeight)
-                }
+                    .background(Color(nsColor: .textBackgroundColor))
+            }
+        }
+        .overlay(alignment: .top) {
+            Divider()
+            if isExpanded {
+                resizeHandle
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: AppConstants.Animation.standard), value: isExpanded)
@@ -132,14 +90,15 @@ struct FrontmatterBottomPanel: View {
                 rawText = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
             }
         }
-        .onChange(of: viewMode) { oldValue, newValue in
-            if newValue == .raw {
-                // Switching to raw view - serialize current frontmatter
+        .onChange(of: pane) { oldValue, newValue in
+            switch oldValue.sync(to: newValue) {
+            case .serialize:
                 rawText = FrontmatterParser.shared.serializeFrontmatter(frontmatter)
                 parseError = nil
-            } else if newValue == .form && oldValue == .raw {
-                // Switching to form view - parse raw text
+            case .parse:
                 parseRawText()
+            case .none:
+                break
             }
         }
         .onChange(of: isExpanded) { _, newValue in
@@ -150,45 +109,149 @@ struct FrontmatterBottomPanel: View {
         }
     }
 
-    // MARK: - Resize Handle
+    // MARK: - Header
 
-    private var resizeHandle: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(height: 1)
-            .overlay(alignment: .center) {
-                // Visible drag indicator
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(nsColor: .separatorColor))
-                    .frame(width: 36, height: 4)
-                    .padding(.vertical, 3)
-            }
-            .frame(height: 10)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        // Dragging up increases height (negative translation)
-                        let newHeight = settings.frontmatterPanelHeight - value.translation.height
-                        settings.frontmatterPanelHeight = min(maxHeight, max(minHeight, newHeight))
-                    }
-            )
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeUpDown.push()
-                } else {
-                    NSCursor.pop()
+    private var header: some View {
+        HStack(spacing: 8) {
+            Button(action: { isExpanded.toggle() }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+
+                    Text("Frontmatter")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    Text(frontmatter.format.displayName)
+                        .secondaryBadgeStyle(font: .caption2)
                 }
+                .contentShape(Rectangle())
             }
-            .help("Drag to resize panel")
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse frontmatter" : "Expand frontmatter")
+            .accessibilityLabel("Frontmatter, \(frontmatter.format.displayName)")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+
+            Spacer(minLength: 8)
+
+            // Always laid out so the row height doesn't jump on expand/collapse.
+            panePicker
+                .opacity(isExpanded ? 1 : 0)
+                .disabled(!isExpanded)
+                .accessibilityHidden(!isExpanded)
+        }
+        .padding(.horizontal, AppConstants.Toolbar.horizontalPadding)
+        .padding(.vertical, AppConstants.Toolbar.verticalPadding)
     }
 
-    private var frontmatterFormatBadge: String {
-        switch frontmatter.format {
-        case .yaml: return "YAML"
-        case .toml: return "TOML"
-        case .json: return "JSON"
+    private var panePicker: some View {
+        ViewThatFits(in: .horizontal) {
+            paneGroups(iconOnly: false)
+            paneGroups(iconOnly: true)
         }
+    }
+
+    private func paneGroups(iconOnly: Bool) -> some View {
+        GlassEffectContainer(spacing: AppConstants.Toolbar.glassGroupSpacing) {
+            HStack(spacing: AppConstants.Toolbar.glassGroupSpacing) {
+                ToolbarGroup {
+                    ForEach(FrontmatterTab.allCases, id: \.self) { tab in
+                        paneButton(.form(tab), iconOnly: iconOnly)
+                    }
+                }
+                ToolbarGroup {
+                    paneButton(.raw, iconOnly: iconOnly)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Frontmatter view")
+    }
+
+    private func paneButton(_ option: FrontmatterPane, iconOnly: Bool) -> some View {
+        let isSelected = pane == option
+        return Button(action: { pane = option }) {
+            Label(option.title, systemImage: option.systemImage)
+                .labelStyle(.adaptive(iconOnly: iconOnly))
+                .padding(.horizontal, 8)
+                .frame(minHeight: AppConstants.Toolbar.iconButtonSize)
+                .background(isSelected ? Color.primary.opacity(0.12) : .clear, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .foregroundStyle(isSelected ? .primary : .secondary)
+        .help(option.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        switch pane {
+        case .form(let tab):
+            // FrontmatterEditorView has its own ScrollView
+            FrontmatterEditorView(frontmatter: frontmatter, selectedTab: tab)
+        case .raw:
+            rawEditor
+        }
+    }
+
+    private var rawEditor: some View {
+        VStack(spacing: 0) {
+            if let parseError = parseError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.Status.warning)
+                        .accessibilityHidden(true)
+                    Text(parseError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Dismiss") {
+                        self.parseError = nil
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                }
+                .padding(8)
+                .background(Color.Status.warning.opacity(0.1))
+
+                Divider()
+            }
+
+            TextEditor(text: $rawText)
+                .font(.system(size: 12, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .accessibilityLabel(parseError.map { "Raw frontmatter, error: \($0)" } ?? "Raw frontmatter")
+        }
+    }
+
+    // MARK: - Resize Handle
+
+    /// Invisible grab strip straddling the panel's top hairline, like a split view divider.
+    private var resizeHandle: some View {
+        Color.clear
+            .frame(height: 8)
+            .contentShape(Rectangle())
+            .offset(y: -4)
+            .pointerStyle(.rowResize)
+            .gesture(
+                // Global space: the handle moves as the panel grows, so local
+                // translations would feed back into themselves.
+                DragGesture(coordinateSpace: .global)
+                    .onChanged { value in
+                        let start = dragStartHeight ?? settings.frontmatterPanelHeight
+                        dragStartHeight = start
+                        // Dragging up increases height (negative translation)
+                        settings.frontmatterPanelHeight = min(maxHeight, max(minHeight, start - value.translation.height))
+                    }
+                    .onEnded { _ in dragStartHeight = nil }
+            )
+            .help("Drag to resize panel")
     }
 
     private func parseRawText() {

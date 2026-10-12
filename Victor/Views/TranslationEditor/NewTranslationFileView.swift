@@ -68,7 +68,7 @@ struct NewTranslationFileView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
                                 .background(languageCode == code ? Color.accentColor.opacity(0.2) : Color(nsColor: .controlBackgroundColor))
-                                .cornerRadius(6)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
                             .buttonStyle(.plain)
                             // Selection is otherwise conveyed only by

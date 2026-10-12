@@ -139,7 +139,7 @@ struct GlobalSearchView: View {
             }
             .padding(8)
             .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
             // Replace field (collapsible)
             if showReplaceField {
@@ -169,7 +169,7 @@ struct GlobalSearchView: View {
                 }
                 .padding(8)
                 .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(6)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
         .padding(.horizontal)
@@ -427,7 +427,7 @@ struct SearchMatchRow: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 2)
                 .background(Color.accentColor)
-                .cornerRadius(2)
+                .clipShape(RoundedRectangle(cornerRadius: 2))
             Text(match.textAfterMatch)
                 .foregroundStyle(.primary)
         }

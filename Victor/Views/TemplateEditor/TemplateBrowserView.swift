@@ -88,7 +88,7 @@ struct TemplateBrowserView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(.secondary.opacity(0.1))
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
             Divider()
                 .frame(height: 20)
@@ -100,6 +100,7 @@ struct TemplateBrowserView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .frame(width: AppConstants.Toolbar.viewFormLabelFrameWidth*2)
 
             Divider()
@@ -480,7 +481,7 @@ private struct TemplateRow: View {
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
                     .background(.purple.opacity(0.7))
-                    .cornerRadius(3)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
             }
 
             if template.metadata.definesBlocks {

@@ -98,7 +98,7 @@ struct AssetDetailPanel: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(maxHeight: 200)
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
                 .frame(maxWidth: .infinity)
         } else {
             // Show file type icon for non-images
@@ -113,7 +113,7 @@ struct AssetDetailPanel: View {
             .frame(height: 100)
             .frame(maxWidth: .infinity)
             .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(4)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
         }
     }
 

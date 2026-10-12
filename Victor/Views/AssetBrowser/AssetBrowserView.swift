@@ -153,6 +153,7 @@ struct AssetBrowserView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 .frame(width: AppConstants.Toolbar.viewIconLabelFrameWidth)
                 .accessibilityLabel("View mode")
 
@@ -385,7 +386,7 @@ struct AssetGridItem: View {
                 }
                 .frame(width: 100, height: 80)
                 .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
 
                 // Drag hint indicator on hover
                 if isHovered {
@@ -394,7 +395,7 @@ struct AssetGridItem: View {
                         .foregroundStyle(.white)
                         .padding(3)
                         .background(Color.accentColor.opacity(0.8))
-                        .cornerRadius(4)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                         .offset(x: 4, y: -4)
                         .transition(.opacity.combined(with: .scale))
                         .accessibilityHidden(true)
@@ -411,16 +412,11 @@ struct AssetGridItem: View {
 
             // Location badge
             Text(asset.isInAssetsDir ? "assets" : "static")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.2))
-                .cornerRadius(4)
+                .secondaryBadgeStyle(font: .caption2, horizontalPadding: 4)
         }
         .padding(8)
         .background(backgroundColor)
-        .cornerRadius(4)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
@@ -477,7 +473,7 @@ struct AssetListRow: View {
                         .foregroundStyle(.white)
                         .padding(2)
                         .background(Color.accentColor.opacity(0.8))
-                        .cornerRadius(3)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
                         .offset(x: 2, y: 2)
                         .transition(.opacity.combined(with: .scale))
                         .accessibilityHidden(true)
@@ -510,17 +506,12 @@ struct AssetListRow: View {
 
             // File type badge
             Text(asset.fileType.displayName)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.secondary.opacity(0.2))
-                .cornerRadius(4)
+                .secondaryBadgeStyle(font: .caption2)
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 4)
         .background(isHovered ? Color(nsColor: .unemphasizedSelectedContentBackgroundColor) : Color.clear)
-        .cornerRadius(4)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
         .onHover { hovering in
             isHovered = hovering
         }

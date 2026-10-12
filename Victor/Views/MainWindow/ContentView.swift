@@ -86,8 +86,14 @@ struct ContentView: View {
             WindowAccessor { newWindow in
                 window = newWindow
                 window?.isDocumentEdited = siteViewModel.hasUnsavedChanges
+                lockSidebarCollapse()
             }
         )
+        // mainContent swaps NavigationSplitView branches when a site opens or closes,
+        // which builds a fresh split view controller - re-lock on that edge.
+        .onChange(of: siteViewModel.site == nil) { _, _ in
+            lockSidebarCollapse()
+        }
         .onChange(of: siteViewModel.hasUnsavedChanges) { _, newValue in
             window?.isDocumentEdited = newValue
         }
@@ -131,6 +137,15 @@ struct ContentView: View {
         }
     }
 
+    /// Deferred a runloop turn: the split view controller is built during the same
+    /// update that attaches the window / swaps the branch, so it may not exist yet.
+    private func lockSidebarCollapse() {
+        guard let window else { return }
+        DispatchQueue.main.async {
+            SidebarCollapseLock.apply(in: window)
+        }
+    }
+
     // MARK: - Main Content
 
     @ViewBuilder
@@ -162,12 +177,14 @@ struct ContentView: View {
                     max: AppConstants.Sidebar.maxWidth
                 )
         } detail: {
-            // Main content area with optional inspector
-            HSplitView {
-                // Main content area with tab-based layout
+            // Content + fixed-width inspector, Pages-style: no drag-resize, no
+            // split view. Deliberately not SwiftUI's .inspector - on macOS 27 it
+            // crashes AppKit's constraint pass (Docs/MACOS27-UPLIFT.md, pass 3).
+            HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     // Tab bar only shown for content files (markdown with frontmatter)
-                    if siteViewModel.selectedNode?.contentFile != nil {
+                    if siteViewModel.selectedNode?.contentFile != nil,
+                       TabBarView.isNeeded(layoutMode: settings.layoutMode, hasBuildIssues: !siteViewModel.hugoBuildErrors.isEmpty) {
                         TabBarView(viewModel: siteViewModel)
                     }
 
@@ -189,13 +206,14 @@ struct ContentView: View {
                 .focusSection()
                 .focused($focusedPane, equals: .editor)
 
-                // Inspector panel (right side)
                 if settings.isInspectorVisible {
+                    Divider()
                     InspectorPanel(
                         contentFile: siteViewModel.selectedNode?.contentFile,
                         fileNode: siteViewModel.selectedNode,
                         siteViewModel: siteViewModel
                     )
+                    .frame(width: AppConstants.Inspector.width)
                     .transition(.move(edge: .trailing))
                     .focusable()
                     .focusEffectDisabled() // see the sidebar's
@@ -219,21 +237,30 @@ struct ContentView: View {
             // array and crashing on index bounds. State is expressed via .disabled/.opacity
             // only - also the HIG-correct behaviour.
 
-            ToolbarItem(id: "serverControls", placement: .automatic, showsByDefault: true) {
-                ServerControlView(siteViewModel: siteViewModel)
-                    .disabled(siteViewModel.site == nil)
+            // Editing first: the view-mode switch leads, where it sat before as the
+            // first control above the editor. The Hugo server is secondary - one
+            // trailing group (status + Run/Stop) - then the inspector on its own.
+            ToolbarItem(id: "layoutMode", placement: .navigation, showsByDefault: true) {
+                Picker("Layout", selection: $settings.layoutMode) {
+                    ForEach(EditorLayoutMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .help("Editor, Preview, or Split (⌘1, ⌘2, ⌘3)")
+                .disabled(siteViewModel.selectedNode?.contentFile == nil)
             }
 
-            ToolbarItem(id: "loadingIndicator", placement: .automatic, showsByDefault: true) {
-                ProgressView()
-                    .controlSize(.small)
-                    .opacity(siteViewModel.isLoading || siteViewModel.isLoadingFile ? 1 : 0)
-                    .help(siteViewModel.isLoadingFile ? "Loading file..." : "Loading site...")
-                    // Opacity alone doesn't remove it from the accessibility
-                    // tree - without this a screen reader would find an
-                    // invisible "loading" item even when nothing is loading.
-                    .accessibilityHidden(!(siteViewModel.isLoading || siteViewModel.isLoadingFile))
+            // One item, not two: as separate items SwiftUI parked the Run menu over the
+            // sidebar column instead of beside its status.
+            ToolbarItem(id: "hugoServer", placement: .primaryAction, showsByDefault: true) {
+                HStack(spacing: 4) {
+                    ServerStatusView(siteViewModel: siteViewModel)
+                    ServerRunMenu(siteViewModel: siteViewModel)
+                }
             }
+
+            ToolbarSpacer(.fixed, placement: .primaryAction)
 
             // Inspector toggle: enabled only for markdown content files
             // (Assets have their own built-in detail panel)
@@ -301,13 +328,16 @@ struct ContentView: View {
 
         case .split:
             // Side-by-side editor and preview (markdown only)
+            // No minWidth on the panes: at the 1000pt window minimum with the inspector
+            // open the pair gets ~500pt, so per-pane minimums can't both be met. The
+            // content column's own minWidth bounds the pair.
             if node.contentFile != nil {
                 HSplitView {
                     FileViewerRouter(node: node, siteViewModel: siteViewModel)
-                        .frame(minWidth: AppConstants.Content.panelMinWidth)
+                        .frame(maxWidth: .infinity)
 
                     previewPanel(for: node)
-                        .frame(minWidth: AppConstants.Content.panelMinWidth)
+                        .frame(maxWidth: .infinity)
                 }
             } else {
                 FileViewerRouter(node: node, siteViewModel: siteViewModel)
@@ -414,7 +444,7 @@ struct KeyboardHintRow: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
                 .frame(minWidth: 50)
 
             Text(description)

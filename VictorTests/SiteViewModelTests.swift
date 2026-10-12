@@ -1625,6 +1625,43 @@ final class SiteViewModelTests: XCTestCase {
         XCTAssertEqual(AppSettings.shared.isInspectorVisible, initial)
     }
 
+    /// Archetype/layout `.md` files are markdown but have no ContentFile, so the
+    /// inspector toggle is disabled for them - an inspector left open from a post
+    /// must close too. (Their editors use HSplitView, which crashes beside an open
+    /// inspector on macOS 27 - see Docs/MACOS27-UPLIFT.md.)
+    func testSelectingMarkdownWithoutContentFileHidesInspector() {
+        let original = AppSettings.shared.isInspectorVisible
+        defer { AppSettings.shared.isInspectorVisible = original }
+        let viewModel = SiteViewModel()
+        let post = FileNode(url: URL(fileURLWithPath: "/site/content/post.md"), isDirectory: false)
+        post.contentFile = ContentFile(url: post.url)
+        let archetype = FileNode(url: URL(fileURLWithPath: "/site/archetypes/default.md"), isDirectory: false)
+        viewModel.fileNodes = [post, archetype]
+
+        viewModel.selectNode(post)
+        AppSettings.shared.isInspectorVisible = true
+        viewModel.selectNode(archetype)
+
+        XCTAssertFalse(AppSettings.shared.isInspectorVisible)
+    }
+
+    func testSelectingContentFileKeepsInspectorOpen() {
+        let original = AppSettings.shared.isInspectorVisible
+        defer { AppSettings.shared.isInspectorVisible = original }
+        let viewModel = SiteViewModel()
+        let first = FileNode(url: URL(fileURLWithPath: "/site/content/a.md"), isDirectory: false)
+        first.contentFile = ContentFile(url: first.url)
+        let second = FileNode(url: URL(fileURLWithPath: "/site/content/b.md"), isDirectory: false)
+        second.contentFile = ContentFile(url: second.url)
+        viewModel.fileNodes = [first, second]
+
+        viewModel.selectNode(first)
+        AppSettings.shared.isInspectorVisible = true
+        viewModel.selectNode(second)
+
+        XCTAssertTrue(AppSettings.shared.isInspectorVisible)
+    }
+
     func testToggleFocusMode() {
         let viewModel = SiteViewModel()
         XCTAssertFalse(viewModel.isFocusModeActive)

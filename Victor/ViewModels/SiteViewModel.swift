@@ -158,10 +158,11 @@ class SiteViewModel {
             pushNavigationHistory(node)
         }
 
-        // Auto-hide inspector when switching to a non-markdown file
-        // (The inspector toolbar button is only shown for markdown files,
-        // so we need to auto-dismiss to prevent the user being stuck)
-        if AppSettings.shared.isInspectorVisible && (node == nil || !node!.isMarkdownFile) {
+        // Auto-hide inspector when switching to anything but a content file - the
+        // same condition that enables its toolbar button, so the user is never stuck
+        // with it open. Archetype/layout .md files count as non-content: they're
+        // markdown, but have no ContentFile, so the inspector has nothing to show.
+        if AppSettings.shared.isInspectorVisible && node?.contentFile == nil {
             AppSettings.shared.isInspectorVisible = false
         }
 
@@ -448,7 +449,7 @@ class SiteViewModel {
     private let fileOperationsService: FileOperationsService
 
     /// Hugo server service (for start/stop/status streams - WP3.5 Cluster 9). Not `private`
-    /// (victor-zw4): ServerControlView/LivePreviewPanel/ServerConfigPopover reach this via
+    /// (victor-zw4): ServerRunMenu/LivePreviewPanel/ServerConfigPopover reach this via
     /// `siteViewModel.hugoServerService` instead of `HugoServerService.shared`.
     let hugoServerService: HugoServerService
 

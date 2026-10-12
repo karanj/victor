@@ -37,7 +37,7 @@ Verification: `c445934` at the 14.0 target (clean worktree), full suite 3/3 gree
 ## Pending (not done in session)
 
 - [x] Pushed `claude/macos27-baseline`, `macos14-maintenance`, tags `v1.1.0` + `macos14-final`; PR #57 (merge commit, not squash, so the tags stay on `main`'s history).
-- [ ] `scripts/release.sh` for 1.1.0 → signed, notarized zip on a GitHub release.
+- [x] `scripts/release.sh` for 1.1.0 → signed, notarized zip on a GitHub release (https://github.com/karanj/victor/releases/tag/v1.1.0).
 - [ ] Smoke-test the 1.1.0 binary on a real macOS 14 or 15 machine/VM — everything above was built and tested on 27.
 - [ ] Human check on 27: does `ShareLink` inside a `CommandGroup` now work? If so, delete `SharingHelper` (`VictorApp.swift`). (2026-10-10: Share via the existing `SharingHelper` path confirmed working on 27 — doesn't answer the `ShareLink` question.)
 
@@ -52,3 +52,92 @@ Starting inventory:
 - Two `WKWebView` wrappers (`PreviewWebView`, `LivePreviewPanel`) — evaluate SwiftUI `WebView`/`WebPage` alongside, since edge-to-edge content under glass toolbars is where `scrollEdgeEffectStyle` matters.
 
 Keep the per-keystroke invalidation contract (`CLAUDE.md`) in view: glass effects in toolbar/menu scopes must not read per-keystroke state.
+
+### Liquid Glass audit — screenshots on macOS 27 (2026-10-10)
+
+Debug build on 27.0, throwaway demo site, driven through the Accessibility API. Light mode only. Findings:
+
+**Glass / structure**
+1. **Inspector is a hand-rolled `HSplitView` column** (`ContentView` detail → `InspectorPanel`), not `.inspector(isPresented:)`. Result: an opaque grey band, and the toolbar's glass capsule (server controls + inspector toggle) sits over the inspector's top edge instead of the toolbar extending across it. Move to `.inspector` — biggest single win.
+2. **Sidebar renders flush and opaque**, not as the inset floating glass sidebar. `FileListView` uses `.listStyle(.sidebar)`; suspects are the opaque header block (site name + search field with `.background(controlBackgroundColor)`, `SidebarView.swift:292`) and the hard divider under it. Needs a probe.
+3. **Secondary bars under the toolbar** — layout mode (Editor/Preview/Split) + preview source pickers (`TabBarView`), and each viewer's own header (config/data "View Form|Raw", asset/template browser filter/sort/view rows) — each a flat strip with a hairline divider. Candidates for toolbar items (`ToolbarSpacer` grouping) or a `GlassEffectContainer` over content.
+4. **Formatting toolbar** (bold/italic/heading/lists/…/Live Preview/Save) — row of individually bordered buttons; a natural `GlassEffectContainer` + `.buttonStyle(.glass)` group.
+5. Toolbar groups server status + play + gear + inspector toggle into one capsule; the inspector toggle wants its own group (`ToolbarSpacer`).
+6. Settings window is stock Form/TabView — already fine.
+
+**Layout bugs found along the way (not glass-specific; likely pre-existing, not checked on 1.1)**
+- Split mode + inspector: the formatting toolbar clips its leading edge ("eadi…" — heading picker cut off). Needs to scroll or overflow, not clip.
+- Template browser header: `Picker("View")` label wraps to "Vie / w" (`TemplateBrowserView.swift:97`).
+- Empty asset browser (`assets/`): the header bar is vertically centred in the pane, with blank space above (empty state not top-aligned).
+- Sidebar: "Draft" badge wraps under `post-3.md` instead of trailing it like `bundle`/`config`.
+- Config editor: the Locale and Theme fields render without a text-field border, unlike Base URL/Title above them.
+
+**Sidebar drag-collapse (user report)** — reproduced: dragging the divider below the 200pt min collapses the sidebar; dragging from the window's left edge then resizes the *window* — there is no drag-back affordance. Only View ▸ Toggle Sidebar / the toolbar button restore it. Standard `NavigationSplitView` behaviour; fix options: block collapse-on-drag (AppKit `NSSplitViewItem.canCollapse` via the window's split view controller) or accept and keep the toggle.
+
+Screenshots: session scratchpad `shots/01..14-*.png` (not committed).
+
+### Liquid Glass pass 1 — inspector, sidebar lock (2026-10-10, branch `liquid-glass`)
+
+- **Inspector → system `.inspector(isPresented:)`** on the `NavigationSplitView` (was an `HSplitView` column with `.frame(width: 260)` + `.ultraThinMaterial`). Width via `AppConstants.Inspector` (220/260/360). Drag-to-close writes back through `AppSettings.isInspectorVisible`.
+- **Sidebar can't be drag-collapsed** (user call). `SidebarCollapseLock` sets `canCollapse = false` on the sidebar `NSSplitViewItem` (SwiftUI has no API); re-applied when the window attaches and when a site opens/closes (`mainContent` swaps split-view branches). View ▸ Toggle Sidebar still works — `canCollapse` gates user collapse only (pinned by `SidebarCollapseLockTests`, 4 tests, red first).
+- `ToolbarSpacer(.fixed)` separates the inspector toggle from the server-controls group.
+
+**macOS 27 framework bug found doing this.** An `HSplitView` inside a `NavigationSplitView` detail column, beside a *visible* `.inspector`, crashes with `NSGenericException: …more Update Constraints in Window passes than there are views in the window` when a pane has a minimum width ≳150pt (100% reproducible in a 40-line standalone app; `inspectorColumnWidth` doesn't help, pane min ≤50pt or none is fine). Victor's Split mode hit it twice: the panes' `minWidth: 300`, and `EditorToolbar`'s ~600pt intrinsic minimum (AppKit-backed buttons). Workarounds:
+  - Split panes: no `minWidth` (`panelMinWidth` removed); the detail column's `Content.minWidth` still bounds the pair.
+  - `EditorToolbar`: `ViewThatFits` — full row, else the same controls in a horizontal `ScrollView` (no minimum). Also fixes the audit's "eadi…" clipping.
+  - Inspector auto-hide now keys on `contentFile == nil` (the toggle's own enablement) instead of `!isMarkdownFile`: archetype `.md` files kept an open inspector beside `ArchetypeEditorView`'s `HSplitView` (2 tests, red first). Template/asset browsers already hid it.
+  - Repro to file as Feedback: `Window` + `NavigationSplitView { List } detail: { HSplitView { Text.frame(minWidth: 150); Text.frame(minWidth: 150) } }.inspector(isPresented: .constant(true)) { Text("x") }`.
+
+Verified: full suite 784 tests green ×2 (one earlier run hit the known intermittent `testRenameCancelsStillSleepingDebounce…` — its new diagnostics show the rename itself failed with `FileError.accessDenied`, not via the path-traversal guard log; lead for that flake). Launch + inspector shown in Split/Editor/Preview modes: no crash.
+
+**Not yet verified by eye** — my Accessibility driver lost its TCC grant mid-session (rebuilding the binary changes its signature), so the post-fix screenshots of the inspector with a file selected and the drag-collapse lock in the running app still need a human pass:
+- [ ] Inspector column with a post selected: glass/toolbar extends over it, Metadata/Statistics readable at 220–360pt.
+- [ ] Sidebar divider dragged left stops at 200pt, never collapses; Toggle Sidebar still hides/shows it.
+- [ ] Split mode + inspector at the 1000pt minimum window width: editor toolbar scrolls, nothing clips.
+
+Debugging note: while bisecting, the "launch crashes" were really the restored `post-1.md` in Split mode — Victor restores the last selection, so the editor was always on screen.
+
+### Liquid Glass pass 2 — code-only items while the Mac was locked (2026-10-12, branch `liquid-glass`)
+
+Session ran with the screen locked: AX trust and Screen Recording were both granted (the pass-1 "lost TCC grant" was the rebuilt helper binary, not a revoked permission), but a locked session returns black screenshots, `screencapture -l` fails, and AX child walks loop. Nothing below has been seen on screen. Suite 784 green after each commit.
+
+- `3b60959` audit layout bugs: `EmptyStateView` fills its container (asset browser header no longer floats mid-pane; 12 callers); fixed-width segmented "View" pickers `.labelsHidden()` (template browser "Vie/w"; also Form|Raw, folder, asset view pickers); sidebar status badges inline after the name; config Locale/Theme use the shared bordered `configTextFieldStyle()`.
+- `a084d7b` `.cornerRadius` → `clipShape(RoundedRectangle)` (0 left); 9 duplicated grey chips → `secondaryBadgeStyle()`; `FileTagBadge` shared by sidebar + folder view.
+- Formatting toolbar → glass capsules per group in one `GlassEffectContainer`, borderless buttons, Live Preview `.glass`, Save `.glassProminent`; opaque strip removed.
+
+Human checks (in addition to pass 1's three):
+- [ ] Formatting toolbar: capsules read as groups, icons not cramped (22pt hit area), Heading menu looks right borderless, Save prominent only when dirty. Light + dark.
+- [ ] Toolbar without the grey strip: still separated from the editor text? (Revert the background line in `EditorToolbar.body` if not.)
+- [ ] Split + inspector at 1000pt: toolbar falls back to scrolling, no constraint-loop crash.
+- [ ] Sidebar: Draft/Scheduled badges inline; long names truncate before badges.
+- [ ] Template browser / Form|Raw / asset + folder view pickers: no label, widths look right (constants were sized with the label; may want trimming).
+- [ ] Empty `assets/` folder: header at top, empty state centred below.
+- [ ] Config ▸ Essentials: Locale and Theme bordered like Base URL/Title.
+
+### Pass 3 — inspector back to a fixed panel (2026-10-13, branch `liquid-glass`)
+
+Pass 1's switch to SwiftUI `.inspector` introduced a crash, found on the pass-2 visual check: focus any text field in the inspector (Title, Description), then shrink the window → `NSGenericException: …more Update Constraints in Window passes than there are views in the window`. Bisected with scripted repros (AX + CGEvent, demo site in the scratchpad): `main` survives, `a7d2281` (pass 1) crashes, pass-2 commits irrelevant. Not fixed by dropping the inspector's focus section, pinning `inspectorColumnWidth`, or lowering `Content.minWidth` to 300.
+
+It's a framework bug: a standalone app — `NavigationSplitView` + `.inspector { Text("x") }` + detail `.frame(minWidth: 400)` + window `minWidth: 1000` — throws the same exception **at launch** (detail min 0–300 fine, ≥400 crashes; no window min fine). File as Feedback with that repro.
+
+Decision (user, 2026-10-13): don't fight it. Inspector is a fixed 260pt panel beside the content in an `HStack` (`AppConstants.Inspector.width`), Pages-style — no drag-resize, no split view, toolbar toggle unchanged. Lost vs pass 1: drag-to-resize and drag-to-close. All four crash repros now survive (inspector toggled at runtime, Title/Description focused, Editor and Split, resize to the 1000pt min).
+
+Still open:
+- [x] Split mode: Live Preview/Save hidden off the end of the scrolling toolbar → fixed: only the formatting groups scroll; Live Preview/Save stay pinned (labelled, then icon-only). Not moved to the window toolbar — Save's enabled state is per-keystroke, which CLAUDE.md keeps out of toolbar scopes. Same pass: the tab bar's "Preview:" caption drops out when narrow instead of wrapping a letter per line. Verified by screenshot at 1200pt (with/without inspector) and 1000pt.
+- [ ] Inspector Description `TextEditor` has a hard 1pt border and visible scroller — restyle to match the other inspector fields.
+- [ ] Revisit `.inspector` when a macOS 27.x SDK fixes the standalone repro.
+
+### Pass 4 — window toolbar regroup, bundle resources, frontmatter panel (2026-10-13, branch `liquid-glass`)
+
+Driven by user feedback on the pass-3 build (all five items addressed; each verified by screenshot in the scratchpad build at 1200 and 1000pt).
+
+- **Bundle resources missing from the tree** (unrelated pre-existing bug): `FileSystemService.buildFileTree` only kept `.md` under `content/`, so a branch bundle's `screenshots/` + `icon.png` (bitstories `apps/dose-tracker`) never showed. Now a bundle (`index.md`/`_index.md`) shows all its files, and that carries into subfolders with no markdown of their own (resource folders). Loose non-md outside bundles still hidden. `FileTreeScanTests` (3).
+- **Window toolbar**, Mail/Xcode-style: leading = Editor|Preview|Split segmented + document title (editing first, where it used to be); trailing = one server capsule (● status text + Run/Stop split-button menu: Open in Browser, Show Server Logs, Server Settings…) then the inspector toggle. One `ToolbarItem` for the server group — separate items in `.primaryAction` got assigned to the sidebar column. `ServerControlView` → `ServerToolbarItems.swift`; presentation logic in `ServerActivity` (`ServerToolbarTests`, 8). Secondary bar (`TabBarView`) now only appears outside Editor mode or with build issues (`TabBarView.isNeeded`).
+- **New Post** moved out of the window toolbar to a "+" in the sidebar site header (the user hit it while reaching for the editor view). ⌘N unchanged.
+- **Frontmatter panel**: one header row styled like the formatting toolbar — leading disclosure chevron, neutral format chip (`secondaryBadgeStyle`), and a single glass picker `Essential · Publishing · SEO · Menus · Advanced | Raw` (`FrontmatterPane`) that replaces both the blue Form|Raw segmented control and the separate category tab strip. Picker is laid out while collapsed (hidden/disabled) so the row height doesn't jump; falls back to icon-only via `ViewThatFits`. Opaque header strip and drawn pill removed; resize is an invisible 8pt strip over the top hairline (`.pointerStyle(.rowResize)`), drag now uses the start height + global translation (previously compounded the cumulative translation each frame). `FrontmatterFormat.displayName` moved from `StatisticsSection` into the model and reused by the archetype format picker. `FrontmatterPanelTests` (5).
+
+Suite: 800 tests green (one earlier run hit the known intermittent debounce flake; three reruns clean).
+
+Still open:
+- [ ] Frontmatter picker icon-only fallback not yet seen on screen (needs a detail pane narrower than ~800pt with the panel open).
+- [ ] Light mode pass over pass 3–4 surfaces.

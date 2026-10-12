@@ -88,12 +88,15 @@ enum AppConstants {
         static let maxWidth: CGFloat = 450
     }
 
+    enum Inspector {
+        /// Fixed inspector width (Pages-style, not user-resizable)
+        static let width: CGFloat = 260
+    }
+
     /// Content area layout constants
     enum Content {
         /// Minimum width for main content area
         static let minWidth: CGFloat = 400
-        /// Minimum width for editor/preview panels in split view
-        static let panelMinWidth: CGFloat = 300
     }
 
     /// Main window constants
@@ -144,10 +147,14 @@ enum AppConstants {
         static let verticalPadding: CGFloat = 8
         /// Spacing between buttons within a group
         static let groupSpacing: CGFloat = 4
-        /// Height of separator dividers between groups
-        static let separatorHeight: CGFloat = 20
-        /// Horizontal padding around separators
-        static let separatorPadding: CGFloat = 8
+        /// Gap between the formatting toolbar's glass capsules
+        static let glassGroupSpacing: CGFloat = 8
+        /// Inset of buttons inside a glass capsule (vertical uses half)
+        static let glassGroupPadding: CGFloat = 6
+        /// Smallest visible slice of the scrolling formatting groups (two buttons)
+        static let scrollingGroupsMinWidth: CGFloat = 80
+        /// Minimum hit area for an icon-only toolbar button
+        static let iconButtonSize: CGFloat = 22
         /// Height of action separator (before save button)
         static let actionSeparatorHeight: CGFloat = 24
         /// Width of heading dropdown menu
